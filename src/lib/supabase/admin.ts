@@ -3,16 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 /**
  * cron / ワーカー専用のクライアント。
  *
- * サービスロールキーを使うので RLS を迂回する。バックグラウンド処理には
+ * Secret キー（旧 service_role）を使うので RLS を迂回する。バックグラウンド処理には
  * ログインセッションが無く auth.uid() が null になるため、user_id は
  * OWNER_USER_ID を明示的に入れる必要がある。
  * このモジュールは絶対に Client Component から import しないこと。
  */
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL と SUPABASE_SERVICE_ROLE_KEY が必要です');
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL と SUPABASE_SECRET_KEY が必要です');
   }
 
   return createClient(url, key, {

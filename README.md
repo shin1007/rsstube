@@ -33,6 +33,16 @@ NotebookLM に投げてすぐ音声にできる状態まで用意する。
 `.env.example` を `.env.local` にコピーして埋める。
 `CRON_SECRET` は適当な長いランダム文字列でよい（`openssl rand -hex 32` など）。
 
+キーの名前は Supabase ダッシュボードの Project Settings > API Keys の表記に合わせている。
+
+| ダッシュボードの表記 | 環境変数 | 旧称 |
+|---|---|---|
+| Publishable key（`sb_publishable_…`） | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | anon key |
+| Secret key（`sb_secret_…`） | `SUPABASE_SECRET_KEY` | service_role key |
+
+`.env` ではなく **`.env.local`** に書くこと。両方あると `.env.local` が優先されるので、
+片方を直したつもりでもう片方が効き続ける事故が起きる。
+
 ### 3. 起動
 
 ```bash
