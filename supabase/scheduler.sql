@@ -35,8 +35,12 @@ select cron.schedule('rsstube-worker', '*/5 * * * *', $$
   );
 $$);
 
--- 毎日: 完了ジョブの掃除
-select cron.schedule('rsstube-purge', '30 3 * * *', $$ select purge_jobs(); $$);
+-- 毎日: 完了ジョブの掃除と、保持期間を過ぎた記事本文の削除。
+-- 本文は DB サイズのほぼ全部を占めるので、これが無いと無料枠を静かに使い切る。
+select cron.schedule('rsstube-purge', '30 3 * * *', $$
+  select purge_jobs();
+  select purge_article_bodies();
+$$);
 
 -- 確認用:
 --   select jobname, schedule, active from cron.job;

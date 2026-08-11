@@ -30,6 +30,7 @@ export default async function SettingsPage() {
         notebooklm_prompt: String(formData.get('notebooklm_prompt') ?? ''),
         digest_count: Number(formData.get('digest_count') ?? 8),
         digest_hour: Number(formData.get('digest_hour') ?? 6),
+        retention_days: Number(formData.get('retention_days') ?? 90),
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' },
@@ -88,7 +89,23 @@ export default async function SettingsPage() {
                 />
                 時
               </label>
+              <label className="text-xs text-zinc-400" title="0で無効（本文を永久に保持）">
+                本文の保持
+                <input
+                  type="number"
+                  name="retention_days"
+                  min={0}
+                  max={3650}
+                  defaultValue={settings?.retention_days ?? 90}
+                  className="ml-2 w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+                />
+                日
+              </label>
             </div>
+            <p className="text-xs text-zinc-500">
+              保持期間を過ぎた既読記事は本文だけを消します（スター・あとで・書き出し済みは対象外）。
+              記事の行自体は残るので、既読の記事が未読で戻ってくることはありません。0 で無効。
+            </p>
             <button type="submit" className="rounded bg-zinc-100 px-3 py-1.5 text-sm text-zinc-900">
               保存
             </button>

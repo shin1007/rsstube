@@ -124,11 +124,19 @@ export function ArticleView({ article }: { article: unknown }) {
             </form>
           )}
 
-          {!a.content_ok && (
-            <p className="mt-4 rounded border border-amber-900/60 bg-amber-950/30 p-2 text-xs text-amber-300">
-              このサイトからは本文を取得できなかったため、RSSの抜粋のみ表示しています。
-              全文は元記事で読んでください。
+          {/* 本文が空なら、抽出に失敗したのではなく保持期間を過ぎて消したほう。
+              取得失敗と同じ文言を出すと原因を取り違えるので分けている。 */}
+          {!a.content_text?.trim() ? (
+            <p className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-2 text-xs text-zinc-400">
+              保持期間を過ぎたため本文は削除されています。元記事で読んでください。
             </p>
+          ) : (
+            !a.content_ok && (
+              <p className="mt-4 rounded border border-amber-900/60 bg-amber-950/30 p-2 text-xs text-amber-300">
+                このサイトからは本文を取得できなかったため、RSSの抜粋のみ表示しています。
+                全文は元記事で読んでください。
+              </p>
+            )
           )}
 
           <div className="prose-article mt-5 text-[15px] text-zinc-300">

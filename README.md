@@ -21,7 +21,8 @@ NotebookLM に投げてすぐ音声にできる状態まで用意する。
 ### 1. Supabase
 
 1. プロジェクトを作る
-2. SQL Editor で `supabase/migrations/0001_init.sql` → `0002_jobs_rpc.sql` の順に流す
+2. SQL Editor で `supabase/migrations/` の SQL を番号順に流す
+   （`0001_init.sql` → `0002_jobs_rpc.sql` → `0003_retention.sql`）
 3. Authentication > Users で自分のユーザーを1つ作る（メールアドレス）
 4. Authentication > Sign In / Providers で **新規サインアップを無効化**する
    （自分専用のため。ログインはマジックリンクのみ）
