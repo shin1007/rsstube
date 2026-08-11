@@ -1,6 +1,12 @@
 'use client';
 
-import { markAllRead, markRead, setReadLater, setStarred } from '@/app/actions/articles';
+import {
+  markAllRead,
+  markRead,
+  requestSummaries,
+  setReadLater,
+  setStarred,
+} from '@/app/actions/articles';
 import type { ArticleRow, View } from '@/lib/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
@@ -142,19 +148,34 @@ export function ArticleList({
 
         <span className="text-xs text-zinc-500">{articles.length}件</span>
 
-        <button
-          type="button"
-          onClick={() => startTransition(() => void markAllRead(articles.map((a) => a.id)))}
-          className="ml-auto rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100"
-        >
-          全既読
-        </button>
+        {view === 'unsummarized' ? (
+          <button
+            type="button"
+            disabled={articles.length === 0}
+            onClick={() => startTransition(() => void requestSummaries(articles.map((a) => a.id)))}
+            className="ml-auto rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100 disabled:opacity-40"
+          >
+            まとめて再要約
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => startTransition(() => void markAllRead(articles.map((a) => a.id)))}
+            className="ml-auto rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100"
+          >
+            全既読
+          </button>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto thin-scroll pb-16 md:pb-0">
         {articles.length === 0 && (
           <p className="p-6 text-center text-sm text-zinc-500">
-            {view === 'unread' ? '未読はありません' : '記事がありません'}
+            {view === 'unread'
+              ? '未読はありません'
+              : view === 'unsummarized'
+                ? '要約が付いていない記事はありません'
+                : '記事がありません'}
           </p>
         )}
 

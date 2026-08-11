@@ -29,21 +29,27 @@ AI要約つきの個人用RSSリーダー。詳細な設計は `docs/plan.md`、
 ## 実装済み / 未実装
 
 済: リーダーUI、フィード巡回、本文抽出、AI要約、ジョブキュー、NotebookLM への書き出し
-（`.md` ダウンロード／クリップボードコピー／指示文生成）、OPML取り込み、マジックリンク認証。
+（`.md` ダウンロード／クリップボードコピー／指示文生成）、OPML の取り込みと書き出し、
+マジックリンク認証、フォルダ管理（作成・改名・削除・並べ替え・フィードの移動）、
+「要約なし」ビュー、記事本文の保持ポリシー（`purge_article_bodies()`）。
 
 未: Google Drive への直接書き出し（OAuth）、毎朝ダイジェスト自動生成、PWA/Web Push、
 アプリ内の音声生成・スライド再生、全文検索の `/library` 画面。
 
 ## 検証状況
 
-- `npm run build` / `tsc --noEmit` / `eslint --max-warnings 0` すべて通る。
+- `npm run build` / `tsc --noEmit` / `eslint --max-warnings 0` / `npm test` すべて通る。
 - 未ログイン時の `/`・`/settings` → `/login` の307、cron ルートの401/通過を実機確認済み。
-- OPMLパーサ・URL正規化・Markdown生成はモックデータで確認済み。
+- URL正規化・OPMLの読み書き・Markdown生成は vitest で固定（40件）。
 - **未検証**: Supabase に繋いだ実データでの動作全般、スマホ幅のレイアウト。
+  `0003_retention.sql` と `purge_article_bodies()` も未実行。
+- 実データで最初に疑うところ: `poll` の `upsert(..., ignoreDuplicates: true)` +
+  `.select('id')` が新規挿入分だけを返すか。ここを外すと毎時 extract が再投入され、
+  Gemini の無料枠を食う。
 
 ## 次にやること
 
-1. Supabase プロジェクトを作り `supabase/migrations/` の2本を流す
+1. Supabase プロジェクトを作り `supabase/migrations/` の3本を流す
 2. `.env.local` を実値に差し替え、自分のユーザーを1つ作って `OWNER_USER_ID` に入れる
 3. OPML を取り込み `/api/cron/poll` を手で叩いて記事が入ることを確認
 4. `GEMINI_API_KEY` を入れて `/api/jobs/run` を叩き、要約が付くことを確認

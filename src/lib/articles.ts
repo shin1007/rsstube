@@ -62,6 +62,11 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
     case 'later':
       q = q.eq('article_states.read_later', true);
       break;
+    case 'unsummarized':
+      // ワーカーは要約が返らなかった記事もジョブを完了扱いにする（無料枠を
+      // 食い潰さないため）。落ちたぶんはここでしか見つけられない。
+      q = q.is('summaries', null);
+      break;
     case 'all':
       break;
   }

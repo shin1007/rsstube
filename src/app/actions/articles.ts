@@ -65,6 +65,36 @@ export async function markAllRead(articleIds: string[]) {
   revalidatePath('/');
 }
 
+/**
+ * 表示中の記事をまとめて要約し直す。「要約なし」ビューから使う。
+ * 一気に積んでも、ワーカーが1回の実行で食べる量は絞ってあるので溢れない。
+ */
+export async function requestSummaries(articleIds: string[]) {
+  if (articleIds.length === 0) return;
+  const { supabase, userId } = await client();
+
+  // 未処理ジョブがある記事は先に除く。jobs の一意索引は部分索引なので
+  // upsert では回避できず、1件でもぶつかると insert 全体が落ちてしまう。
+  const { data: pending, error: pendingError } = await supabase
+    .from('jobs')
+    .select('payload')
+    .in('status', ['queued', 'running'])
+    .in('payload->>article_id', articleIds);
+  if (pendingError) throw pendingError;
+
+  const queued = new Set(
+    (pending ?? []).map((j) => (j.payload as { article_id?: string }).article_id),
+  );
+  const targets = articleIds.filter((id) => !queued.has(id));
+  if (targets.length === 0) return;
+
+  const { error } = await supabase.from('jobs').insert(
+    targets.map((id) => ({ user_id: userId, type: 'extract', payload: { article_id: id } })),
+  );
+  if (error) throw error;
+  revalidatePath('/');
+}
+
 /** 要約が無い記事、または要約をやり直したい記事をキューに積む。 */
 export async function requestSummary(articleId: string) {
   const { supabase, userId } = await client();

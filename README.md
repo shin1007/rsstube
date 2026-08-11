@@ -21,7 +21,8 @@ NotebookLM に投げてすぐ音声にできる状態まで用意する。
 ### 1. Supabase
 
 1. プロジェクトを作る
-2. SQL Editor で `supabase/migrations/0001_init.sql` → `0002_jobs_rpc.sql` の順に流す
+2. SQL Editor で `supabase/migrations/` の SQL を番号順に流す
+   （`0001_init.sql` → `0002_jobs_rpc.sql` → `0003_retention.sql`）
 3. Authentication > Users で自分のユーザーを1つ作る（メールアドレス）
 4. Authentication > Sign In / Providers で **新規サインアップを無効化**する
    （自分専用のため。ログインはマジックリンクのみ）
@@ -58,6 +59,24 @@ Vercel にデプロイして URL が決まったら、`supabase/scheduler.sql` �
 Vercel Hobby の cron は1日1回までなので、1時間毎の巡回と5分毎のワーカーは
 Supabase の `pg_cron` 側に持たせている。
 
+## テスト
+
+```bash
+npm test          # 1回だけ実行
+npm run test:watch
+npm run typecheck # next typegen + tsc --noEmit
+```
+
+`PageProps` / `LayoutProps` は `next typegen` が生成する global 型なので、
+素の `tsc --noEmit` は clone 直後だと落ちる。`npm run typecheck` を使うこと。
+
+PR を作ると GitHub Actions で型・Lint・テスト・ビルドが回る
+（`.github/workflows/ci.yml`）。
+
+外部依存のない純関数だけを対象にしている（URL正規化・OPML の読み書き・
+NotebookLM 用 Markdown の生成）。特に URL 正規化は記事の重複判定キーそのものなので、
+ここが変わると既読の記事が未読で再登場する。
+
 ## 仕組み
 
 ```
@@ -86,6 +105,8 @@ pg_cron(5分毎) → /api/jobs/run
 | `l` | あとで |
 | `v` | 元記事を新しいタブで開く |
 | `Shift+A` | 表示中をすべて既読 |
+
+購読一覧は設定画面の「書き出す」から OPML で保存できる（`/api/opml`）。
 
 ## 未実装
 

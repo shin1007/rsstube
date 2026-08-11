@@ -1,0 +1,47 @@
+name: CI
+
+# PR に積むたびに回す。main への直接 push も一応見る。
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 同じブランチに続けて push したら、古い実行は打ち切る。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # ビルド時にだけ要るプレースホルダ。実際の接続は実行時に .env / Vercel の
+      # 環境変数から読むので、ここに本物の値を置く必要はない（置いてもいけない）。
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # PageProps / LayoutProps は next が生成する global 型なので、
+      # 素の tsc だけだと clone 直後の CI では必ず落ちる（next typegen が要る）。
+      - name: 型
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint -- --max-warnings 0
+
+      - name: テスト
+        run: npm test
+
+      - name: ビルド
+        run: npm run build
