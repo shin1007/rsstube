@@ -151,10 +151,20 @@ export default async function SettingsPage() {
 
         {/* ---------------- OPML ---------------- */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">OPML を取り込む</h2>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold">OPML を取り込む</h2>
+            <a
+              href="/api/opml"
+              download
+              className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100"
+            >
+              書き出す
+            </a>
+          </div>
           <p className="mb-2 text-xs text-zinc-500">
             Inoreader / Feedly からエクスポートした OPML をそのまま読み込めます。
-            記事は次の巡回で入ります。
+            記事は次の巡回で入ります。「書き出す」で今の購読一覧を OPML として保存できます
+            （バックアップ用。フォルダの構成も一緒に出ます）。
           </p>
           <form action={importOpml} className="flex flex-col gap-2 sm:flex-row">
             <input
