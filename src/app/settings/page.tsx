@@ -1,4 +1,13 @@
-import { addFeed, deleteFeed, importOpml } from '@/app/actions/feeds';
+import {
+  addFeed,
+  createFolder,
+  deleteFeed,
+  deleteFolder,
+  importOpml,
+  moveFolder,
+  renameFolder,
+} from '@/app/actions/feeds';
+import { FolderSelect } from '@/components/FolderSelect';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
@@ -14,7 +23,8 @@ export default async function SettingsPage() {
       .from('feeds')
       .select('id, title, url, site_url, folder_id, error_count, last_error, last_fetched_at')
       .order('title'),
-    supabase.from('folders').select('id, name').order('name'),
+    // 並び順はサイドバーと揃える（sort_order → 名前）。
+    supabase.from('folders').select('id, name').order('sort_order').order('name'),
     supabase.from('settings').select('*').maybeSingle(),
   ]);
 
@@ -38,8 +48,6 @@ export default async function SettingsPage() {
     if (error) throw error;
     revalidatePath('/settings');
   }
-
-  const folderName = new Map((folders ?? []).map((f: FolderRow) => [f.id, f.name]));
 
   return (
     <main className="flex-1 overflow-y-auto p-4 md:p-8">
@@ -162,6 +170,74 @@ export default async function SettingsPage() {
           </form>
         </section>
 
+        {/* ---------------- フォルダ ---------------- */}
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">フォルダ（{(folders ?? []).length}）</h2>
+          <p className="mb-2 text-xs text-zinc-500">
+            並び順はサイドバーにそのまま反映されます。名前を書き換えて Enter で保存。
+            フォルダを削除しても中のフィードは残り、未分類に移ります。
+          </p>
+
+          <ul className="mb-2 divide-y divide-zinc-900 rounded border border-zinc-800">
+            {(folders ?? []).map((f: FolderRow, i: number) => (
+              <li key={f.id} className="flex items-center gap-2 px-3 py-2">
+                <form action={renameFolder.bind(null, f.id)} className="min-w-0 flex-1">
+                  <input
+                    type="text"
+                    name="name"
+                    defaultValue={f.name}
+                    aria-label="フォルダ名"
+                    className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-zinc-800 focus:border-zinc-700 focus:bg-zinc-900 focus:outline-none"
+                  />
+                </form>
+                <form action={moveFolder.bind(null, f.id, 'up')}>
+                  <button
+                    type="submit"
+                    disabled={i === 0}
+                    aria-label="上へ"
+                    className="px-1 text-xs text-zinc-500 hover:text-zinc-200 disabled:opacity-25"
+                  >
+                    ↑
+                  </button>
+                </form>
+                <form action={moveFolder.bind(null, f.id, 'down')}>
+                  <button
+                    type="submit"
+                    disabled={i === (folders ?? []).length - 1}
+                    aria-label="下へ"
+                    className="px-1 text-xs text-zinc-500 hover:text-zinc-200 disabled:opacity-25"
+                  >
+                    ↓
+                  </button>
+                </form>
+                <form action={deleteFolder.bind(null, f.id)}>
+                  <button type="submit" className="text-xs text-zinc-500 hover:text-red-400">
+                    削除
+                  </button>
+                </form>
+              </li>
+            ))}
+            {(folders ?? []).length === 0 && (
+              <li className="px-3 py-6 text-center text-sm text-zinc-500">
+                まだフォルダがありません
+              </li>
+            )}
+          </ul>
+
+          <form action={createFolder} className="flex gap-2">
+            <input
+              type="text"
+              name="name"
+              required
+              placeholder="新しいフォルダ名"
+              className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+            />
+            <button type="submit" className="rounded bg-zinc-100 px-3 py-2 text-sm text-zinc-900">
+              追加
+            </button>
+          </form>
+        </section>
+
         {/* ---------------- 登録済みフィード ---------------- */}
         <section>
           <h2 className="mb-2 text-sm font-semibold">
@@ -172,16 +248,18 @@ export default async function SettingsPage() {
               <li key={feed.id} className="flex items-center gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm">{feed.title || feed.url}</p>
-                  <p className="truncate text-xs text-zinc-600">
-                    {feed.folder_id ? `${folderName.get(feed.folder_id)} / ` : ''}
-                    {feed.url}
-                  </p>
+                  <p className="truncate text-xs text-zinc-600">{feed.url}</p>
                   {feed.error_count > 0 && (
                     <p className="truncate text-xs text-amber-500">
                       取得失敗 {feed.error_count}回: {feed.last_error}
                     </p>
                   )}
                 </div>
+                <FolderSelect
+                  feedId={feed.id}
+                  folders={(folders ?? []) as FolderRow[]}
+                  current={feed.folder_id}
+                />
                 <form action={deleteFeed.bind(null, feed.id)}>
                   <button type="submit" className="text-xs text-zinc-500 hover:text-red-400">
                     削除
