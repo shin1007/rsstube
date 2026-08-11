@@ -58,6 +58,17 @@ Vercel にデプロイして URL が決まったら、`supabase/scheduler.sql` �
 Vercel Hobby の cron は1日1回までなので、1時間毎の巡回と5分毎のワーカーは
 Supabase の `pg_cron` 側に持たせている。
 
+## テスト
+
+```bash
+npm test          # 1回だけ実行
+npm run test:watch
+```
+
+外部依存のない純関数だけを対象にしている（URL正規化・OPML の読み書き・
+NotebookLM 用 Markdown の生成）。特に URL 正規化は記事の重複判定キーそのものなので、
+ここが変わると既読の記事が未読で再登場する。
+
 ## 仕組み
 
 ```
