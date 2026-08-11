@@ -64,7 +64,14 @@ Supabase の `pg_cron` 側に持たせている。
 ```bash
 npm test          # 1回だけ実行
 npm run test:watch
+npm run typecheck # next typegen + tsc --noEmit
 ```
+
+`PageProps` / `LayoutProps` は `next typegen` が生成する global 型なので、
+素の `tsc --noEmit` は clone 直後だと落ちる。`npm run typecheck` を使うこと。
+
+PR を作ると GitHub Actions で型・Lint・テスト・ビルドが回る
+（`.github/workflows/ci.yml`）。
 
 外部依存のない純関数だけを対象にしている（URL正規化・OPML の読み書き・
 NotebookLM 用 Markdown の生成）。特に URL 正規化は記事の重複判定キーそのものなので、
