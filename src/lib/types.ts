@@ -30,11 +30,13 @@ export type FeedRow = {
 export type FolderRow = { id: string; name: string };
 
 /** 一覧の表示モード。 */
-export type View = 'unread' | 'starred' | 'later' | 'all';
+export type View = 'unread' | 'starred' | 'later' | 'all' | 'unsummarized';
 
 export const VIEW_LABELS: Record<View, string> = {
   unread: '未読',
   starred: 'スター',
   later: 'あとで',
   all: 'すべて',
+  // ワーカーが要約を付けられなかった記事の置き場。ここから積み直せる。
+  unsummarized: '要約なし',
 };

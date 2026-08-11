@@ -16,7 +16,7 @@ import type { FeedRow, FolderRow, View } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-const VIEWS: View[] = ['unread', 'starred', 'later', 'all'];
+const VIEWS: View[] = ['unread', 'starred', 'later', 'all', 'unsummarized'];
 
 export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   const params = await searchParams;
