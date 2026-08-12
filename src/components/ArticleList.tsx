@@ -1,13 +1,13 @@
 'use client';
 
 import {
-  markAllRead,
   markRead,
   requestSummaries,
   setReadLater,
+  setReadMany,
   setStarred,
 } from '@/app/actions/articles';
-import type { ArticleRow, View } from '@/lib/types';
+import { VIEW_LABELS, type ArticleRow, type View } from '@/lib/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
@@ -15,19 +15,37 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
  * 記事リスト。ここが「大量の記事を高速に捌く」中心。
  *
  * - 行にAIの要点と重要度を出し、開かずに判断できるようにする
- * - PC: j/k で移動、m 既読、s スター、l あとで、v 元記事、Shift+A 全既読
+ * - PC: j/k で移動、m 既読、s スター、l あとで、v 元記事、Shift+A 全既読、? でヘルプ
  * - スマホ: 左スワイプで既読、右スワイプであとで
  */
+
+/** ヘルプに出す一覧。実際の処理は onKey 側にあるので、増やしたら両方直すこと。 */
+const SHORTCUTS: [string, string][] = [
+  ['j / ↓', '次の記事'],
+  ['k / ↑', '前の記事'],
+  ['o / Enter', '開く'],
+  ['Esc', '記事を閉じる'],
+  ['m', '既読・未読'],
+  ['s', 'スター'],
+  ['l', 'あとで'],
+  ['v', '元記事を新しいタブで開く'],
+  ['Shift + A', '表示中をすべて既読'],
+  ['/', '検索'],
+  ['?', 'このヘルプ'],
+];
+
 export function ArticleList({
   articles,
   view,
   sort,
   selectedId,
+  search,
 }: {
   articles: ArticleRow[];
   view: View;
   sort: 'new' | 'important';
   selectedId?: string;
+  search?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -37,6 +55,11 @@ export function ArticleList({
   const selectedIndex = articles.findIndex((a) => a.id === selectedId);
   const [cursor, setCursor] = useState(() => Math.max(0, selectedIndex));
   const rowRefs = useRef<(HTMLElement | null)[]>([]);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
+  const [helpOpen, setHelpOpen] = useState(false);
+  // 全既読の取り消し用に、直前まで未読だった記事を覚えておく。
+  const [undoIds, setUndoIds] = useState<string[] | null>(null);
 
   // 記事が選択され直したらカーソルを合わせる。
   // effect ではなくレンダー中に調整する（effect でやると余計な再レンダーが1往復増える）。
@@ -46,27 +69,70 @@ export function ArticleList({
     if (selectedIndex >= 0) setCursor(selectedIndex);
   }
 
-  const open = useCallback(
-    (id: string) => {
+  const pushParams = useCallback(
+    (mutate: (sp: URLSearchParams) => void) => {
       const sp = new URLSearchParams(searchParams.toString());
-      sp.set('article', id);
-      router.push(`/?${sp.toString()}`);
-      // 開いた時点で既読にする（Inoreader と同じ挙動）。
-      startTransition(() => void markRead(id, true));
+      mutate(sp);
+      const qs = sp.toString();
+      router.push(qs ? `/?${qs}` : '/');
     },
     [router, searchParams],
   );
 
+  const open = useCallback(
+    (id: string) => {
+      pushParams((sp) => sp.set('article', id));
+      // 開いた時点で既読にする（Inoreader と同じ挙動）。
+      startTransition(() => void markRead(id, true));
+    },
+    [pushParams],
+  );
+
+  const markAll = useCallback(() => {
+    // 既に既読だったものは戻す対象にしない。
+    const wasUnread = articles.filter((a) => !a.state?.is_read).map((a) => a.id);
+    if (wasUnread.length === 0) return;
+    setUndoIds(wasUnread);
+    startTransition(() => void setReadMany(articles.map((a) => a.id), true));
+  }, [articles]);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      // 入力中はショートカットを効かせない。
+      // 入力中はショートカットを効かせない（Esc で入力から抜けるのだけ許す）。
       const target = e.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      const typing = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
+      if (typing) {
+        if (e.key === 'Escape') target.blur();
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // ヘルプが開いている間は閉じる操作だけ受ける。
+      if (helpOpen) {
+        if (e.key === 'Escape' || e.key === '?') {
+          e.preventDefault();
+          setHelpOpen(false);
+        }
+        return;
+      }
 
       const current = articles[cursor];
 
       switch (e.key) {
+        case '?':
+          e.preventDefault();
+          setHelpOpen(true);
+          break;
+        case '/':
+          e.preventDefault();
+          searchRef.current?.focus();
+          break;
+        case 'Escape':
+          if (selectedId) {
+            e.preventDefault();
+            pushParams((sp) => sp.delete('article'));
+          }
+          break;
         case 'j':
         case 'ArrowDown': {
           e.preventDefault();
@@ -117,7 +183,7 @@ export function ArticleList({
         case 'A':
           if (e.shiftKey) {
             e.preventDefault();
-            startTransition(() => void markAllRead(articles.map((a) => a.id)));
+            markAll();
           }
           break;
       }
@@ -125,57 +191,99 @@ export function ArticleList({
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [articles, cursor, open]);
+  }, [articles, cursor, open, helpOpen, selectedId, pushParams, markAll]);
 
-  const setParam = (key: string, value: string) => {
-    const sp = new URLSearchParams(searchParams.toString());
-    sp.set(key, value);
-    sp.delete('article');
-    router.push(`/?${sp.toString()}`);
-  };
+  const unreadCount = articles.filter((a) => !a.state?.is_read).length;
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <header className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2">
-        <select
-          value={sort}
-          onChange={(e) => setParam('sort', e.target.value)}
-          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
-        >
-          <option value="new">新着順</option>
-          <option value="important">重要度順</option>
-        </select>
+    <div className="relative flex flex-col h-full min-h-0">
+      <header className="border-b border-zinc-800 px-3 py-2">
+        {/* どのビューを見ているかを常に出す。スマホでは下部タブしか手がかりが無かった。 */}
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold">{VIEW_LABELS[view]}</h2>
+          <span className="text-xs text-zinc-500">
+            {articles.length}件{unreadCount > 0 && ` / 未読 ${unreadCount}`}
+          </span>
 
-        <span className="text-xs text-zinc-500">{articles.length}件</span>
+          {view === 'unsummarized' ? (
+            <button
+              type="button"
+              disabled={articles.length === 0}
+              onClick={() => startTransition(() => void requestSummaries(articles.map((a) => a.id)))}
+              className="ml-auto rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100 disabled:opacity-40"
+            >
+              まとめて再要約
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={unreadCount === 0}
+              onClick={markAll}
+              className="ml-auto rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100 disabled:opacity-40"
+            >
+              全既読
+            </button>
+          )}
+        </div>
 
-        {view === 'unsummarized' ? (
+        <div className="mt-2 flex items-center gap-2">
+          {/* 検索はサーバ側に前からあったが、入力欄が無くて使えなかった。 */}
+          <form
+            className="flex-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = new FormData(e.currentTarget).get('q');
+              pushParams((sp) => {
+                const value = String(q ?? '').trim();
+                if (value) sp.set('q', value);
+                else sp.delete('q');
+                sp.delete('article');
+              });
+            }}
+          >
+            <input
+              ref={searchRef}
+              type="search"
+              name="q"
+              defaultValue={search ?? ''}
+              placeholder="検索（/ で移動）"
+              aria-label="記事を検索"
+              className="w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+            />
+          </form>
+
+          <select
+            value={sort}
+            aria-label="並び順"
+            onChange={(e) => pushParams((sp) => (sp.set('sort', e.target.value), sp.delete('article')))}
+            className="rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs"
+          >
+            <option value="new">新着順</option>
+            <option value="important">重要度順</option>
+          </select>
+
           <button
             type="button"
-            disabled={articles.length === 0}
-            onClick={() => startTransition(() => void requestSummaries(articles.map((a) => a.id)))}
-            className="ml-auto rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100 disabled:opacity-40"
+            onClick={() => setHelpOpen(true)}
+            aria-label="キーボードショートカット"
+            title="キーボードショートカット（?）"
+            className="hidden md:block rounded border border-zinc-800 px-2 py-1 text-xs text-zinc-500 hover:text-zinc-200"
           >
-            まとめて再要約
+            ?
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => startTransition(() => void markAllRead(articles.map((a) => a.id)))}
-            className="ml-auto rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100"
-          >
-            全既読
-          </button>
-        )}
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto thin-scroll pb-16 md:pb-0">
         {articles.length === 0 && (
           <p className="p-6 text-center text-sm text-zinc-500">
-            {view === 'unread'
-              ? '未読はありません'
-              : view === 'unsummarized'
-                ? '要約が付いていない記事はありません'
-                : '記事がありません'}
+            {search
+              ? `「${search}」に一致する記事はありません`
+              : view === 'unread'
+                ? '未読はありません'
+                : view === 'unsummarized'
+                  ? '要約が付いていない記事はありません'
+                  : '記事がありません'}
           </p>
         )}
 
@@ -188,12 +296,99 @@ export function ArticleList({
             article={article}
             active={i === cursor}
             selected={article.id === selectedId}
+            onFocus={() => setCursor(i)}
             onOpen={() => {
               setCursor(i);
               open(article.id);
             }}
           />
         ))}
+
+        {/* 上限に当たっているなら黙って切らない。 */}
+        {articles.length >= 60 && (
+          <p className="px-3 py-4 text-center text-xs text-zinc-600">
+            先頭60件まで表示しています。絞り込むか検索してください。
+          </p>
+        )}
+      </div>
+
+      {undoIds && (
+        <UndoBar
+          count={undoIds.length}
+          onUndo={() => {
+            const ids = undoIds;
+            setUndoIds(null);
+            startTransition(() => void setReadMany(ids, false));
+          }}
+          onDismiss={() => setUndoIds(null)}
+        />
+      )}
+
+      {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
+    </div>
+  );
+}
+
+/** 全既読の取り消し。数秒で自分から消える。 */
+function UndoBar({
+  count,
+  onUndo,
+  onDismiss,
+}: {
+  count: number;
+  onUndo: () => void;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const timer = setTimeout(onDismiss, 8000);
+    return () => clearTimeout(timer);
+  }, [onDismiss]);
+
+  return (
+    <div
+      role="status"
+      className="absolute inset-x-3 bottom-20 z-20 flex items-center gap-3 rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs shadow-lg md:bottom-4"
+    >
+      <span className="flex-1">{count}件を既読にしました</span>
+      <button type="button" onClick={onUndo} className="font-semibold text-sky-400 hover:text-sky-300">
+        取り消す
+      </button>
+      <button type="button" onClick={onDismiss} aria-label="閉じる" className="text-zinc-500 hover:text-zinc-300">
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function HelpOverlay({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="キーボードショートカット"
+      onClick={onClose}
+      className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded border border-zinc-700 bg-zinc-900 p-4"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">キーボードショートカット</h2>
+          <button type="button" onClick={onClose} aria-label="閉じる" className="text-zinc-500 hover:text-zinc-200">
+            ✕
+          </button>
+        </div>
+        <dl className="space-y-1.5">
+          {SHORTCUTS.map(([keys, label]) => (
+            <div key={keys} className="flex items-baseline gap-3">
+              <dt className="w-24 shrink-0 text-right">
+                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-300">{keys}</kbd>
+              </dt>
+              <dd className="text-xs text-zinc-400">{label}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </div>
   );
@@ -205,88 +400,148 @@ function Row({
   active,
   selected,
   onOpen,
+  onFocus,
 }: {
   ref: (el: HTMLElement | null) => void;
   article: ArticleRow;
   active: boolean;
   selected: boolean;
   onOpen: () => void;
+  onFocus: () => void;
 }) {
   const [, startTransition] = useTransition();
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [swipe, setSwipe] = useState(0);
+  const [releasing, setReleasing] = useState(false);
 
   const read = article.state?.is_read ?? false;
   const importance = article.summary?.importance;
 
-  return (
-    <article
-      ref={ref}
-      onClick={onOpen}
-      onTouchStart={(e) => {
-        touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      }}
-      onTouchMove={(e) => {
-        if (!touchStart.current) return;
-        const dx = e.touches[0].clientX - touchStart.current.x;
-        const dy = e.touches[0].clientY - touchStart.current.y;
-        // 縦スクロールと取り違えないよう、横移動が明確なときだけ追従させる。
-        if (Math.abs(dx) > Math.abs(dy)) setSwipe(dx);
-      }}
-      onTouchEnd={() => {
-        const dx = swipe;
-        setSwipe(0);
-        touchStart.current = null;
-        if (dx < -80) startTransition(() => void markRead(article.id, !read));
-        else if (dx > 80)
-          startTransition(() => void setReadLater(article.id, !article.state?.read_later));
-      }}
-      style={swipe !== 0 ? { transform: `translateX(${swipe}px)` } : undefined}
-      className={`cursor-pointer border-b border-zinc-900 px-3 py-2.5 transition-colors ${
-        selected ? 'bg-zinc-800' : active ? 'bg-zinc-900' : 'hover:bg-zinc-900/60'
-      }`}
-    >
-      <div className="flex items-start gap-2">
-        {!read && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-sky-500" />}
-        <h3 className={`flex-1 text-sm leading-snug ${read ? 'text-zinc-500' : 'font-medium'}`}>
-          {article.title}
-        </h3>
-        {typeof importance === 'number' && importance >= 70 && (
-          <span className="shrink-0 rounded bg-amber-900/60 px-1.5 py-0.5 text-[10px] text-amber-300">
-            {importance}
-          </span>
-        )}
-      </div>
+  // 何が起きるかをスワイプ中に見せる。滑るだけだと壊れて見える。
+  const THRESHOLD = 80;
+  const willAct = Math.abs(swipe) > THRESHOLD;
+  const leftAction = swipe < 0; // 左へ = 既読
 
-      {/* AI要点。ここが読めれば記事を開かずに判断できる。 */}
-      {article.summary?.bullets?.length ? (
-        <ul className="mt-1.5 space-y-0.5">
-          {article.summary.bullets.slice(0, 3).map((b, i) => (
-            <li key={i} className="text-xs leading-relaxed text-zinc-400">
-              ・{b}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-1.5 line-clamp-2 text-xs text-zinc-500">
-          {article.excerpt ?? '要約待ち…'}
-        </p>
+  return (
+    <div className="relative overflow-hidden border-b border-zinc-900">
+      {/* 行の背後。スワイプで顔を出す。 */}
+      {swipe !== 0 && (
+        <div
+          aria-hidden
+          className={`absolute inset-0 flex items-center px-4 text-xs font-semibold ${
+            leftAction
+              ? 'justify-end bg-zinc-700 text-zinc-200'
+              : 'justify-start bg-sky-900 text-sky-200'
+          } ${willAct ? 'opacity-100' : 'opacity-50'}`}
+        >
+          {leftAction ? (read ? '未読に戻す' : '既読にする') : article.state?.read_later ? 'あとでを外す' : 'あとで読む'}
+        </div>
       )}
 
-      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-zinc-600">
-        <span className="truncate">{article.feed?.title}</span>
-        {article.published_at && (
-          <time dateTime={article.published_at}>
-            {new Date(article.published_at).toLocaleDateString('ja-JP', {
-              month: 'numeric',
-              day: 'numeric',
-            })}
-          </time>
+      <article
+        ref={ref}
+        tabIndex={0}
+        role="button"
+        aria-current={selected ? 'true' : undefined}
+        onFocus={onFocus}
+        onClick={onOpen}
+        onKeyDown={(e) => {
+          // 行そのものにフォーカスがあるとき用。全体のショートカットとは別。
+          if (e.key === ' ') {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+        onTouchStart={(e) => {
+          touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          setReleasing(false);
+        }}
+        onTouchMove={(e) => {
+          if (!touchStart.current) return;
+          const dx = e.touches[0].clientX - touchStart.current.x;
+          const dy = e.touches[0].clientY - touchStart.current.y;
+          // 縦スクロールと取り違えないよう、横移動が明確なときだけ追従させる。
+          if (Math.abs(dx) > Math.abs(dy)) setSwipe(dx);
+        }}
+        onTouchEnd={() => {
+          const dx = swipe;
+          setReleasing(true);
+          setSwipe(0);
+          touchStart.current = null;
+          if (dx < -THRESHOLD) startTransition(() => void markRead(article.id, !read));
+          else if (dx > THRESHOLD)
+            startTransition(() => void setReadLater(article.id, !article.state?.read_later));
+        }}
+        style={swipe !== 0 ? { transform: `translateX(${swipe}px)` } : undefined}
+        className={`relative cursor-pointer px-3 py-2.5 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-500 ${
+          releasing ? 'transition-transform duration-150' : ''
+        } ${
+          selected
+            ? 'bg-zinc-800'
+            : active
+              ? 'bg-zinc-900 shadow-[inset_2px_0_0_0_var(--color-sky-500)]'
+              : 'bg-zinc-950 hover:bg-zinc-900/60'
+        }`}
+      >
+        <div className="flex items-start gap-2">
+          {!read && (
+            <span aria-label="未読" className="mt-1.5 size-2 shrink-0 rounded-full bg-sky-500" />
+          )}
+          <h3 className={`flex-1 text-sm leading-snug ${read ? 'text-zinc-500' : 'font-medium'}`}>
+            {article.title}
+          </h3>
+          {typeof importance === 'number' && importance >= 70 && (
+            <span
+              title={`重要度 ${importance}`}
+              className="shrink-0 rounded bg-amber-900/60 px-1.5 py-0.5 text-[10px] text-amber-300"
+            >
+              {importance}
+            </span>
+          )}
+        </div>
+
+        {/* AI要点。ここが読めれば記事を開かずに判断できる。 */}
+        {article.summary?.bullets?.length ? (
+          <ul className="mt-1.5 space-y-0.5">
+            {article.summary.bullets.slice(0, 3).map((b, i) => (
+              <li key={i} className="text-xs leading-relaxed text-zinc-400">
+                ・{b}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1.5 line-clamp-2 text-xs text-zinc-500">
+            {article.excerpt ?? '要約待ち…'}
+          </p>
         )}
-        {article.state?.is_starred && <span className="text-amber-400">★</span>}
-        {article.state?.read_later && <span className="text-sky-400">◷</span>}
-        {article.state?.exported_at && <span className="text-emerald-400">NLM</span>}
-      </div>
-    </article>
+
+        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-zinc-600">
+          <span className="truncate">{article.feed?.title}</span>
+          {article.published_at && (
+            <time dateTime={article.published_at}>
+              {new Date(article.published_at).toLocaleDateString('ja-JP', {
+                month: 'numeric',
+                day: 'numeric',
+              })}
+            </time>
+          )}
+          {article.state?.is_starred && (
+            <span title="スター" className="text-amber-400">
+              ★
+            </span>
+          )}
+          {article.state?.read_later && (
+            <span title="あとで読む" className="text-sky-400">
+              ◷
+            </span>
+          )}
+          {article.state?.exported_at && (
+            <span title="NotebookLM へ書き出し済み" className="text-emerald-400">
+              NLM
+            </span>
+          )}
+        </div>
+      </article>
+    </div>
   );
 }

@@ -60,7 +60,13 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
           selectedId ? 'hidden md:block' : 'block'
         }`}
       >
-        <ArticleList articles={articles} view={view} sort={sort} selectedId={selectedId} />
+        <ArticleList
+          articles={articles}
+          view={view}
+          sort={sort}
+          selectedId={selectedId}
+          search={search}
+        />
       </div>
 
       {/* 本文。スマホでは記事を選んだときだけ出す。 */}

@@ -45,8 +45,13 @@ export async function setReadLater(articleId: string, later: boolean) {
   await setState(articleId, { read_later: later });
 }
 
-/** 表示中の記事をまとめて既読にする（Inoreader の "Mark all as read" 相当）。 */
-export async function markAllRead(articleIds: string[]) {
+/**
+ * 表示中の記事をまとめて既読／未読にする（Inoreader の "Mark all as read" 相当）。
+ *
+ * read=false を受けられるのは取り消しのため。60件がまとめて消える操作を
+ * 戻せないままにしておくと、押し間違いの被害が大きい。
+ */
+export async function setReadMany(articleIds: string[], read = true) {
   if (articleIds.length === 0) return;
   const { supabase, userId } = await client();
 
@@ -55,8 +60,8 @@ export async function markAllRead(articleIds: string[]) {
     articleIds.map((id) => ({
       article_id: id,
       user_id: userId,
-      is_read: true,
-      read_at: now,
+      is_read: read,
+      read_at: read ? now : null,
       updated_at: now,
     })),
     { onConflict: 'article_id' },
