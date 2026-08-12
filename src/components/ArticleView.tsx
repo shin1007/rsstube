@@ -21,7 +21,18 @@ type ArticleDetail = {
 };
 
 /** 記事本文。上部にAI要約カードを固定で出し、その下に本文を置く。 */
-export function ArticleView({ article }: { article: unknown }) {
+export function ArticleView({
+  article,
+  backHref = '/',
+  prevHref,
+  nextHref,
+}: {
+  article: unknown;
+  /** 一覧へ戻る先。絞り込みを保つため呼び出し側で組み立てて渡す。 */
+  backHref?: string;
+  prevHref?: string;
+  nextHref?: string;
+}) {
   const a = article as ArticleDetail | null;
 
   if (!a) {
@@ -38,7 +49,7 @@ export function ArticleView({ article }: { article: unknown }) {
     <div className="flex h-full flex-col min-h-0">
       <header className="flex items-center gap-1 border-b border-zinc-800 px-3 py-2">
         {/* スマホでリストへ戻る導線。PCではリストが常に見えているので不要。 */}
-        <Link href="/" className="md:hidden rounded px-2 py-1 text-sm text-zinc-400">
+        <Link href={backHref} className="md:hidden rounded px-2 py-1 text-sm text-zinc-400">
           ← 一覧
         </Link>
 
@@ -142,6 +153,33 @@ export function ArticleView({ article }: { article: unknown }) {
           <div className="prose-article mt-5 text-[15px] text-zinc-300">
             {a.content_text ?? ''}
           </div>
+
+          {/* 読み終わったところに次への導線を置く。PCは j/k があるが、
+              スマホには一覧へ戻る以外の手段が無かった。 */}
+          {(prevHref || nextHref) && (
+            <nav className="mt-8 flex gap-2 border-t border-zinc-800 pt-4 text-sm">
+              {prevHref ? (
+                <Link
+                  href={prevHref}
+                  className="flex-1 rounded border border-zinc-800 px-3 py-2 text-zinc-400 hover:text-zinc-100"
+                >
+                  ← 前の記事
+                </Link>
+              ) : (
+                <span className="flex-1" />
+              )}
+              {nextHref ? (
+                <Link
+                  href={nextHref}
+                  className="flex-1 rounded border border-zinc-800 px-3 py-2 text-right text-zinc-400 hover:text-zinc-100"
+                >
+                  次の記事 →
+                </Link>
+              ) : (
+                <span className="flex-1" />
+              )}
+            </nav>
+          )}
         </div>
       </div>
     </div>

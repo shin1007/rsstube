@@ -12,6 +12,7 @@ export function Sidebar({
   view,
   folderId,
   feedId,
+  sort,
 }: {
   folders: FolderRow[];
   feeds: FeedRow[];
@@ -19,6 +20,8 @@ export function Sidebar({
   view: View;
   folderId?: string;
   feedId?: string;
+  /** 並び順は絞り込みを変えても保つ。フォルダを移るたびに戻ると使いにくい。 */
+  sort?: string;
 }) {
   const feedsByFolder = new Map<string, FeedRow[]>();
   for (const feed of feeds) {
@@ -33,6 +36,7 @@ export function Sidebar({
   const link = (params: Record<string, string | undefined>) => {
     const sp = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v) sp.set(k, v);
+    if (sort && sort !== 'new') sp.set('sort', sort);
     const qs = sp.toString();
     return qs ? `/?${qs}` : '/';
   };
