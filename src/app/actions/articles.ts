@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 
 /**
  * 記事の状態変更。
@@ -10,6 +11,13 @@ import { revalidatePath } from 'next/cache';
  * どの関数でも必ずログイン確認をしてから書き込む。
  * 実データの保護は RLS（user_id = auth.uid()）が担保している。
  */
+
+/** ログアウト。自分専用とはいえ、端末を貸すときに抜ける手段は要る。 */
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect('/login');
+}
 
 async function client() {
   const supabase = await createClient();
