@@ -38,6 +38,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# DBバックアップ。購読内容や記事が入るので追跡しない。
+/backups
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -21,8 +21,9 @@ NotebookLM に投げてすぐ音声にできる状態まで用意する。
 ### 1. Supabase
 
 1. プロジェクトを作る
-2. SQL Editor で `supabase/migrations/` の SQL を番号順に流す
-   （`0001_init.sql` → `0002_jobs_rpc.sql` → `0003_retention.sql`）
+2. マイグレーションを流す。`.env.local` に `SUPABASE_DB_URL` を入れて `npm run db:migrate`
+   （ダッシュボードの SQL Editor に手で貼ってもよい。その場合は
+   `supabase/migrations/` を番号順に）
 3. Authentication > Users で自分のユーザーを1つ作る（メールアドレス）
 4. Authentication > Sign In / Providers で **新規サインアップを無効化**する
    （自分専用のため。ログインはマジックリンクのみ）
@@ -94,6 +95,19 @@ npm run check:secrets
 外部依存のない純関数だけを対象にしている（URL正規化・OPML の読み書き・
 NotebookLM 用 Markdown の生成）。特に URL 正規化は記事の重複判定キーそのものなので、
 ここが変わると既読の記事が未読で再登場する。
+
+## バックアップ
+
+```bash
+npm run db:backup
+```
+
+`backups/` に `<日時>-schema.sql` と `<日時>-data.sql` を吐く（10世代まで保持、
+`.gitignore` 済み）。戻すときは schema → data の順に流す。
+
+Supabase の無料プランには自動バックアップも PITR も無い。記事と要約は消えても
+巡回し直せばよいが、購読一覧・フォルダ構成・スター・あとで・書き出し履歴は
+作り直しが効かないので、たまに走らせておくこと。
 
 ## 仕組み
 

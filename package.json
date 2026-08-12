@@ -9,6 +9,8 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "check:secrets": "bash scripts/check-secrets.sh",
+    "db:migrate": "bash scripts/db-migrate.sh",
+    "db:backup": "bash scripts/db-backup.sh",
     "test": "vitest run",
     "test:watch": "vitest"
   },
