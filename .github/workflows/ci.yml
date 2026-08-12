@@ -20,7 +20,9 @@ jobs:
       # ビルド時にだけ要るプレースホルダ。実際の接続は実行時に .env / Vercel の
       # 環境変数から読むので、ここに本物の値を置く必要はない（置いてもいけない）。
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+      # 本物の接頭辞（sb_publishable_）は使わない。check-secrets.sh が
+      # 追跡ファイル内の鍵を探すので、雛形が引っかかると意味が薄れる。
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-not-a-real-key
 
     steps:
       - uses: actions/checkout@v5
@@ -29,6 +31,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      # 依存のインストールより先に見る。鍵が入っているなら他は無意味。
+      - name: 鍵の混入チェック
+        run: bash scripts/check-secrets.sh
 
       - run: npm ci
 

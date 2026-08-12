@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
+    "check:secrets": "bash scripts/check-secrets.sh",
     "test": "vitest run",
     "test:watch": "vitest"
   },
