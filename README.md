@@ -80,8 +80,16 @@ npm run typecheck # next typegen + tsc --noEmit
 `PageProps` / `LayoutProps` は `next typegen` が生成する global 型なので、
 素の `tsc --noEmit` は clone 直後だと落ちる。`npm run typecheck` を使うこと。
 
-PR を作ると GitHub Actions で型・Lint・テスト・ビルドが回る
+PR を作ると GitHub Actions で鍵の混入チェック・型・Lint・テスト・ビルドが回る
 （`.github/workflows/ci.yml`）。
+
+```bash
+npm run check:secrets
+```
+
+`.env.example` は追跡対象なので、ここに実値を書くと Public リポジトリに出る。
+`sb_secret_…` や `AQ.…` のような鍵の形を追跡ファイル全体から探して、
+見つかれば CI を落とす（`scripts/check-secrets.sh`）。鍵は `.env.local` に置くこと。
 
 外部依存のない純関数だけを対象にしている（URL正規化・OPML の読み書き・
 NotebookLM 用 Markdown の生成）。特に URL 正規化は記事の重複判定キーそのものなので、
