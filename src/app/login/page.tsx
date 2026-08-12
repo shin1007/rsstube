@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 /**
@@ -19,10 +20,20 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
     const email = String(formData.get('email') ?? '').trim();
     if (!email) redirect('/login?error=' + encodeURIComponent('メールアドレスを入力してください'));
 
+    // メールのリンクから戻ってくる先。localhost と本番で変わるので、
+    // 固定値ではなく実際のリクエストのホストから組み立てる。
+    // ここで渡した URL は Supabase の Redirect URLs に登録されている必要がある。
+    const head = await headers();
+    const host = head.get('x-forwarded-host') ?? head.get('host');
+    const proto = head.get('x-forwarded-proto') ?? (host?.startsWith('localhost') ? 'http' : 'https');
+
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: false },
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: `${proto}://${host}/auth/callback`,
+      },
     });
 
     if (error) redirect('/login?error=' + encodeURIComponent(error.message));

@@ -62,7 +62,10 @@ export const config = {
     /*
      * 静的ファイルと、シークレットで別途保護している cron/ワーカーは対象外。
      * matcher を書かないと CSS や画像まで認証にかかる。
+     *
+     * auth/ も外す。マジックリンクのコールバックは「まだセッションが無い状態」で
+     * 来るので、ここを通すと /login へ弾かれてログインが成立しない。
      */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|api/cron|api/jobs|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|auth|api/cron|api/jobs|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };

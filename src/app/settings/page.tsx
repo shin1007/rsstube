@@ -7,6 +7,7 @@ import {
   moveFolder,
   renameFolder,
 } from '@/app/actions/feeds';
+import { signOut } from '@/app/actions/articles';
 import { FolderSelect } from '@/components/FolderSelect';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
@@ -57,6 +58,11 @@ export default async function SettingsPage() {
             ← 一覧
           </Link>
           <h1 className="text-xl font-bold">設定</h1>
+          <form action={signOut} className="ml-auto">
+            <button type="submit" className="text-xs text-zinc-500 hover:text-zinc-200">
+              ログアウト
+            </button>
+          </form>
         </div>
 
         {/* ---------------- NotebookLM 用の指示文 ---------------- */}
