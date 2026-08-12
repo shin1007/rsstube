@@ -19,6 +19,8 @@ fi
 SUPABASE_DB_URL=$(grep -m1 '^SUPABASE_DB_URL=' "$ENV_FILE" | cut -d= -f2- | tr -d '\r' | sed -E 's/^"(.*)"$/\1/')
 
 if [ -z "${SUPABASE_DB_URL:-}" ]; then
+  # 案内文に接続文字列の実例は書かない。check-secrets.sh がパスワード入りの
+  # 接続文字列を探すので、見本を置くと自分で引っかかる。
   cat >&2 <<'MSG'
 SUPABASE_DB_URL が .env.local にありません。
 
@@ -26,8 +28,7 @@ SUPABASE_DB_URL が .env.local にありません。
   （Session pooler か Direct connection。Transaction pooler の 6543 番は
    DDL に使えないことがあるので避ける）
 
-  SUPABASE_DB_URL=postgresql://postgres.xxxx:PASSWORD@...pooler.supabase.com:5432/postgres
-
+そこに出る postgresql:// で始まる1行をまるごと SUPABASE_DB_URL= の右に貼る。
 パスワードに記号が入る場合はパーセントエンコードすること（@ は %40 など）。
 MSG
   exit 1
