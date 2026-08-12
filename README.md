@@ -101,15 +101,20 @@ NotebookLM 用 Markdown の生成）。特に URL 正規化は記事の重複判
 ## バックアップ
 
 ```bash
-npm run db:backup
+npm run db:backup                                  # backups/<日時>.json に保存
+npm run db:restore -- backups/<日時>.json           # 消えた行を埋め戻す
+npm run db:restore -- backups/<日時>.json --replace # 全部消してから戻す
 ```
-
-`backups/` に `<日時>-schema.sql` と `<日時>-data.sql` を吐く（10世代まで保持、
-`.gitignore` 済み）。戻すときは schema → data の順に流す。
 
 Supabase の無料プランには自動バックアップも PITR も無い。記事と要約は消えても
 巡回し直せばよいが、購読一覧・フォルダ構成・スター・あとで・書き出し履歴は
 作り直しが効かないので、たまに走らせておくこと。
+
+スキーマは `supabase/migrations/` が git にあるので取らない。落とすのはデータだけで、
+戻すときは先に `npm run db:migrate` を済ませておく。`jobs` は巡回のたびに作られる
+一時的なキューなので対象外（戻すと古い仕事が動き出す）。
+
+`backups/` は `.gitignore` 済み。購読内容が入るので追跡してはいけない。10世代まで保持する。
 
 ## 仕組み
 

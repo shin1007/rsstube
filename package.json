@@ -9,10 +9,11 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "check:secrets": "bash scripts/check-secrets.sh",
-    "db:migrate": "bash scripts/db-migrate.sh",
-    "db:backup": "bash scripts/db-backup.sh",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:backup": "node scripts/db-backup.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:restore": "node scripts/db-restore.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.16.0",
@@ -30,10 +31,12 @@
     "@tailwindcss/postcss": "^4",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^20",
+    "@types/pg": "^8.21.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "pg": "^8.23.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"
