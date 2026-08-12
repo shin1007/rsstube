@@ -67,7 +67,9 @@ if [ -n "${SUPABASE_DB_PASSWORD:-}" ]; then
     # パスワードが書かれていない形。
     SUPABASE_DB_URL="${BASH_REMATCH[1]}:${encoded}@${BASH_REMATCH[2]}"
   else
-    echo "SUPABASE_DB_URL の形が読めません。postgresql://ユーザー:パスワード@ホスト:ポート/DB名 の形にしてください。" >&2
+    # ここでも URL の見本は書かない（check-secrets.sh に引っかかるため）。
+    echo "SUPABASE_DB_URL の形が読めません。ダッシュボードの Connect が出す" >&2
+    echo "postgresql:// で始まる1行をそのまま貼り直してください。" >&2
     exit 1
   fi
 fi
