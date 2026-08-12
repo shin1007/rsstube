@@ -21,9 +21,11 @@ NotebookLM に投げてすぐ音声にできる状態まで用意する。
 ### 1. Supabase
 
 1. プロジェクトを作る
-2. マイグレーションを流す。`.env.local` に `SUPABASE_DB_URL` を入れて `npm run db:migrate`
-   （ダッシュボードの SQL Editor に手で貼ってもよい。その場合は
-   `supabase/migrations/` を番号順に）
+2. マイグレーションを流す。`.env.local` に `SUPABASE_DB_URL`（ダッシュボード上部の
+   「Connect」→ Session pooler の URI）と `SUPABASE_DB_PASSWORD` を入れて
+   `npm run db:migrate`。パスワードは記号もそのままでよく、URL 側は
+   `[YOUR-PASSWORD]` のままで構わない（スクリプトがエンコードして埋める）。
+   ダッシュボードの SQL Editor に手で貼ってもよい（`supabase/migrations/` を番号順に）
 3. Authentication > Users で自分のユーザーを1つ作る（メールアドレス）
 4. Authentication > Sign In / Providers で **新規サインアップを無効化**する
    （自分専用のため。ログインはマジックリンクのみ）
