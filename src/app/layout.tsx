@@ -7,10 +7,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // スマホで入力欄をタップしたときに勝手にズームされないようにする。
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // maximumScale は入れない。入力欄をタップしたときの自動ズームを止める目的で
+  // よく使われるが、ピンチズームまで殺してしまう（WCAG 1.4.4 違反）。
+  // 自動ズームは globals.css で入力欄を16px以上にすることで防いでいる。
   themeColor: '#0b0d10',
 };
 

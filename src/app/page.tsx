@@ -43,6 +43,24 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
     selectedId ? getArticle(selectedId) : Promise.resolve(null),
   ]);
 
+  // 記事を開いていても、戻り先と前後の記事は「今の絞り込み」を保った URL にする。
+  // ここを / にしてしまうと、フォルダや検索を選んだ状態が戻るたびに消える。
+  const linkTo = (articleId?: string) => {
+    const sp = new URLSearchParams();
+    if (view !== 'unread') sp.set('view', view);
+    if (sort !== 'new') sp.set('sort', sort);
+    if (folderId) sp.set('folder', folderId);
+    if (feedId) sp.set('feed', feedId);
+    if (search) sp.set('q', search);
+    if (articleId) sp.set('article', articleId);
+    const qs = sp.toString();
+    return qs ? `/?${qs}` : '/';
+  };
+
+  const index = selectedId ? articles.findIndex((a) => a.id === selectedId) : -1;
+  const prev = index > 0 ? articles[index - 1] : undefined;
+  const next = index >= 0 && index < articles.length - 1 ? articles[index + 1] : undefined;
+
   return (
     <div className="flex-1 flex min-h-0">
       <Sidebar
@@ -52,6 +70,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
         view={view}
         folderId={folderId}
         feedId={feedId}
+        sort={sort}
       />
 
       {/* 記事リスト。スマホでは記事を選んでいる間は隠す。 */}
@@ -60,12 +79,23 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
           selectedId ? 'hidden md:block' : 'block'
         }`}
       >
-        <ArticleList articles={articles} view={view} sort={sort} selectedId={selectedId} />
+        <ArticleList
+          articles={articles}
+          view={view}
+          sort={sort}
+          selectedId={selectedId}
+          search={search}
+        />
       </div>
 
       {/* 本文。スマホでは記事を選んだときだけ出す。 */}
       <div className={`flex-1 min-w-0 min-h-0 ${selectedId ? 'block' : 'hidden md:block'}`}>
-        <ArticleView article={selected} />
+        <ArticleView
+          article={selected}
+          backHref={linkTo()}
+          prevHref={prev ? linkTo(prev.id) : undefined}
+          nextHref={next ? linkTo(next.id) : undefined}
+        />
       </div>
 
       <BottomTabs view={view} hidden={Boolean(selectedId)} />

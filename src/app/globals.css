@@ -23,6 +23,19 @@ body {
   word-break: break-word;
 }
 
+/*
+ * iOS は 16px 未満の入力欄をタップすると勝手にズームする。
+ * viewport で maximumScale を縛れば止まるが、それだとピンチズームまで
+ * 効かなくなる（WCAG 1.4.4 違反）。狭い画面のときだけ実寸を上げて防ぐ。
+ */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* 一覧のスクロールバーを細くして、記事行の幅を稼ぐ。 */
 .thin-scroll::-webkit-scrollbar {
   width: 6px;
