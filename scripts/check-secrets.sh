@@ -21,6 +21,8 @@ patterns=(
   "Gemini API キー:AQ\.[A-Za-z0-9_-]{20,}"
   "Google OAuth クライアントシークレット:GOCSPX-[A-Za-z0-9_-]{10,}"
   "GitHub トークン:gh[pousr]_[A-Za-z0-9]{20,}"
+  # パスワード入りの接続文字列。SUPABASE_DB_URL をそのまま貼ると引っかかる。
+  "Postgres 接続文字列（パスワード入り）:postgres(ql)?://[^:/@[:space:]]+:[^@[:space:]]{8,}@"
 )
 
 found=0
