@@ -6,6 +6,10 @@ import type { ArticleRow, View } from '@/lib/types';
  *
  * 記事・要約・状態を1クエリで取る。Supabase の埋め込み選択を使うので
  * N+1 にはならない。並び順は「新着順」か「重要度順」。
+ *
+ * 記事とフィードは全ユーザー共通なので（0005）、「自分の記事」を切り出しているのは
+ * article_states!inner のほう。状態行は購読時と巡回時にしか作られないため、
+ * これが購読フィルタを兼ねる。フォルダは購読ごとの持ち物なので subscriptions を見る。
  */
 
 export const PAGE_SIZE = 60;
@@ -26,7 +30,7 @@ type RawRow = {
   published_at: string | null;
   excerpt: string | null;
   content_ok: boolean;
-  feeds: { id: string; title: string } | null;
+  feeds: { id: string; title: string; subscriptions?: unknown } | null;
   summaries: { bullets: string[]; tags: string[]; importance: number } | null;
   article_states: {
     is_read: boolean;
@@ -43,14 +47,14 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
     .from('articles')
     .select(
       `id, title, url, author, published_at, excerpt, content_ok,
-       feeds!inner (id, title, folder_id),
+       feeds!inner (id, title, subscriptions!inner (folder_id)),
        summaries (bullets, tags, importance),
        article_states!inner (is_read, is_starred, read_later, exported_at)`,
     )
     .limit(PAGE_SIZE);
 
   if (query.feedId) q = q.eq('feed_id', query.feedId);
-  if (query.folderId) q = q.eq('feeds.folder_id', query.folderId);
+  if (query.folderId) q = q.eq('feeds.subscriptions.folder_id', query.folderId);
 
   switch (query.view) {
     case 'unread':
@@ -119,7 +123,7 @@ export async function getArticle(id: string) {
   return data;
 }
 
-/** サイドバーに出す未読件数。フォルダ単位で集計する。 */
+/** サイドバーに出す未読件数。フィード単位で集計する（呼び出し側でフォルダにまとめる）。 */
 export async function unreadCounts(): Promise<Map<string, number>> {
   const supabase = await createClient();
   const { data, error } = await supabase

@@ -116,15 +116,16 @@ export async function moveFolder(id: string, direction: 'up' | 'down') {
   revalidatePath('/');
 }
 
-/** フィードのフォルダを移す。空文字なら未分類に戻す。 */
+/** フィードのフォルダを移す。空文字なら未分類に戻す。フォルダは購読ごとの持ち物。 */
 export async function moveFeed(feedId: string, formData: FormData) {
   const raw = String(formData.get('folder_id') ?? '').trim();
 
-  const { supabase } = await client();
+  const { supabase, userId } = await client();
   const { error } = await supabase
-    .from('feeds')
+    .from('subscriptions')
     .update({ folder_id: raw || null })
-    .eq('id', feedId);
+    .eq('user_id', userId)
+    .eq('feed_id', feedId);
   if (error) throw error;
 
   revalidatePath('/settings');
@@ -140,24 +141,24 @@ export async function addFeed(formData: FormData) {
 
   // 登録前に一度取得して、フィードとして読めることとタイトルを確認する。
   const result = await fetchFeed(url);
-  const title = result.status === 'ok' ? result.title : '';
 
-  const { error } = await supabase.from('feeds').insert({
-    user_id: userId,
-    url,
-    title,
-    site_url: result.status === 'ok' ? (result.siteUrl ?? null) : null,
-    folder_id: await folderId(supabase, userId, folder),
+  // feeds は共通テーブルで直接 insert できない。購読の入口は RPC だけ（0006）。
+  const { error } = await supabase.rpc('subscribe_feed', {
+    feed_url: url,
+    feed_title: result.status === 'ok' ? result.title : '',
+    feed_site: result.status === 'ok' ? (result.siteUrl ?? null) : null,
+    in_folder: await folderId(supabase, userId, folder),
   });
-  if (error && error.code !== '23505') throw error;
+  if (error) throw error;
 
   revalidatePath('/settings');
   revalidatePath('/');
 }
 
+/** 購読の解除。記事とフィードは他の購読者のものでもあるので消さない。 */
 export async function deleteFeed(feedId: string) {
   const { supabase } = await client();
-  const { error } = await supabase.from('feeds').delete().eq('id', feedId);
+  const { error } = await supabase.rpc('unsubscribe_feed', { in_feed_id: feedId });
   if (error) throw error;
   revalidatePath('/settings');
   revalidatePath('/');
@@ -181,18 +182,14 @@ export async function importOpml(formData: FormData) {
     folderIds.set(name, await folderId(supabase, userId, name));
   }
 
-  const rows = feeds.map((f) => ({
-    user_id: userId,
-    url: f.xmlUrl,
-    title: f.title,
-    site_url: f.htmlUrl ?? null,
-    folder_id: f.folder ? (folderIds.get(f.folder) ?? null) : null,
-  }));
-
-  if (rows.length > 0) {
-    const { error } = await supabase
-      .from('feeds')
-      .upsert(rows, { onConflict: 'user_id,url', ignoreDuplicates: true });
+  // 1件ずつ RPC を呼ぶ。数百件でも1往復あたりは軽い挿入で済む。
+  for (const f of feeds) {
+    const { error } = await supabase.rpc('subscribe_feed', {
+      feed_url: f.xmlUrl,
+      feed_title: f.title,
+      feed_site: f.htmlUrl ?? null,
+      in_folder: f.folder ? (folderIds.get(f.folder) ?? null) : null,
+    });
     if (error) throw error;
   }
 

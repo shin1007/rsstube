@@ -1,3 +1,4 @@
+import { listSubscribedFeeds } from '@/lib/subscriptions';
 import { buildOpml, type OpmlFeed } from '@/lib/feeds/opml';
 import { createClient } from '@/lib/supabase/server';
 
@@ -18,15 +19,14 @@ export async function GET() {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return new Response('unauthorized', { status: 401 });
 
-  const [{ data: feeds, error }, { data: folders }] = await Promise.all([
-    supabase.from('feeds').select('title, url, site_url, folder_id').order('title'),
+  const [feeds, { data: folders }] = await Promise.all([
+    listSubscribedFeeds(),
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
   ]);
-  if (error) return new Response(error.message, { status: 500 });
 
   const folderName = new Map((folders ?? []).map((f) => [f.id, f.name]));
 
-  const rows: OpmlFeed[] = (feeds ?? []).map((f) => ({
+  const rows: OpmlFeed[] = feeds.map((f) => ({
     title: f.title || f.url,
     xmlUrl: f.url,
     htmlUrl: f.site_url ?? undefined,

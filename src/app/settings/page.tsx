@@ -1,3 +1,4 @@
+import { listSubscribedFeeds } from '@/lib/subscriptions';
 import {
   addFeed,
   createFolder,
@@ -19,11 +20,8 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   const supabase = await createClient();
 
-  const [{ data: feeds }, { data: folders }, { data: settings }] = await Promise.all([
-    supabase
-      .from('feeds')
-      .select('id, title, url, site_url, folder_id, error_count, last_error, last_fetched_at')
-      .order('title'),
+  const [feeds, { data: folders }, { data: settings }] = await Promise.all([
+    listSubscribedFeeds(),
     // 並び順はサイドバーと揃える（sort_order → 名前）。
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
     supabase.from('settings').select('*').maybeSingle(),
