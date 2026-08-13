@@ -11,6 +11,8 @@ import {
 import { signOut } from '@/app/actions/articles';
 import { FolderSelect } from '@/components/FolderSelect';
 import { PushToggle } from '@/components/PushToggle';
+import { UsageTable } from '@/components/UsageTable';
+import { recentUsage } from '@/lib/ai/usage';
 import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
@@ -22,11 +24,12 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   const supabase = await createClient();
 
-  const [feeds, { data: folders }, { data: settings }] = await Promise.all([
+  const [feeds, { data: folders }, { data: settings }, usage] = await Promise.all([
     listSubscribedFeeds(),
     // 並び順はサイドバーと揃える（sort_order → 名前）。
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
     supabase.from('settings').select('*').maybeSingle(),
+    recentUsage(),
   ]);
 
   async function saveSettings(formData: FormData) {
@@ -132,6 +135,12 @@ export default async function SettingsPage() {
               保存
             </button>
           </form>
+        </section>
+
+        {/* ---------------- 使用量 ---------------- */}
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">AI の使用量（直近7日）</h2>
+          <UsageTable usage={usage} />
         </section>
 
         {/* ---------------- 通知 ---------------- */}

@@ -1,4 +1,4 @@
-import { generateJson, SUMMARY_MODEL } from './gemini';
+import { generateJson, SUMMARY_MODEL, type Usage } from './gemini';
 
 /**
  * 記事の要約と重要度スコア。
@@ -89,10 +89,12 @@ function buildPrompt(articles: SummaryInput[], language: string): string {
 export async function summarizeBatch(
   articles: SummaryInput[],
   language = 'ja',
-): Promise<{ results: SummaryOutput[]; model: string }> {
-  if (articles.length === 0) return { results: [], model: SUMMARY_MODEL };
+): Promise<{ results: SummaryOutput[]; model: string; usage: Usage }> {
+  if (articles.length === 0) {
+    return { results: [], model: SUMMARY_MODEL, usage: { inputTokens: 0, outputTokens: 0 } };
+  }
 
-  const data = await generateJson<{ summaries: SummaryOutput[] }>({
+  const { data, usage } = await generateJson<{ summaries: SummaryOutput[] }>({
     model: SUMMARY_MODEL,
     prompt: buildPrompt(articles, language),
     schema: SCHEMA,
@@ -109,5 +111,5 @@ export async function summarizeBatch(
       importance: Math.max(0, Math.min(100, Math.round(Number(s.importance) || 50))),
     }));
 
-  return { results, model: SUMMARY_MODEL };
+  return { results, model: SUMMARY_MODEL, usage };
 }

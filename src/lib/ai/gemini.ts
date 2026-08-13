@@ -35,15 +35,21 @@ function classify(err: unknown): never {
   throw err instanceof Error ? err : new Error(message);
 }
 
+/** 1回の呼び出しで使ったトークン。無料枠の消費ペースを見るために記録する。 */
+export type Usage = { inputTokens: number; outputTokens: number };
+
 /**
  * JSON を返させる生成。responseSchema で形を固定するので、
  * 「説明文が混ざって JSON.parse に失敗する」よくある事故を避けられる。
+ *
+ * 使用量を一緒に返すのは、記録する場所（ワーカー）に DB のクライアントがあり、
+ * ここには無いため。ここで記録しようとすると、この薄いラッパが DB を持つことになる。
  */
 export async function generateJson<T>(opts: {
   model: string;
   prompt: string;
   schema: Record<string, unknown>;
-}): Promise<T> {
+}): Promise<{ data: T; usage: Usage }> {
   try {
     const res = await ai().models.generateContent({
       model: opts.model,
@@ -56,7 +62,14 @@ export async function generateJson<T>(opts: {
 
     const text = res.text;
     if (!text) throw new Error('Gemini が空の応答を返しました');
-    return JSON.parse(text) as T;
+
+    return {
+      data: JSON.parse(text) as T,
+      usage: {
+        inputTokens: res.usageMetadata?.promptTokenCount ?? 0,
+        outputTokens: res.usageMetadata?.candidatesTokenCount ?? 0,
+      },
+    };
   } catch (err) {
     classify(err);
   }
