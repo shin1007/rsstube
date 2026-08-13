@@ -1,6 +1,5 @@
 import { listSubscribedFeeds } from '@/lib/subscriptions';
 import {
-  addFeed,
   createFolder,
   deleteFeed,
   deleteFolder,
@@ -9,6 +8,7 @@ import {
   renameFolder,
 } from '@/app/actions/feeds';
 import { signOut } from '@/app/actions/articles';
+import { AddFeed } from '@/components/AddFeed';
 import { FolderSelect } from '@/components/FolderSelect';
 import { PushToggle } from '@/components/PushToggle';
 import { UsageTable } from '@/components/UsageTable';
@@ -163,30 +163,7 @@ export default async function SettingsPage() {
         {/* ---------------- フィード追加 ---------------- */}
         <section>
           <h2 className="mb-2 text-sm font-semibold">フィードを追加</h2>
-          <form action={addFeed} className="flex flex-col gap-2 sm:flex-row">
-            <input
-              type="url"
-              name="url"
-              required
-              placeholder="https://example.com/feed.xml"
-              className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              name="folder"
-              placeholder="フォルダ名（任意）"
-              list="folder-names"
-              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm sm:w-40"
-            />
-            <datalist id="folder-names">
-              {(folders ?? []).map((f: FolderRow) => (
-                <option key={f.id} value={f.name} />
-              ))}
-            </datalist>
-            <button type="submit" className="rounded bg-zinc-100 px-3 py-2 text-sm text-zinc-900">
-              追加
-            </button>
-          </form>
+          <AddFeed folders={(folders ?? []) as FolderRow[]} />
         </section>
 
         {/* ---------------- OPML ---------------- */}

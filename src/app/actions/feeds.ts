@@ -1,8 +1,11 @@
 'use server';
 
 import { fetchFeed } from '@/lib/feeds/parse';
+import { discoverFeeds, type FeedCandidate } from '@/lib/feeds/discover';
+import { ingestFeedItems } from '@/lib/feeds/ingest';
 import { parseOpml } from '@/lib/feeds/opml';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
 /** フィードとフォルダの管理。 */
@@ -132,27 +135,72 @@ export async function moveFeed(feedId: string, formData: FormData) {
   revalidatePath('/');
 }
 
+/**
+ * URL からフィードを探す。
+ *
+ * 画面はこれを呼んでから候補を出し、選ばせてから subscribeFeed に渡す。
+ * 登録してから「違うフィードだった」と気づくより、先に中身を見せたほうが早い。
+ */
+export async function findFeeds(input: string): Promise<FeedCandidate[]> {
+  await client(); // 未ログインなら弾く（任意のURLを叩かせる踏み台にしない）。
+  return discoverFeeds(input);
+}
+
+export async function subscribeFeed(
+  url: string,
+  folder?: string,
+): Promise<{ title: string; newArticles: number }> {
+  const { supabase, userId } = await client();
+
+  // 登録前に一度取得して、フィードとして読めることとタイトルを確認する。
+  const result = await fetchFeed(url);
+  if (result.status !== 'ok') throw new Error('フィードを読めませんでした');
+
+  // feeds は共通テーブルで直接 insert できない。購読の入口は RPC だけ（0006）。
+  const { data: feedId, error } = await supabase.rpc('subscribe_feed', {
+    feed_url: url,
+    feed_title: result.title,
+    feed_site: result.siteUrl ?? null,
+    in_folder: await folderId(supabase, userId, folder?.trim() || undefined),
+  });
+  if (error) throw error;
+
+  // 記事もその場で入れる。次の巡回を待つと、登録した直後の画面が空のままで
+  // 「登録できたのか分からない」状態が最大1時間続く。
+  // 記事の書き込みは共通テーブルなので、RLS を迂回するクライアントで行う。
+  let newArticles = 0;
+  try {
+    const admin = createAdminClient();
+    const ingested = await ingestFeedItems(admin, feedId as string, result);
+    newArticles = ingested.newArticles;
+
+    await admin
+      .from('feeds')
+      .update({
+        etag: result.etag ?? null,
+        last_modified: result.lastModified ?? null,
+        last_fetched_at: new Date().toISOString(),
+        error_count: 0,
+        last_error: null,
+      })
+      .eq('id', feedId as string);
+  } catch {
+    // 取り込みに失敗しても購読自体は済んでいる。次の巡回で埋まる。
+  }
+
+  revalidatePath('/settings');
+  revalidatePath('/');
+
+  return { title: result.title, newArticles };
+}
+
+/** 旧来のフォーム経由の登録。OPML の隣に残してある。 */
 export async function addFeed(formData: FormData) {
   const url = String(formData.get('url') ?? '').trim();
   const folder = String(formData.get('folder') ?? '').trim() || undefined;
   if (!url) return;
 
-  const { supabase, userId } = await client();
-
-  // 登録前に一度取得して、フィードとして読めることとタイトルを確認する。
-  const result = await fetchFeed(url);
-
-  // feeds は共通テーブルで直接 insert できない。購読の入口は RPC だけ（0006）。
-  const { error } = await supabase.rpc('subscribe_feed', {
-    feed_url: url,
-    feed_title: result.status === 'ok' ? result.title : '',
-    feed_site: result.status === 'ok' ? (result.siteUrl ?? null) : null,
-    in_folder: await folderId(supabase, userId, folder),
-  });
-  if (error) throw error;
-
-  revalidatePath('/settings');
-  revalidatePath('/');
+  await subscribeFeed(url, folder);
 }
 
 /** 購読の解除。記事とフィードは他の購読者のものでもあるので消さない。 */

@@ -8,7 +8,12 @@ AI要約つきの個人用RSSリーダー。詳細な設計は `docs/plan.md`、
 ## 決まっていること（蒸し返さない）
 
 - **NotebookLM に公開APIは無い**（2026年8月時点。Enterprise版のみ、コンシューマ版は未提供）。
-  なので「アプリで整形 → 人が NotebookLM に投入」が P2 の方針。自前音声は後段（P4）。
+  なので「アプリで整形 → 人が NotebookLM に投入」が P2 の方針。自前音声は後段（P4、実装済み）。
+  2026-07 に「Gemini Notebook」へ改称し、Video Overview / Slide Deck / Infographic なども
+  出せるようになったが、**API が無いことは変わっていない**ので自動化の対象にはならない。
+  出来上がりは向こうが上なので、書き出しの経路は残し続ける。
+  音声・スライドの他サービスの比較は `docs/tts-options.md`。結論は「いまは変えない、
+  Gemini TTS の preview が終わったら Google Cloud TTS」。
 - **AI は Gemini API の無料枠**を使う。要約 `gemini-3.5-flash-lite`、台本 `gemini-3.5-flash`、
   音声（後段）`gemini-3.1-flash-tts-preview`。いずれも無料枠あり。
 - **定期実行は Supabase の `pg_cron`**。Vercel Hobby の cron は1日1回までで
@@ -147,6 +152,9 @@ Storage保存・`/listen`・`/watch/[id]`）。
 - **`gemini-3.5-flash` の無料枠は1日20リクエスト。** 台本生成1本で1回使う。
   デバッグで何度も叩くとその日ぶんが尽きる（実際に尽くした）。
   使用量は設定画面の表で見られる。要約の flash-lite とは別枠。
+  **無料枠と上限の全体は `docs/quotas.md` にまとめてある。**公開情報だと
+  Flash 系は500〜1500 RPD と書かれていることが多いが、手元のキーは20だった。
+  外の数字ではなく `ai_usage` と 429 の本文（`limit:` が書いてある）を見ること。
 - **1回のワーカー実行は時間で切る。** 件数だけで絞っても、TTS は1セグメントに
   数十秒かかることがあり `maxDuration = 60` を超えると関数ごと落ちて、
   running のジョブが宙に浮く。`TIME_BUDGET_MS` を見ながら次の種類に進む前に
