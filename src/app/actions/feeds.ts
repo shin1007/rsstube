@@ -3,6 +3,7 @@
 import { fetchFeed } from '@/lib/feeds/parse';
 import { discoverFeeds, type FeedCandidate } from '@/lib/feeds/discover';
 import { fanOutStates, ingestFeedItems } from '@/lib/feeds/ingest';
+import { looksLikeUrl, searchFeeds } from '@/lib/feeds/search';
 import { parseOpml } from '@/lib/feeds/opml';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -136,14 +137,28 @@ export async function moveFeed(feedId: string, formData: FormData) {
 }
 
 /**
- * URL からフィードを探す。
+ * フィードを探す。URL でも名前でもよい。
+ *
+ * URL に見えるならそのサイトを見に行き、そうでなければ名前で検索する。
+ * URL のつもりが見つからなかった場合も、最後に名前として検索し直す
+ * （`gigazine.net` のように、ドメインがそのまま名前として通ることがある）。
  *
  * 画面はこれを呼んでから候補を出し、選ばせてから subscribeFeed に渡す。
- * 登録してから「違うフィードだった」と気づくより、先に中身を見せたほうが早い。
+ * 登録してから「違うフィードだった」と気づくより、先に見せたほうが早い。
  */
 export async function findFeeds(input: string): Promise<FeedCandidate[]> {
   await client(); // 未ログインなら弾く（任意のURLを叩かせる踏み台にしない）。
-  return discoverFeeds(input);
+
+  if (!looksLikeUrl(input)) return searchFeeds(input);
+
+  try {
+    return await discoverFeeds(input);
+  } catch (err) {
+    // URL として辿れなかった。名前として拾えることがあるので最後に試す。
+    const fallback = await searchFeeds(input).catch(() => []);
+    if (fallback.length > 0) return fallback;
+    throw err;
+  }
 }
 
 export async function subscribeFeed(

@@ -67,7 +67,7 @@ export function AddFeed({ folders }: { folders: FolderRow[] }) {
             // フォームではないので Enter を自分で拾う。
             if (e.key === 'Enter' && input.trim()) search();
           }}
-          placeholder="サイトのURL（例: nazology.kusuguru.co.jp）"
+          placeholder="サイト名かURL（例: ナゾロジー / wired.jp）"
           className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
         />
         <input
@@ -94,8 +94,13 @@ export function AddFeed({ folders }: { folders: FolderRow[] }) {
       </div>
 
       <p className="text-xs text-zinc-500">
-        フィードのURLでも、記事を読んでいるページのURLでも構いません。
-        ページに書かれたフィードの場所を探し、見つからなければよくある場所を当たります。
+        <strong className="text-zinc-400">名前でも探せます</strong>（「ナゾロジー」「東洋経済」など）。
+        URL を貼った場合は、そのページに書かれたフィードの場所を探し、
+        見つからなければよくある場所を当たります。フィードのURLを直接知っている必要はありません。
+      </p>
+      <p className="text-xs text-zinc-600">
+        名前で探すときは Feedly の検索を使うので、打った語が Feedly に送られます。
+        URL を貼った場合はそのサイトを直接見に行くだけです。
       </p>
 
       {error && <p className="text-xs text-red-400">{error}</p>}
@@ -108,7 +113,15 @@ export function AddFeed({ folders }: { folders: FolderRow[] }) {
             <li key={c.url} className="p-3">
               <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{c.title}</p>
+                  <p className="flex items-center gap-2 text-sm font-medium">
+                    <span className="truncate">{c.title}</span>
+                    {/* 購読者数は名前で検索したときだけ付く。まともなフィードかの目安。 */}
+                    {c.subscribers !== undefined && (
+                      <span className="shrink-0 text-[10px] font-normal text-zinc-500">
+                        購読者 {c.subscribers.toLocaleString('ja-JP')}
+                      </span>
+                    )}
+                  </p>
                   <p className="truncate text-xs text-zinc-600">{c.url}</p>
                   <ul className="mt-1.5 space-y-0.5">
                     {c.sampleTitles.map((t, i) => (

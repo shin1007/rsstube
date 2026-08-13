@@ -21,6 +21,11 @@ export type FeedCandidate = {
   /** 見つかった記事数と、最新の数件。登録前に「これで合っているか」を目で見るため。 */
   itemCount: number;
   sampleTitles: string[];
+  /**
+   * 購読者数。名前で検索したときだけ付く（Feedly が返す）。
+   * 「まともなフィードかどうか」の目安になる。
+   */
+  subscribers?: number;
 };
 
 const USER_AGENT = 'RSSTube/0.1 (personal feed reader)';
@@ -90,7 +95,7 @@ export function extractFeedLinks(html: string, baseUrl: string): string[] {
 }
 
 /** 見つけたフィードを、中身を1回読んで候補にする。読めなければ null。 */
-async function inspect(url: string): Promise<FeedCandidate | null> {
+export async function inspectFeed(url: string): Promise<FeedCandidate | null> {
   try {
     const result = await fetchFeed(url);
     if (result.status !== 'ok' || result.items.length === 0) return null;
@@ -112,7 +117,7 @@ export async function discoverFeeds(input: string): Promise<FeedCandidate[]> {
   if (!url) throw new Error('URL として読めません');
 
   // 1. 貼られたものがそのままフィードか。
-  const direct = await inspect(url);
+  const direct = await inspectFeed(url);
   if (direct) return [direct];
 
   // 2. ページの中の link タグ。
@@ -133,7 +138,7 @@ export async function discoverFeeds(input: string): Promise<FeedCandidate[]> {
   const found: FeedCandidate[] = [];
 
   for (const link of links.slice(0, MAX_CANDIDATES)) {
-    const candidate = await inspect(link);
+    const candidate = await inspectFeed(link);
     if (candidate) found.push(candidate);
   }
   if (found.length > 0) return found;
@@ -141,7 +146,7 @@ export async function discoverFeeds(input: string): Promise<FeedCandidate[]> {
   // 3. よくある場所を当てる。link タグを置いていないサイト向け。
   const origin = new URL(url).origin;
   for (const path of COMMON_PATHS.slice(0, MAX_GUESSES)) {
-    const candidate = await inspect(`${origin}${path}`);
+    const candidate = await inspectFeed(`${origin}${path}`);
     if (candidate) return [candidate];
   }
 
