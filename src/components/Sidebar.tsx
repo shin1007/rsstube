@@ -114,8 +114,11 @@ export function Sidebar({
         )}
       </div>
 
-      <div className="mt-auto p-3 border-t border-zinc-800">
-        <Link href="/settings" className="text-sm text-zinc-400 hover:text-zinc-100">
+      <div className="mt-auto p-3 border-t border-zinc-800 space-y-1.5">
+        <Link href="/exports" className="block text-sm text-zinc-400 hover:text-zinc-100">
+          書き出し・朝のダイジェスト
+        </Link>
+        <Link href="/settings" className="block text-sm text-zinc-400 hover:text-zinc-100">
           設定・フィード管理
         </Link>
       </div>

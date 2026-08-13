@@ -10,6 +10,7 @@ import {
 } from '@/app/actions/feeds';
 import { signOut } from '@/app/actions/articles';
 import { FolderSelect } from '@/components/FolderSelect';
+import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
@@ -74,7 +75,8 @@ export default async function SettingsPage() {
             <textarea
               name="notebooklm_prompt"
               rows={4}
-              defaultValue={settings?.notebooklm_prompt ?? ''}
+              // 未保存（settings の行がまだ無い）ときも、実際に使われる文面を出す。
+              defaultValue={settings?.notebooklm_prompt ?? DEFAULT_NOTEBOOKLM_PROMPT}
               className="w-full rounded border border-zinc-700 bg-zinc-900 p-2 text-sm"
             />
             <div className="flex gap-3">

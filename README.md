@@ -64,13 +64,27 @@ curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/poll
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/jobs/run
 ```
 
+毎朝ダイジェストも同じように叩ける。`dry=1` は何も書かずに選抜結果だけ返すので、
+「今日の8件」がどう選ばれるかを確かめてから本番で作れる:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" 'http://localhost:3000/api/cron/digest?dry=1'
+curl -H "Authorization: Bearer $CRON_SECRET" 'http://localhost:3000/api/cron/digest?force=1'
+```
+
+`force=1` は生成時刻を待たずに作るが、その日のぶんが既にあれば作らない。
+書き出した記事には `exported_at` が付いて選抜から外れるため、作り直しのつもりで
+叩くと中身の違う2本目ができてしまう。本当に作り直すときは `digests` の当日行を
+消してから叩くこと。
+
 ### 5. デプロイ後の定期実行
 
 Vercel にデプロイして URL が決まったら、`supabase/scheduler.sql` の
 `__APP_URL__` と `__CRON_SECRET__` を置き換えて Supabase の SQL Editor で流す。
 
 Vercel Hobby の cron は1日1回までなので、1時間毎の巡回と5分毎のワーカーは
-Supabase の `pg_cron` 側に持たせている。
+Supabase の `pg_cron` 側に持たせている。毎朝ダイジェストも同様で、Vercel Cron は
+実行時刻が±59分ずれる（6時のダイジェストが7時前にできる）ため pg_cron に寄せた。
 
 ## テスト
 
@@ -128,7 +142,14 @@ pg_cron(5分毎) → /api/jobs/run
               失敗したら RSS の抜粋にフォールバック（画面上で区別表示）
     summarize 複数記事を1リクエストにまとめて Gemini へ
               → 要点3行 / タグ / 重要度スコア(0-100)
+
+pg_cron(1時間毎) → /api/cron/digest
+    設定した時刻（日本時間）の回だけ、過去24時間の未読から重要度上位を選抜
+    → NotebookLM 用の Markdown を1本作って /exports に置く
 ```
+
+ダイジェストの選抜はフォルダごとに上限（全体の1/3）を設けてあり、当たりの多い
+フォルダだけで埋まらないようにしている。それでも枠が余ったら上限を外して重要度順に埋める。
 
 無料枠のレート制限に当たらないよう、1回の実行で処理する件数を絞ってある。
 429 が返ったジョブは指数バックオフで再キューされる（`fail_job`）。

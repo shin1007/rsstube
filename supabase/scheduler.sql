@@ -14,7 +14,7 @@ create extension if not exists pg_net;
 -- 既存の登録を消してから貼り直せるようにしておく。
 select cron.unschedule(jobname)
   from cron.job
- where jobname in ('rsstube-poll', 'rsstube-worker', 'rsstube-purge');
+ where jobname in ('rsstube-poll', 'rsstube-worker', 'rsstube-purge', 'rsstube-digest');
 
 -- 1時間毎: フィード巡回
 select cron.schedule('rsstube-poll', '7 * * * *', $$
@@ -41,6 +41,20 @@ select cron.schedule('rsstube-purge', '30 3 * * *', $$
   select purge_jobs();
   select purge_article_bodies();
   select purge_orphan_feeds();
+$$);
+
+-- 1時間毎: 毎朝ダイジェスト。
+-- 毎時叩くが、実際に作るのは各ユーザーの settings.digest_hour（日本時間）に
+-- 一致した回だけ。時刻の判定をアプリ側に持たせているのは、ユーザーごとに
+-- 生成時刻を変えられるようにするため（cron の式は1つしか置けない）。
+-- :50 なのは、その直前の巡回（:07）とワーカー（*/5）で当日ぶんの記事に
+-- 要約が付き終わってから選抜したいため。
+select cron.schedule('rsstube-digest', '50 * * * *', $$
+  select net.http_post(
+    url     := '__APP_URL__/api/cron/digest',
+    headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__'),
+    timeout_milliseconds := 60000
+  );
 $$);
 
 -- 確認用:
