@@ -1,14 +1,14 @@
 import { listSubscribedFeeds } from '@/lib/subscriptions';
 import {
   createFolder,
-  deleteFeed,
-  deleteFolder,
   importOpml,
   moveFolder,
   renameFolder,
 } from '@/app/actions/feeds';
 import { signOut } from '@/app/actions/articles';
 import { AddFeed } from '@/components/AddFeed';
+import { DeleteFolderButton } from '@/components/DeleteFolderButton';
+import { UnsubscribeButton } from '@/components/UnsubscribeButton';
 import { FolderSelect } from '@/components/FolderSelect';
 import { PushToggle } from '@/components/PushToggle';
 import { UsageTable } from '@/components/UsageTable';
@@ -237,11 +237,11 @@ export default async function SettingsPage() {
                     ↓
                   </button>
                 </form>
-                <form action={deleteFolder.bind(null, f.id)}>
-                  <button type="submit" className="text-xs text-zinc-500 hover:text-red-400">
-                    削除
-                  </button>
-                </form>
+                <DeleteFolderButton
+                  id={f.id}
+                  name={f.name}
+                  feedCount={(feeds ?? []).filter((feed: FeedRow) => feed.folder_id === f.id).length}
+                />
               </li>
             ))}
             {(folders ?? []).length === 0 && (
@@ -272,7 +272,7 @@ export default async function SettingsPage() {
           </h2>
           <ul className="divide-y divide-zinc-900 rounded border border-zinc-800">
             {(feeds ?? []).map((feed: FeedRow) => (
-              <li key={feed.id} className="flex items-center gap-3 px-3 py-2">
+              <li key={feed.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm">{feed.title || feed.url}</p>
                   <p className="truncate text-xs text-zinc-600">{feed.url}</p>
@@ -287,11 +287,11 @@ export default async function SettingsPage() {
                   folders={(folders ?? []) as FolderRow[]}
                   current={feed.folder_id}
                 />
-                <form action={deleteFeed.bind(null, feed.id)}>
-                  <button type="submit" className="text-xs text-zinc-500 hover:text-red-400">
-                    削除
-                  </button>
-                </form>
+                <UnsubscribeButton
+                  feedId={feed.id}
+                  title={feed.title || feed.url}
+                  folderId={feed.folder_id}
+                />
               </li>
             ))}
             {(feeds ?? []).length === 0 && (

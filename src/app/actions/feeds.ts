@@ -2,7 +2,7 @@
 
 import { fetchFeed } from '@/lib/feeds/parse';
 import { discoverFeeds, type FeedCandidate } from '@/lib/feeds/discover';
-import { ingestFeedItems } from '@/lib/feeds/ingest';
+import { fanOutStates, ingestFeedItems } from '@/lib/feeds/ingest';
 import { parseOpml } from '@/lib/feeds/opml';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -204,10 +204,96 @@ export async function addFeed(formData: FormData) {
 }
 
 /** 購読の解除。記事とフィードは他の購読者のものでもあるので消さない。 */
+/** 購読をやめたときに何がどうなるか。押す前に見せるための数え上げ。 */
+export type UnsubscribeImpact = {
+  /** 一覧から消える件数（未読＋ただ読んだだけのもの）。 */
+  dropped: number;
+  /** 残る件数の内訳。 */
+  starred: number;
+  readLater: number;
+  exported: number;
+};
+
+export async function feedImpact(feedId: string): Promise<UnsubscribeImpact> {
+  const { supabase, userId } = await client();
+
+  const { data, error } = await supabase
+    .from('article_states')
+    .select('is_starred, read_later, exported_at, articles!inner (feed_id)')
+    .eq('user_id', userId)
+    .eq('articles.feed_id', feedId);
+  if (error) throw error;
+
+  const rows = (data ?? []) as unknown as {
+    is_starred: boolean;
+    read_later: boolean;
+    exported_at: string | null;
+  }[];
+
+  // 印が付いているものは購読をやめても残る（0012）。残るものを先に数え、
+  // それ以外を「消えるもの」とする。
+  const kept = rows.filter((r) => r.is_starred || r.read_later || r.exported_at);
+
+  return {
+    dropped: rows.length - kept.length,
+    starred: rows.filter((r) => r.is_starred).length,
+    readLater: rows.filter((r) => r.read_later).length,
+    exported: rows.filter((r) => r.exported_at).length,
+  };
+}
+
+/**
+ * 購読をやめる。
+ *
+ * 記事とフィードは他の購読者のものでもあるので消さない。自分の状態行のうち、
+ * 印を付けていないものだけが消える（スター・あとで・書き出し済みは残る。0012）。
+ */
 export async function deleteFeed(feedId: string) {
   const { supabase } = await client();
   const { error } = await supabase.rpc('unsubscribe_feed', { in_feed_id: feedId });
   if (error) throw error;
+  revalidatePath('/settings');
+  revalidatePath('/');
+}
+
+/**
+ * 購読をやめたのを取り消す。
+ *
+ * フィード自体は残っているので（誰かが購読していれば、いなくても
+ * 印つきの記事があれば掃除されない）、購読の行を作り直せば戻る。
+ * ただし印の無かった記事の既読・未読は戻らない。そのことは画面に出す。
+ */
+export async function resubscribeFeed(feedId: string, folderId?: string | null) {
+  const { supabase } = await client();
+
+  const { data: feed } = await supabase.from('feeds').select('url, title, site_url').eq('id', feedId).maybeSingle();
+  if (!feed) throw new Error('フィードが見つかりません（掃除で消えた可能性があります）');
+
+  const { error } = await supabase.rpc('subscribe_feed', {
+    feed_url: feed.url,
+    feed_title: feed.title ?? '',
+    feed_site: feed.site_url ?? null,
+    in_folder: folderId ?? null,
+  });
+  if (error) throw error;
+
+  // 未読の状態行は購読解除で消えているので、作り直す。
+  // 記事の書き込みは共通テーブルなので RLS を迂回するクライアントで行う。
+  try {
+    const admin = createAdminClient();
+    const { data: articles } = await admin
+      .from('articles')
+      .select('id')
+      .eq('feed_id', feedId)
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .limit(200);
+
+    const ids = (articles ?? []).map((a) => a.id as string);
+    if (ids.length > 0) await fanOutStates(admin, feedId, ids);
+  } catch {
+    // 戻せなくても購読自体は復活している。記事は次の巡回で埋まる。
+  }
+
   revalidatePath('/settings');
   revalidatePath('/');
 }
