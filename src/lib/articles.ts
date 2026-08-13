@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { sanitizeSearch } from '@/lib/search';
 import type { ArticleRow, View } from '@/lib/types';
 
 /**
@@ -77,7 +78,9 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
 
   if (query.search) {
     // 日本語は形態素解析が無いので、タイトルと本文の部分一致で引く。
-    q = q.or(`title.ilike.%${query.search}%,content_text.ilike.%${query.search}%`);
+    // 検索語をそのまま埋めるとカンマや括弧で or 式が壊れるので落としておく。
+    const term = sanitizeSearch(query.search);
+    if (term) q = q.or(`title.ilike.%${term}%,content_text.ilike.%${term}%`);
   }
 
   if (query.sort === 'important') {

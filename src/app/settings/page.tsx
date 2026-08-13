@@ -57,7 +57,14 @@ export default async function SettingsPage() {
             ← 一覧
           </Link>
           <h1 className="text-xl font-bold">設定</h1>
-          <form action={signOut} className="ml-auto">
+          {/* スマホには下部タブしか無いので、二次画面どうしを相互に張っておく。 */}
+          <Link href="/library" className="ml-auto text-xs text-zinc-500 hover:text-zinc-200">
+            アーカイブ
+          </Link>
+          <Link href="/exports" className="text-xs text-zinc-500 hover:text-zinc-200">
+            書き出し
+          </Link>
+          <form action={signOut}>
             <button type="submit" className="text-xs text-zinc-500 hover:text-zinc-200">
               ログアウト
             </button>
