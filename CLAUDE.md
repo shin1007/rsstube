@@ -24,7 +24,7 @@ AI要約つきの個人用RSSリーダー。詳細な設計は `docs/plan.md`、
   `node_modules` を逃がすジャンクションも作れない（Drive の仮想FSが再解析ポイント非対応）。
   同じ install が Drive で10分超＋失敗、`C:\dev` で22秒。
 - `G:\マイドライブ\ローカルリポジトリ\RSSTube` に壊れかけの旧コピーが残っている。削除してよい。
-- `.env.local` は現在ダミー値。Supabase 未接続のため `/login` 以外は動かせない。
+- `.env.local` は実値が入っている。Supabase・Gemini とも接続済み。
 
 ## 実装済み / 未実装
 
@@ -41,11 +41,12 @@ AI要約つきの個人用RSSリーダー。詳細な設計は `docs/plan.md`、
 - `npm run build` / `tsc --noEmit` / `eslint --max-warnings 0` / `npm test` すべて通る。
 - 未ログイン時の `/`・`/settings` → `/login` の307、cron ルートの401/通過を実機確認済み。
 - URL正規化・OPMLの読み書き・Markdown生成は vitest で固定（40件）。
-- **未検証**: Supabase に繋いだ実データでの動作全般、スマホ幅のレイアウト。
-  `0003_retention.sql` と `purge_article_bodies()` も未実行。
-- 実データで最初に疑うところ: `poll` の `upsert(..., ignoreDuplicates: true)` +
-  `.select('id')` が新規挿入分だけを返すか。ここを外すと毎時 extract が再投入され、
-  Gemini の無料枠を食う。
+- **実データで確認済み（2026-08-13）**: マイグレーション4本適用、フィード5本・記事178件。
+  `poll` → extract → summarize がエラー0件で通り、全記事に要約が付く。
+  懸念だった `upsert(..., ignoreDuplicates: true)` + `.select('id')` は白。
+  2回目の poll で新規22件だけが extract に積まれ、既存156件は再投入されなかった。
+- **未検証**: スマホ幅のレイアウト、`purge_article_bodies()` の実行、
+  デプロイ後の `supabase/scheduler.sql`（pg_cron はまだ入れていない）。
 
 ## 次にやること
 
