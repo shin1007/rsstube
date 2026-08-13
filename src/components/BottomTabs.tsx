@@ -12,7 +12,8 @@ export function BottomTabs({ view, hidden }: { view: View; hidden: boolean }) {
     { view: 'unread', href: '/?view=unread', label: '読む' },
     { view: 'later', href: '/?view=later', label: 'あとで' },
     { view: 'starred', href: '/?view=starred', label: 'スター' },
-    // 朝のダイジェストを取り出すのはスマホからが主なので、ここに置く。
+    // 朝のダイジェストを取り出すのも、音声を聴くのもスマホからが主。
+    { href: '/listen', label: '聴く' },
     { href: '/exports', label: '書き出し' },
     { href: '/settings', label: '設定' },
   ];

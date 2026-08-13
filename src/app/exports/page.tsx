@@ -17,11 +17,19 @@ const LIMIT = 50;
 export default async function ExportsPage() {
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from('exports')
-    .select('id, kind, title, created_at, article_ids')
-    .order('created_at', { ascending: false })
-    .limit(LIMIT);
+  const [{ data }, { data: digests }] = await Promise.all([
+    supabase
+      .from('exports')
+      .select('id, kind, title, created_at, article_ids')
+      .order('created_at', { ascending: false })
+      .limit(LIMIT),
+    // 朝のぶんは音声にもできる。どの書き出しがダイジェストなのかを引き当てる。
+    supabase.from('digests').select('id, export_id'),
+  ]);
+
+  const digestByExport = new Map(
+    (digests ?? []).map((d) => [d.export_id as string, d.id as string]),
+  );
 
   const exports: ExportSummary[] = (
     (data ?? []) as { id: string; kind: 'manual' | 'digest'; title: string; created_at: string; article_ids: string[] }[]
@@ -31,6 +39,7 @@ export default async function ExportsPage() {
     title: e.title,
     created_at: e.created_at,
     article_count: e.article_ids?.length ?? 0,
+    digest_id: digestByExport.get(e.id) ?? null,
   }));
 
   return (

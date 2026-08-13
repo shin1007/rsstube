@@ -3,6 +3,7 @@ import { SUMMARY_MODEL } from '@/lib/ai/gemini';
 import { recordUsage } from '@/lib/ai/usage';
 import { extractArticle, htmlToText } from '@/lib/feeds/extract';
 import { claim, complete, enqueue, fail, type Job } from '@/lib/jobs/queue';
+import { runScriptJob, runTtsJob, TTS_PER_RUN } from '@/lib/media/jobs';
 import { authorizeCron, createAdminClient, ownerUserId } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -22,6 +23,18 @@ export const maxDuration = 60;
 /** 1回の実行あたりの上限。extract は外部fetch、summarize は無料枠が律速。 */
 const EXTRACT_PER_RUN = 12;
 const SUMMARIZE_BATCHES_PER_RUN = 2;
+/** 台本は1本作るだけで数千トークン出るので、1回の実行につき1本まで。 */
+const SCRIPT_PER_RUN = 1;
+
+/**
+ * 1回の実行に使ってよい時間。
+ *
+ * 件数だけで絞っても、1件あたりの時間は相手次第で読めない（TTS は1セグメントに
+ * 数十秒かかることがある）。maxDuration=60 を超えると関数ごと落とされ、
+ * 途中の running のジョブが宙に浮く（0004 の回収待ちになる）。
+ * 残り時間を見ながら、次の種類に進む前に切り上げる。
+ */
+const TIME_BUDGET_MS = 45_000;
 
 export async function POST(request: Request) {
   if (!authorizeCron(request)) {
@@ -29,21 +42,34 @@ export async function POST(request: Request) {
   }
 
   const db = createAdminClient();
+  const deadline = Date.now() + TIME_BUDGET_MS;
 
-  const extracted = await runExtractJobs(db);
-  const summarized = await runSummarizeJobs(db);
+  const extracted = await runExtractJobs(db, deadline);
+  const summarized = await runSummarizeJobs(db, deadline);
+  // 音声は要約より後。要約が付いていない記事から台本を作っても薄くなる。
+  const scripted = await runScriptJobs(db, deadline);
+  const synthesized = await runTtsJobs(db, deadline);
 
-  return Response.json({ extracted, summarized });
+  return Response.json({
+    extracted,
+    summarized,
+    scripted,
+    synthesized,
+    // 予算を使い切ったなら、残りは次の実行に持ち越されている。
+    outOfTime: Date.now() >= deadline,
+  });
 }
 
 export const GET = POST;
 
 /** 本文抽出。取れなければ RSS の内容にフォールバックし、いずれにせよ要約へ進める。 */
-async function runExtractJobs(db: SupabaseClient): Promise<number> {
+async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<number> {
   const jobs = await claim(db, EXTRACT_PER_RUN, 'extract');
   let done = 0;
 
   for (const job of jobs) {
+    // 引いたぶんを全部やり切る必要はない。残りは次の実行が拾い直す（0004）。
+    if (Date.now() >= deadline) break;
     const articleId = job.payload.article_id as string | undefined;
     if (!articleId) {
       await complete(db, job.id);
@@ -95,7 +121,7 @@ async function runExtractJobs(db: SupabaseClient): Promise<number> {
 }
 
 /** 要約。複数記事を1リクエストにまとめて無料枠を節約する。 */
-async function runSummarizeJobs(db: SupabaseClient): Promise<number> {
+async function runSummarizeJobs(db: SupabaseClient, deadline: number): Promise<number> {
   // 要約は全ユーザー共通なので（0005）、言語も1つしか選べない。
   // 当面はオーナーの設定をその1つとして使う。購読者ごとに言語を変えたくなったら、
   // summaries を (article_id, language) で持つ形にする必要がある。
@@ -109,6 +135,7 @@ async function runSummarizeJobs(db: SupabaseClient): Promise<number> {
   let done = 0;
 
   for (let i = 0; i < SUMMARIZE_BATCHES_PER_RUN; i++) {
+    if (Date.now() >= deadline) break;
     const jobs = await claim(db, BATCH_SIZE, 'summarize');
     if (jobs.length === 0) break;
 
@@ -165,5 +192,35 @@ async function runSummarizeJobs(db: SupabaseClient): Promise<number> {
     }
   }
 
+  return done;
+}
+
+/** 台本作り。1本ぶんで数千トークン出るので、1回の実行につき1本だけ進める。 */
+async function runScriptJobs(db: SupabaseClient, deadline: number): Promise<number> {
+  if (Date.now() >= deadline) return 0;
+  const jobs = await claim(db, SCRIPT_PER_RUN, 'script');
+  let done = 0;
+  for (const job of jobs) {
+    if (await runScriptJob(db, job)) done++;
+  }
+  return done;
+}
+
+/**
+ * 音声合成。スライド1枚ぶんが1回。
+ *
+ * 1本の番組が10前後のセグメントになるので、1回の実行で4つずつ進めると
+ * 3回ほどの実行（15分ほど）で1本仕上がる。朝までに間に合えばよいので、
+ * 無料枠を一度に食わないほうを取る。
+ */
+async function runTtsJobs(db: SupabaseClient, deadline: number): Promise<number> {
+  if (Date.now() >= deadline) return 0;
+  const jobs = await claim(db, TTS_PER_RUN, 'tts');
+  let done = 0;
+  for (const job of jobs) {
+    // 1セグメントに数十秒かかることがあるので、毎回残り時間を見る。
+    if (Date.now() >= deadline) break;
+    if (await runTtsJob(db, job)) done++;
+  }
   return done;
 }

@@ -2,6 +2,7 @@
 
 import { getExport } from '@/app/actions/exports';
 import { ExportDialog } from '@/components/ExportDialog';
+import { MediaButton } from '@/components/MediaButton';
 import type { ExportResult } from '@/lib/export/create';
 import { useState, useTransition } from 'react';
 
@@ -11,6 +12,8 @@ export type ExportSummary = {
   title: string;
   created_at: string;
   article_count: number;
+  /** ダイジェストなら、その日のぶんの id。自前音声にするときに要る。 */
+  digest_id?: string | null;
 };
 
 /**
@@ -54,14 +57,14 @@ export function ExportList({ exports }: { exports: ExportSummary[] }) {
 
       <ul className="divide-y divide-zinc-900 rounded border border-zinc-800">
         {exports.map((e) => (
-          <li key={e.id}>
-            <button
-              type="button"
-              onClick={() => open(e.id)}
-              disabled={pending && openId === e.id}
-              className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-zinc-900 disabled:opacity-50"
-            >
-              <div className="min-w-0 flex-1">
+          <li key={e.id} className="px-3 py-2.5">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => open(e.id)}
+                disabled={pending && openId === e.id}
+                className="min-w-0 flex-1 text-left disabled:opacity-50"
+              >
                 <p className="truncate text-sm">
                   {e.kind === 'digest' && (
                     <span className="mr-1.5 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300">
@@ -73,11 +76,19 @@ export function ExportList({ exports }: { exports: ExportSummary[] }) {
                 <p className="text-xs text-zinc-600">
                   {formatDateTime(e.created_at)} / {e.article_count}件
                 </p>
-              </div>
+              </button>
+
               <span className="shrink-0 text-xs text-zinc-500">
-                {pending && openId === e.id ? '読込中…' : '開く'}
+                {pending && openId === e.id ? '読込中…' : 'NotebookLM へ'}
               </span>
-            </button>
+            </div>
+
+            {/* NotebookLM に渡す代わりに、アプリ内で音声にすることもできる。 */}
+            {e.digest_id && (
+              <div className="mt-1 flex items-center gap-2">
+                <MediaButton digestId={e.digest_id} label="アプリ内で音声にする" />
+              </div>
+            )}
           </li>
         ))}
       </ul>
