@@ -65,7 +65,11 @@ export const config = {
      *
      * auth/ も外す。マジックリンクのコールバックは「まだセッションが無い状態」で
      * 来るので、ここを通すと /login へ弾かれてログインが成立しない。
+     *
+     * PWA の3点（manifest / sw.js / offline.html）も外す。ここを認証にかけると、
+     * 未ログインだとインストール要件を満たせず、圏外のときは offline.html 自体が
+     * /login へのリダイレクトになって何も出せなくなる。
      */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|auth|api/cron|api/jobs|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline.html|auth|api/cron|api/jobs|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };

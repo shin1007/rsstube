@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "check:secrets": "bash scripts/check-secrets.sh",
+    "icons": "node scripts/make-icons.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:backup": "node scripts/db-backup.mjs",
     "test": "vitest run",
