@@ -1,5 +1,6 @@
 'use client';
 
+import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
 import {
   markRead,
   requestSummaries,
@@ -255,6 +256,7 @@ export function ArticleList({
           <select
             value={sort}
             aria-label="並び順"
+            title={sort === 'important' ? IMPORTANCE_HELP : undefined}
             onChange={(e) => pushParams((sp) => (sp.set('sort', e.target.value), sp.delete('article')))}
             className="rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs"
           >
@@ -272,6 +274,12 @@ export function ArticleList({
             ?
           </button>
         </div>
+
+        {/* 重要度で並べているときは、何の点数で並んでいるのかをその場に出す。
+            バッジの title はスマホでは出ないので、ツールチップだけでは足りない。 */}
+        {sort === 'important' && (
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">{IMPORTANCE_HELP}</p>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto thin-scroll pb-16 md:pb-0">
@@ -490,12 +498,12 @@ function Row({
           <h3 className={`flex-1 text-sm leading-snug ${read ? 'text-zinc-500' : 'font-medium'}`}>
             {article.title}
           </h3>
-          {typeof importance === 'number' && importance >= 70 && (
+          {typeof importance === 'number' && importanceTier(importance).badge && (
             <span
-              title={`重要度 ${importance}`}
-              className="shrink-0 rounded bg-amber-900/60 px-1.5 py-0.5 text-[10px] text-amber-300"
+              title={importanceTitle(importance)}
+              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${importanceTier(importance).className}`}
             >
-              {importance}
+              重要度 {importanceTier(importance).label}
             </span>
           )}
         </div>
