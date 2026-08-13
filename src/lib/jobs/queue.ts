@@ -12,31 +12,39 @@ export type JobType = 'extract' | 'summarize' | 'digest' | 'script' | 'tts';
 
 export type Job = {
   id: number;
-  user_id: string;
+  /** extract / summarize は記事1件ぶんの仕事で誰のものでもないので null。 */
+  user_id: string | null;
   type: JobType;
   payload: Record<string, unknown>;
   attempts: number;
 };
 
+/**
+ * ジョブを積む。
+ *
+ * 記事は全ユーザー共通なので（0005）、extract と summarize に user_id は要らない。
+ * 購読者が何人いても仕事は1件で済む。digest / script / tts のように
+ * 出力がユーザーごとに違うものだけ userId を渡す。
+ */
 export async function enqueue(
   db: SupabaseClient,
-  userId: string,
   type: JobType,
   payload: Record<string, unknown>,
+  userId?: string,
 ): Promise<void> {
   // 同じ対象の未処理ジョブがあれば一意索引で弾かれる。重複は無視してよい。
-  const { error } = await db.from('jobs').insert({ user_id: userId, type, payload });
+  const { error } = await db.from('jobs').insert({ user_id: userId ?? null, type, payload });
   if (error && error.code !== '23505') throw error;
 }
 
 export async function enqueueMany(
   db: SupabaseClient,
-  userId: string,
   type: JobType,
   payloads: Record<string, unknown>[],
+  userId?: string,
 ): Promise<void> {
   if (payloads.length === 0) return;
-  const rows = payloads.map((payload) => ({ user_id: userId, type, payload }));
+  const rows = payloads.map((payload) => ({ user_id: userId ?? null, type, payload }));
   const { error } = await db.from('jobs').insert(rows);
   if (error && error.code !== '23505') throw error;
 }

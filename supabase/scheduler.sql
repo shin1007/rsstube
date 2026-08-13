@@ -40,6 +40,7 @@ $$);
 select cron.schedule('rsstube-purge', '30 3 * * *', $$
   select purge_jobs();
   select purge_article_bodies();
+  select purge_orphan_feeds();
 $$);
 
 -- 確認用:
