@@ -1,3 +1,4 @@
+import { HelpTip } from '@/components/HelpTip';
 import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
 import { requestSummary, setReadLater, setStarred } from '@/app/actions/articles';
 import { ExportButton } from '@/components/ExportButton';
@@ -111,12 +112,9 @@ export function ArticleView({
                   重要度 {importanceTier(a.summaries.importance).label}
                   <span className="ml-1 opacity-60">{a.summaries.importance}/100</span>
                 </span>
+                {/* 数字だけでは何の点数か分からない。押したときだけ基準を出す。 */}
+                <HelpTip label="重要度とは" text={IMPORTANCE_HELP} />
               </div>
-
-              {/* 数字だけ出しても何の点数か分からないので、基準をその場に書く。 */}
-              <p className="mb-2 text-[11px] leading-relaxed text-zinc-600">
-                {IMPORTANCE_HELP}
-              </p>
               <ul className="space-y-1">
                 {a.summaries.bullets.map((b, i) => (
                   <li key={i} className="text-sm leading-relaxed text-zinc-300">
