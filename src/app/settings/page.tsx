@@ -10,6 +10,7 @@ import {
 } from '@/app/actions/feeds';
 import { signOut } from '@/app/actions/articles';
 import { FolderSelect } from '@/components/FolderSelect';
+import { PushToggle } from '@/components/PushToggle';
 import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
@@ -131,6 +132,23 @@ export default async function SettingsPage() {
               保存
             </button>
           </form>
+        </section>
+
+        {/* ---------------- 通知 ---------------- */}
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">ダイジェストの通知</h2>
+          <p className="mb-2 text-xs text-zinc-500">
+            朝のダイジェストができたときに通知します。アプリを開いていなくても届くので、
+            これが「起きたら聴く」の起点になります。端末ごとに登録が要ります。
+          </p>
+          {process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ? (
+            <PushToggle vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
+          ) : (
+            <p className="text-xs text-zinc-500">
+              VAPID の鍵が設定されていません。<code>npm run vapid</code> で作って
+              <code className="mx-1">.env.local</code>に入れてください。
+            </p>
+          )}
         </section>
 
         {/* ---------------- フィード追加 ---------------- */}
