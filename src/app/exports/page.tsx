@@ -41,7 +41,11 @@ export default async function ExportsPage() {
             ← 一覧
           </Link>
           <h1 className="text-xl font-bold">書き出し</h1>
-          <Link href="/settings" className="ml-auto text-xs text-zinc-500 hover:text-zinc-200">
+          {/* スマホには下部タブしか無いので、二次画面どうしを相互に張っておく。 */}
+          <Link href="/library" className="ml-auto text-xs text-zinc-500 hover:text-zinc-200">
+            アーカイブ
+          </Link>
+          <Link href="/settings" className="text-xs text-zinc-500 hover:text-zinc-200">
             設定
           </Link>
         </div>
