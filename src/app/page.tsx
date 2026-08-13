@@ -1,3 +1,4 @@
+import { listSubscribedFeeds } from '@/lib/subscriptions';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
 import { BottomTabs } from '@/components/BottomTabs';
@@ -32,12 +33,9 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
 
   const supabase = await createClient();
 
-  const [{ data: folders }, { data: feeds }, articles, counts, selected] = await Promise.all([
+  const [{ data: folders }, feeds, articles, counts, selected] = await Promise.all([
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
-    supabase
-      .from('feeds')
-      .select('id, title, url, site_url, folder_id, error_count, last_error, last_fetched_at')
-      .order('title'),
+    listSubscribedFeeds(),
     listArticles({ view, folderId, feedId, sort, search }),
     unreadCounts(),
     selectedId ? getArticle(selectedId) : Promise.resolve(null),

@@ -16,6 +16,21 @@ AI要約つきの個人用RSSリーダー。詳細な設計は `docs/plan.md`、
 - **Next.js 16.3**。`middleware` は `proxy.ts` に改称、`params`/`searchParams` は Promise、
   Turbopack が既定。訓練データと差異があるので `node_modules/next/dist/docs/` を読むこと（AGENTS.md）。
 - **ダークテーマ固定**。朝晩に長時間読む用途のため、切り替えは作らない。
+- **記事・要約・フィードは全ユーザー共通**（`0005`/`0006` で実施済み）。
+  ユーザーごとなのは `subscriptions` / `article_states` / `folders` /
+  `exports` / `digests` / `settings` だけ。ユーザーごとに複製していた頃は
+  記事178件＝3.7MB（本文平均8KB）、要約は `BATCH_SIZE = 5` で約36回の Gemini 呼び出しが
+  購読者数ぶん掛かる形で、無料枠に収まらなかった。2人目が同じフィードを購読しても
+  記事・ジョブは増えず `article_states` だけが増えることを実測で確認済み。
+  - `feeds` に書き込みポリシーは無い。購読の入口は `subscribe_feed()` /
+    `unsubscribe_feed()` RPC だけ。タイトルや etag の持ち主は巡回であって購読者ではない。
+  - 副作用として、ログイン済みなら**全フィードのURLが見える**（誰が購読しているかは見えない）。
+    購読 URL 自体を隠したくなったら、そのとき `feeds` の select を絞ること。
+  - 要約は共通なので**言語も全体で1つ**しか選べない。当面はオーナーの
+    `settings.summary_language` を使う。ユーザーごとに変えるなら
+    `summaries` を `(article_id, language)` で持つ必要がある。
+- **当面は個人用のまま**（2026-08-13 決定）。一般公開は「自分が毎日使えている」状態に
+  なってから。費用は無料枠に収まる範囲で設計する。
 
 ## 環境
 
@@ -45,8 +60,13 @@ AI要約つきの個人用RSSリーダー。詳細な設計は `docs/plan.md`、
   `poll` → extract → summarize がエラー0件で通り、全記事に要約が付く。
   懸念だった `upsert(..., ignoreDuplicates: true)` + `.select('id')` は白。
   2回目の poll で新規22件だけが extract に積まれ、既存156件は再投入されなかった。
-- **未検証**: スマホ幅のレイアウト、`purge_article_bodies()` の実行、
-  デプロイ後の `supabase/scheduler.sql`（pg_cron はまだ入れていない）。
+- `purge_article_bodies()` は実行確認済み。いまは0件（90日を過ぎた既読記事がまだ無い）だが、
+  古い既読記事を仕込むと消えることをトランザクション内で確認した。
+- **未検証**: スマホ幅のレイアウト（実装はしてある。`/` の先がマジックリンク認証なので
+  実機で見るには自分でログインするしかない）、デプロイ後の `supabase/scheduler.sql`
+  （pg_cron はまだ入れていない）。
+- **いちばんの問題は「自動で動いていない」こと。** デプロイしていないので、
+  巡回も要約も localhost で手で叩かないと走らない。毎日使うにはここが先。
 
 ## 次にやること
 

@@ -27,10 +27,9 @@ export async function POST(request: Request) {
   }
 
   const db = createAdminClient();
-  const userId = ownerUserId();
 
-  const extracted = await runExtractJobs(db, userId);
-  const summarized = await runSummarizeJobs(db, userId);
+  const extracted = await runExtractJobs(db);
+  const summarized = await runSummarizeJobs(db);
 
   return Response.json({ extracted, summarized });
 }
@@ -38,7 +37,7 @@ export async function POST(request: Request) {
 export const GET = POST;
 
 /** 本文抽出。取れなければ RSS の内容にフォールバックし、いずれにせよ要約へ進める。 */
-async function runExtractJobs(db: SupabaseClient, userId: string): Promise<number> {
+async function runExtractJobs(db: SupabaseClient): Promise<number> {
   const jobs = await claim(db, EXTRACT_PER_RUN, 'extract');
   let done = 0;
 
@@ -82,7 +81,7 @@ async function runExtractJobs(db: SupabaseClient, userId: string): Promise<numbe
         .update({ content_text: text || article.content_text, content_ok: ok })
         .eq('id', articleId);
 
-      await enqueue(db, userId, 'summarize', { article_id: articleId });
+      await enqueue(db, 'summarize', { article_id: articleId });
       await complete(db, job.id);
       done++;
     } catch (err) {
@@ -94,11 +93,14 @@ async function runExtractJobs(db: SupabaseClient, userId: string): Promise<numbe
 }
 
 /** 要約。複数記事を1リクエストにまとめて無料枠を節約する。 */
-async function runSummarizeJobs(db: SupabaseClient, userId: string): Promise<number> {
+async function runSummarizeJobs(db: SupabaseClient): Promise<number> {
+  // 要約は全ユーザー共通なので（0005）、言語も1つしか選べない。
+  // 当面はオーナーの設定をその1つとして使う。購読者ごとに言語を変えたくなったら、
+  // summaries を (article_id, language) で持つ形にする必要がある。
   const { data: settings } = await db
     .from('settings')
     .select('summary_language')
-    .eq('user_id', userId)
+    .eq('user_id', ownerUserId())
     .maybeSingle();
   const language = settings?.summary_language ?? 'ja';
 
@@ -135,7 +137,6 @@ async function runSummarizeJobs(db: SupabaseClient, userId: string): Promise<num
         const { error } = await db.from('summaries').upsert(
           results.map((r) => ({
             article_id: r.id,
-            user_id: userId,
             bullets: r.bullets,
             tags: r.tags,
             importance: r.importance,
