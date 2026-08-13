@@ -8,9 +8,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * 毎朝ダイジェスト。過去24時間の未読から重要度上位を選び、
  * NotebookLM にそのまま入れられる Markdown を1本作っておく。
  *
- * pg_cron から1時間毎に叩かれ、各ユーザーの settings.digest_hour（日本時間）に
- * 一致した回だけ実際に作る。Vercel Hobby の cron は1日1回・時刻が±59分ずれるので、
- * 「6時のダイジェストが7時半にできる」を避けるためにこちらも pg_cron 側に寄せた。
+ * pg_cron から1時間毎に叩かれ、各ユーザーの settings.digest_hour（日本時間）を
+ * 過ぎていて、その日のぶんがまだ無ければ作る。Vercel Hobby の cron は1日1回・
+ * 時刻が±59分ずれるので、「6時のダイジェストが7時半にできる」を避けるために
+ * こちらも pg_cron 側に寄せた。
  *
  * 同じ日に二重に作らないのは digests の unique (user_id, date) で担保する。
  * 手で確かめたいときは:
@@ -44,7 +45,7 @@ type Result = {
   userId: string;
   status: 'created' | 'skipped';
   /** skipped の理由。created のときは無い。 */
-  reason?: 'not-the-hour' | 'already-done' | 'no-articles';
+  reason?: 'not-yet' | 'already-done' | 'no-articles';
   exportId?: string;
   articles?: number;
   /** 通知を送れた端末数。鍵が未設定・未登録なら 0。 */
@@ -91,8 +92,13 @@ export async function POST(request: Request) {
     const wantHour = setting?.digest_hour ?? DEFAULT_HOUR;
     const count = setting?.digest_count ?? DEFAULT_COUNT;
 
-    if (!force && hour !== wantHour) {
-      results.push({ userId, status: 'skipped', reason: 'not-the-hour' });
+    // 「その時刻ちょうど」ではなく「その時刻を過ぎているか」で見る。
+    // ちょうどで判定すると、pg_net の失敗やデプロイ中の1回で cron が落ちただけで
+    // その日のダイジェストが永久に作られない（次の実行はもう別の時刻なので）。
+    // 過ぎていれば作る形なら、取りこぼしても次の時間に自分で追いつく。
+    // 二重に作らないのは下の「当日ぶんがあるか」で担保する。
+    if (!force && hour < wantHour) {
+      results.push({ userId, status: 'skipped', reason: 'not-yet' });
       continue;
     }
 
