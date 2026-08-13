@@ -1,4 +1,6 @@
 import { BATCH_SIZE, summarizeBatch, type SummaryInput } from '@/lib/ai/summarize';
+import { SUMMARY_MODEL } from '@/lib/ai/gemini';
+import { recordUsage } from '@/lib/ai/usage';
 import { extractArticle, htmlToText } from '@/lib/feeds/extract';
 import { claim, complete, enqueue, fail, type Job } from '@/lib/jobs/queue';
 import { authorizeCron, createAdminClient, ownerUserId } from '@/lib/supabase/admin';
@@ -131,7 +133,8 @@ async function runSummarizeJobs(db: SupabaseClient): Promise<number> {
     }));
 
     try {
-      const { results, model } = await summarizeBatch(inputs, language);
+      const { results, model, usage } = await summarizeBatch(inputs, language);
+      await recordUsage(db, model, usage.inputTokens, usage.outputTokens, true);
 
       if (results.length > 0) {
         const { error } = await db.from('summaries').upsert(
@@ -152,6 +155,10 @@ async function runSummarizeJobs(db: SupabaseClient): Promise<number> {
       for (const job of byArticle.values()) await complete(db, job.id);
       done += results.length;
     } catch (err) {
+      // 失敗した呼び出しも RPD を1回ぶん食う（429 で弾かれた場合は特に、
+      // 「もう上限に当たっている」ことが数字に出ていないと原因を追えない）。
+      await recordUsage(db, SUMMARY_MODEL, 0, 0, false);
+
       // RetryableError（429など）はバックオフして次回に回る。
       for (const job of byArticle.values()) await fail(db, job.id, err);
       break; // レート制限に当たっているなら、この実行では以降も失敗する。
