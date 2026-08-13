@@ -1,3 +1,4 @@
+import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
 import { requestSummary, setReadLater, setStarred } from '@/app/actions/articles';
 import { ExportButton } from '@/components/ExportButton';
 import Link from 'next/link';
@@ -103,10 +104,19 @@ export function ArticleView({
             <section className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-3">
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-xs font-semibold text-zinc-400">AI要約</span>
-                <span className="text-[11px] text-zinc-600">
-                  重要度 {a.summaries.importance}
+                <span
+                  title={importanceTitle(a.summaries.importance)}
+                  className={`rounded px-1.5 py-0.5 text-[11px] ${importanceTier(a.summaries.importance).className}`}
+                >
+                  重要度 {importanceTier(a.summaries.importance).label}
+                  <span className="ml-1 opacity-60">{a.summaries.importance}/100</span>
                 </span>
               </div>
+
+              {/* 数字だけ出しても何の点数か分からないので、基準をその場に書く。 */}
+              <p className="mb-2 text-[11px] leading-relaxed text-zinc-600">
+                {IMPORTANCE_HELP}
+              </p>
               <ul className="space-y-1">
                 {a.summaries.bullets.map((b, i) => (
                   <li key={i} className="text-sm leading-relaxed text-zinc-300">
