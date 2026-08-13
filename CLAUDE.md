@@ -65,8 +65,20 @@ AI要約つきの個人用RSSリーダー。詳細な設計は `docs/plan.md`、
 - **未検証**: スマホ幅のレイアウト（実装はしてある。`/` の先がマジックリンク認証なので
   実機で見るには自分でログインするしかない）、デプロイ後の `supabase/scheduler.sql`
   （pg_cron はまだ入れていない）。
-- **いちばんの問題は「自動で動いていない」こと。** デプロイしていないので、
-  巡回も要約も localhost で手で叩かないと走らない。毎日使うにはここが先。
+- Vercel にデプロイ済み（https://rsstube.vercel.app ）。本番で `poll` と `jobs/run` が
+  動くことを確認済み。**残るは `supabase/scheduler.sql` の実行**（pg_cron 未導入）で、
+  それまでは自動巡回が走らない。
+
+## 踏んだ罠
+
+- **PostgREST の `.order(col, { referencedTable: X })` は親の行順を変えない。**
+  埋め込んだ X 側の並びを変えるだけ。`articles` を主に `summaries` を埋め込んで
+  重要度順にしていたつもりが、実際は published_at 順のままだった（`0007` で発覚）。
+  並べ替えは必ず親テーブルの列で行うこと。`articles.importance` はそのための複製。
+- **ローカルで動いても Vercel で落ちる依存がある。** `jsdom@30` が引く
+  html-encoding-sniffer が CJS のまま ESM を require していて、dev では通るが
+  Vercel の外部モジュール読み込みで `ERR_REQUIRE_ESM`。本文抽出は `linkedom` に変えた。
+  依存を足したら本番でも1回叩いて確かめること。
 
 ## 次にやること
 

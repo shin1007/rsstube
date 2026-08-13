@@ -81,9 +81,12 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
   }
 
   if (query.sort === 'important') {
-    // 要約がまだ無い記事は importance が null になり、末尾に回る。
+    // articles.importance は summaries.importance の複製（0007）。
+    // 埋め込んだ summaries 側を order しても親の記事順は変わらないので、
+    // 並べ替えは必ず articles 側の列で行うこと。
+    // 要約がまだ無い記事は null になり、末尾に回る。
     q = q
-      .order('importance', { referencedTable: 'summaries', ascending: false })
+      .order('importance', { ascending: false, nullsFirst: false })
       .order('published_at', { ascending: false, nullsFirst: false });
   } else {
     q = q.order('published_at', { ascending: false, nullsFirst: false });

@@ -1,5 +1,6 @@
 'use client';
 
+import { HelpTip } from '@/components/HelpTip';
 import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
 import {
   markRead,
@@ -264,6 +265,10 @@ export function ArticleList({
             <option value="important">重要度順</option>
           </select>
 
+          {/* 重要度で並べているときだけ、その点数が何なのかを引ける「?」を出す。
+              キーボードヘルプの ? と紛れないよう、説明する対象の隣に置く。 */}
+          {sort === 'important' && <HelpTip label="重要度とは" text={IMPORTANCE_HELP} />}
+
           <button
             type="button"
             onClick={() => setHelpOpen(true)}
@@ -274,12 +279,6 @@ export function ArticleList({
             ?
           </button>
         </div>
-
-        {/* 重要度で並べているときは、何の点数で並んでいるのかをその場に出す。
-            バッジの title はスマホでは出ないので、ツールチップだけでは足りない。 */}
-        {sort === 'important' && (
-          <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">{IMPORTANCE_HELP}</p>
-        )}
       </header>
 
       <div className="flex-1 overflow-y-auto thin-scroll pb-16 md:pb-0">
