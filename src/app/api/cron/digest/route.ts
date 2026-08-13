@@ -1,5 +1,6 @@
 import { pickDigestArticles, type DigestCandidate } from '@/lib/digest/select';
 import { createExportFor } from '@/lib/export/create';
+import { sendToUser } from '@/lib/push/send';
 import { authorizeCron, createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -46,6 +47,8 @@ type Result = {
   reason?: 'not-the-hour' | 'already-done' | 'no-articles';
   exportId?: string;
   articles?: number;
+  /** 通知を送れた端末数。鍵が未設定・未登録なら 0。 */
+  pushed?: number;
   /** dry=1 のときだけ。選ばれた記事の中身を目で見るため。 */
   preview?: { title: string; importance: number | null; folder: string | null }[];
 };
@@ -155,11 +158,20 @@ export async function POST(request: Request) {
     });
     if (digestError) throw digestError;
 
+    // 通知はここで送る。届かなくてもダイジェストは既にできているので、
+    // 失敗しても止めない（sendToUser は投げずに数だけ返す）。
+    const push = await sendToUser(db, userId, {
+      title: '今日のダイジェスト',
+      body: `${picked.length}件の要点をまとめました`,
+      url: '/exports',
+    });
+
     results.push({
       userId,
       status: 'created',
       exportId: exported.id,
       articles: picked.length,
+      pushed: push.sent,
     });
   }
 
