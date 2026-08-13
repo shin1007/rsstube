@@ -115,6 +115,9 @@ export function Sidebar({
       </div>
 
       <div className="mt-auto p-3 border-t border-zinc-800 space-y-1.5">
+        <Link href="/listen" className="block text-sm text-zinc-400 hover:text-zinc-100">
+          聴く
+        </Link>
         <Link href="/library" className="block text-sm text-zinc-400 hover:text-zinc-100">
           アーカイブを検索
         </Link>
