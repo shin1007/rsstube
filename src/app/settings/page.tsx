@@ -10,6 +10,9 @@ import {
 } from '@/app/actions/feeds';
 import { signOut } from '@/app/actions/articles';
 import { FolderSelect } from '@/components/FolderSelect';
+import { PushToggle } from '@/components/PushToggle';
+import { UsageTable } from '@/components/UsageTable';
+import { recentUsage } from '@/lib/ai/usage';
 import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
@@ -21,11 +24,12 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   const supabase = await createClient();
 
-  const [feeds, { data: folders }, { data: settings }] = await Promise.all([
+  const [feeds, { data: folders }, { data: settings }, usage] = await Promise.all([
     listSubscribedFeeds(),
     // 並び順はサイドバーと揃える（sort_order → 名前）。
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
     supabase.from('settings').select('*').maybeSingle(),
+    recentUsage(),
   ]);
 
   async function saveSettings(formData: FormData) {
@@ -57,7 +61,14 @@ export default async function SettingsPage() {
             ← 一覧
           </Link>
           <h1 className="text-xl font-bold">設定</h1>
-          <form action={signOut} className="ml-auto">
+          {/* スマホには下部タブしか無いので、二次画面どうしを相互に張っておく。 */}
+          <Link href="/library" className="ml-auto text-xs text-zinc-500 hover:text-zinc-200">
+            アーカイブ
+          </Link>
+          <Link href="/exports" className="text-xs text-zinc-500 hover:text-zinc-200">
+            書き出し
+          </Link>
+          <form action={signOut}>
             <button type="submit" className="text-xs text-zinc-500 hover:text-zinc-200">
               ログアウト
             </button>
@@ -124,6 +135,29 @@ export default async function SettingsPage() {
               保存
             </button>
           </form>
+        </section>
+
+        {/* ---------------- 使用量 ---------------- */}
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">AI の使用量（直近7日）</h2>
+          <UsageTable usage={usage} />
+        </section>
+
+        {/* ---------------- 通知 ---------------- */}
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">ダイジェストの通知</h2>
+          <p className="mb-2 text-xs text-zinc-500">
+            朝のダイジェストができたときに通知します。アプリを開いていなくても届くので、
+            これが「起きたら聴く」の起点になります。端末ごとに登録が要ります。
+          </p>
+          {process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ? (
+            <PushToggle vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
+          ) : (
+            <p className="text-xs text-zinc-500">
+              VAPID の鍵が設定されていません。<code>npm run vapid</code> で作って
+              <code className="mx-1">.env.local</code>に入れてください。
+            </p>
+          )}
         </section>
 
         {/* ---------------- フィード追加 ---------------- */}

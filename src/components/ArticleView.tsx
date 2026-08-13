@@ -2,6 +2,7 @@ import { HelpTip } from '@/components/HelpTip';
 import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
 import { requestSummary, setReadLater, setStarred } from '@/app/actions/articles';
 import { ExportButton } from '@/components/ExportButton';
+import { MediaButton } from '@/components/MediaButton';
 import Link from 'next/link';
 
 type ArticleDetail = {
@@ -74,6 +75,8 @@ export function ArticleView({
         </form>
 
         <ExportButton articleIds={[a.id]} exported={Boolean(state?.exported_at)} />
+
+        <MediaButton articleId={a.id} />
 
         <a
           href={a.url}

@@ -17,11 +17,19 @@ const LIMIT = 50;
 export default async function ExportsPage() {
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from('exports')
-    .select('id, kind, title, created_at, article_ids')
-    .order('created_at', { ascending: false })
-    .limit(LIMIT);
+  const [{ data }, { data: digests }] = await Promise.all([
+    supabase
+      .from('exports')
+      .select('id, kind, title, created_at, article_ids')
+      .order('created_at', { ascending: false })
+      .limit(LIMIT),
+    // 朝のぶんは音声にもできる。どの書き出しがダイジェストなのかを引き当てる。
+    supabase.from('digests').select('id, export_id'),
+  ]);
+
+  const digestByExport = new Map(
+    (digests ?? []).map((d) => [d.export_id as string, d.id as string]),
+  );
 
   const exports: ExportSummary[] = (
     (data ?? []) as { id: string; kind: 'manual' | 'digest'; title: string; created_at: string; article_ids: string[] }[]
@@ -31,6 +39,7 @@ export default async function ExportsPage() {
     title: e.title,
     created_at: e.created_at,
     article_count: e.article_ids?.length ?? 0,
+    digest_id: digestByExport.get(e.id) ?? null,
   }));
 
   return (
@@ -41,7 +50,11 @@ export default async function ExportsPage() {
             ← 一覧
           </Link>
           <h1 className="text-xl font-bold">書き出し</h1>
-          <Link href="/settings" className="ml-auto text-xs text-zinc-500 hover:text-zinc-200">
+          {/* スマホには下部タブしか無いので、二次画面どうしを相互に張っておく。 */}
+          <Link href="/library" className="ml-auto text-xs text-zinc-500 hover:text-zinc-200">
+            アーカイブ
+          </Link>
+          <Link href="/settings" className="text-xs text-zinc-500 hover:text-zinc-200">
             設定
           </Link>
         </div>

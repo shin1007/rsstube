@@ -14,7 +14,8 @@ create extension if not exists pg_net;
 -- 既存の登録を消してから貼り直せるようにしておく。
 select cron.unschedule(jobname)
   from cron.job
- where jobname in ('rsstube-poll', 'rsstube-worker', 'rsstube-purge', 'rsstube-digest');
+ where jobname in ('rsstube-poll', 'rsstube-worker', 'rsstube-purge', 'rsstube-digest',
+                   'rsstube-media-purge');
 
 -- 1時間毎: フィード巡回
 select cron.schedule('rsstube-poll', '7 * * * *', $$
@@ -52,6 +53,17 @@ $$);
 select cron.schedule('rsstube-digest', '50 * * * *', $$
   select net.http_post(
     url     := '__APP_URL__/api/cron/digest',
+    headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__'),
+    timeout_milliseconds := 60000
+  );
+$$);
+
+-- 毎日: 保持期間を過ぎた音声の削除。
+-- SQL 側の掃除と分けてあるのは、Storage のファイルを消すのに API が要るため
+-- （行だけ消してもファイルは残り、容量の実体はそちら）。
+select cron.schedule('rsstube-media-purge', '45 3 * * *', $$
+  select net.http_post(
+    url     := '__APP_URL__/api/cron/purge',
     headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__'),
     timeout_milliseconds := 60000
   );
