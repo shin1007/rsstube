@@ -1,7 +1,5 @@
 import { fetchFeed } from '@/lib/feeds/parse';
-import { urlHash } from '@/lib/feeds/url';
-import { enqueueMany } from '@/lib/jobs/queue';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { ingestFeedItems } from '@/lib/feeds/ingest';
 import { authorizeCron, createAdminClient } from '@/lib/supabase/admin';
 
 /**
@@ -38,9 +36,8 @@ export async function POST(request: Request) {
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
   const now = Date.now();
-  const newArticleIds: string[] = [];
-  // 新着記事を、それが属するフィードごとに覚えておく。あとで購読者に配る。
-  const newByFeed = new Map<string, string[]>();
+  let newArticles = 0;
+  let states = 0;
   let polled = 0;
   let skipped = 0;
   let failed = 0;
@@ -70,34 +67,11 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const rows = result.items.map((item) => ({
-        feed_id: feed.id,
-        guid: item.guid ?? null,
-        url: item.url,
-        url_hash: urlHash(item.url),
-        title: item.title,
-        author: item.author ?? null,
-        published_at: item.publishedAt ?? null,
-        excerpt: item.excerpt ?? null,
-        // 本文は後段の extract ジョブが上書きする。それまでは RSS の内容を出しておく。
-        content_text: item.contentHtml ?? item.excerpt ?? null,
-        content_ok: false,
-      }));
-
-      if (rows.length > 0) {
-        // 既出の記事は url_hash の一意制約で弾く。ignoreDuplicates で
-        // 「既読にした記事が再取得で未読に戻る」事故を防ぐ。
-        const { data: inserted, error: insertError } = await db
-          .from('articles')
-          .upsert(rows, { onConflict: 'url_hash', ignoreDuplicates: true })
-          .select('id');
-
-        if (insertError) throw insertError;
-        for (const row of inserted ?? []) newArticleIds.push(row.id);
-        if ((inserted ?? []).length > 0) {
-          newByFeed.set(feed.id, (inserted ?? []).map((row) => row.id));
-        }
-      }
+      // 記事の入れ方は登録直後の初回取り込みと共有する（lib/feeds/ingest.ts）。
+      // 別々に書くと「登録直後だけ本文抽出が積まれない」ような差が出る。
+      const ingested = await ingestFeedItems(db, feed.id, result);
+      newArticles += ingested.newArticles;
+      states += ingested.states;
 
       await db
         .from('feeds')
@@ -124,59 +98,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // 新着記事ぶんの本文抽出をキューへ。要約は抽出が終わってから積む。
-  // 記事は共通なので、購読者が何人いても仕事は1件ずつでよい。
-  if (newArticleIds.length > 0) {
-    await enqueueMany(
-      db,
-      'extract',
-      newArticleIds.map((id) => ({ article_id: id })),
-    );
-  }
-
-  // 未読の状態行を、そのフィードの購読者ぶんだけ用意しておく
-  // （一覧で left join せずに済ませるため）。
-  const states = await fanOutStates(db, newByFeed);
-
-  return Response.json({
-    polled,
-    skipped,
-    failed,
-    newArticles: newArticleIds.length,
-    states,
-  });
-}
-
-/**
- * 新着記事の未読行を、そのフィードの購読者全員に配る。
- * 戻り値は作った状態行の数。
- */
-async function fanOutStates(
-  db: SupabaseClient,
-  newByFeed: Map<string, string[]>,
-): Promise<number> {
-  if (newByFeed.size === 0) return 0;
-
-  const { data: subs, error } = await db
-    .from('subscriptions')
-    .select('user_id, feed_id')
-    .in('feed_id', [...newByFeed.keys()]);
-  if (error) throw error;
-
-  const rows: { article_id: string; user_id: string }[] = [];
-  for (const sub of subs ?? []) {
-    for (const articleId of newByFeed.get(sub.feed_id) ?? []) {
-      rows.push({ article_id: articleId, user_id: sub.user_id });
-    }
-  }
-  if (rows.length === 0) return 0;
-
-  const { error: upsertError } = await db
-    .from('article_states')
-    .upsert(rows, { onConflict: 'article_id,user_id', ignoreDuplicates: true });
-  if (upsertError) throw upsertError;
-
-  return rows.length;
+  return Response.json({ polled, skipped, failed, newArticles, states });
 }
 
 /** ブラウザから手で叩いて確認できるように GET でも同じ処理を通す。 */
