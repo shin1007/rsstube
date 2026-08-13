@@ -1,3 +1,4 @@
+import { isAllowedEmail } from '@/lib/auth/allowlist';
 import { createClient } from '@/lib/supabase/server';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -7,7 +8,13 @@ import { redirect } from 'next/navigation';
  *
  * 自分専用なのでサインアップ導線は置かない。ユーザーは Supabase の
  * ダッシュボードで1つだけ作り、以後はマジックリンクで入る。
- * （Supabase の Authentication 設定で新規サインアップを無効にしておくこと）
+ *
+ * 新規作成を止めているのは3枚:
+ *   1. shouldCreateUser: false      このフォームからはユーザーを作らない
+ *   2. ALLOWED_EMAILS               書いてあるアドレス以外はリンクすら送らない
+ *   3. Supabase の「Allow new users to sign up」をオフ  ← これが本丸
+ * 1と2はアプリを通った場合にしか効かない。公開鍵で auth API を直接叩かれる経路は
+ * 3でしか塞げないので、デプロイ前に必ず確認すること。
  */
 export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
   const params = await searchParams;
@@ -19,6 +26,10 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
 
     const email = String(formData.get('email') ?? '').trim();
     if (!email) redirect('/login?error=' + encodeURIComponent('メールアドレスを入力してください'));
+
+    // 許可していないアドレスには、そもそもリンクを送らない。
+    // 「登録済みかどうか」を教えないよう、文面は成功時と区別しない。
+    if (!isAllowedEmail(email)) redirect('/login?sent=1');
 
     // メールのリンクから戻ってくる先。localhost と本番で変わるので、
     // 固定値ではなく実際のリクエストのホストから組み立てる。
