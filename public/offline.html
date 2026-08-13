@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b0d10" />
+    <title>オフライン — RSSTube</title>
+    <style>
+      /*
+       * サービスワーカーが通信できないときに出す唯一の画面なので、
+       * 外部ファイルを一切参照しない（参照した先も取れない）。
+       */
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0b0d10;
+        color: #f4f4f5;
+        font-family: system-ui, -apple-system, 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo,
+          sans-serif;
+      }
+      main {
+        max-width: 24rem;
+        padding: 1.5rem;
+        text-align: center;
+      }
+      h1 {
+        font-size: 1rem;
+        margin: 0 0 0.75rem;
+      }
+      p {
+        font-size: 0.8125rem;
+        line-height: 1.8;
+        color: #a1a1aa;
+        margin: 0 0 1.5rem;
+      }
+      button {
+        border: 1px solid #3f3f46;
+        background: transparent;
+        color: #f4f4f5;
+        border-radius: 0.25rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>オフラインです</h1>
+      <p>
+        記事の取得にはネットワークが要ります。<br />
+        電波の届くところで開き直してください。
+      </p>
+      <button type="button" onclick="location.reload()">再読み込み</button>
+    </main>
+  </body>
+</html>
