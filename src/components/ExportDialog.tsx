@@ -1,0 +1,105 @@
+'use client';
+
+import type { ExportResult } from '@/lib/export/create';
+import { safeFileName } from '@/lib/export/markdown';
+import { useState } from 'react';
+
+/**
+ * 書き出した Markdown の受け渡しダイアログ。
+ *
+ * NotebookLM には公開APIが無いので、最後のひと手間（ソースの追加）は人がやる。
+ * こちらの仕事はダウンロード / コピー / 指示文をひと画面に並べて、
+ * その手間を最小にすること。書き出した直後にも `/exports` からも同じものを出す。
+ */
+export function ExportDialog({
+  result,
+  onClose,
+}: {
+  result: ExportResult;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState<'md' | 'prompt' | null>(null);
+
+  const copy = async (text: string, which: 'md' | 'prompt') => {
+    await navigator.clipboard.writeText(text);
+    setCopied(which);
+    setTimeout(() => setCopied(null), 1500);
+  };
+
+  const download = () => {
+    const blob = new Blob([result.markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeFileName(result.title)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 p-0 md:p-6"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-t-xl md:rounded-xl border border-zinc-800 bg-zinc-950 p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-sm font-semibold">NotebookLM に渡す</h2>
+        <p className="mt-1 text-xs text-zinc-500">{result.title}</p>
+
+        <div className="mt-4 space-y-2">
+          <button
+            type="button"
+            onClick={download}
+            className="w-full rounded bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-900"
+          >
+            .md をダウンロード
+          </button>
+          <button
+            type="button"
+            onClick={() => copy(result.markdown, 'md')}
+            className="w-full rounded border border-zinc-700 px-3 py-2 text-sm"
+          >
+            {copied === 'md' ? 'コピーしました' : '本文をクリップボードにコピー'}
+          </button>
+        </div>
+
+        {/* 音声の出来はこの指示文でだいぶ変わるので、目立つ位置に置く。 */}
+        {result.prompt && (
+          <div className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-3">
+            <p className="text-xs font-semibold text-zinc-400">
+              「音声概要をカスタマイズ」に貼る指示文
+            </p>
+            <p className="mt-1.5 text-xs leading-relaxed text-zinc-300">{result.prompt}</p>
+            <button
+              type="button"
+              onClick={() => copy(result.prompt, 'prompt')}
+              className="mt-2 rounded border border-zinc-700 px-2 py-1 text-xs"
+            >
+              {copied === 'prompt' ? 'コピーしました' : '指示文をコピー'}
+            </button>
+          </div>
+        )}
+
+        <div className="mt-4 flex gap-2">
+          <a
+            href="https://notebooklm.google.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 rounded border border-zinc-700 px-3 py-2 text-center text-sm"
+          >
+            NotebookLM を開く ↗
+          </a>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded px-3 py-2 text-sm text-zinc-500"
+          >
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

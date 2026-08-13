@@ -1,118 +1,52 @@
 'use server';
 
-import { buildMarkdown, type ExportArticle } from '@/lib/export/markdown';
+import { createExportFor, type ExportResult } from '@/lib/export/create';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
 /**
- * 記事を NotebookLM 用の Markdown にまとめて保存する。
+ * 記事を NotebookLM 用の Markdown にまとめて保存する（画面からの入口）。
  *
  * 実際の音声化は NotebookLM 側でやるので、ここでの仕事は
- * 「投入できる形にして渡す」ことだけ。
+ * 「投入できる形にして渡す」ことだけ。まとめ方そのものは
+ * lib/export/create.ts にあり、毎朝ダイジェストの cron と共有している。
  */
 
-type Raw = {
-  id: string;
-  title: string;
-  url: string;
-  author: string | null;
-  published_at: string | null;
-  content_text: string | null;
-  content_ok: boolean;
-  feeds: { title: string } | null;
-  summaries: { bullets: string[] } | null;
-};
-
-export type ExportResult = {
-  id: string;
-  title: string;
-  markdown: string;
-  prompt: string;
-};
+export type { ExportResult };
 
 export async function createExport(
   articleIds: string[],
   kind: 'manual' | 'digest' = 'manual',
   title?: string,
 ): Promise<ExportResult> {
-  if (articleIds.length === 0) throw new Error('記事が選択されていません');
-
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) throw new Error('未ログインです');
-  const userId = auth.user.id;
 
-  const { data, error } = await supabase
-    .from('articles')
-    .select(
-      `id, title, url, author, published_at, content_text, content_ok,
-       feeds (title), summaries (bullets)`,
-    )
-    .in('id', articleIds);
-  if (error) throw error;
-
-  const rows = (data ?? []) as unknown as Raw[];
-  // 選択した順を保つ（一覧で見ていた並びのまま音声になるほうが自然）。
-  const order = new Map(articleIds.map((id, i) => [id, i]));
-  rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-
-  const articles: ExportArticle[] = rows.map((r) => ({
-    title: r.title,
-    url: r.url,
-    feedTitle: r.feeds?.title ?? null,
-    author: r.author,
-    publishedAt: r.published_at,
-    bullets: r.summaries?.bullets ?? null,
-    contentText: r.content_text,
-    contentOk: r.content_ok,
-  }));
-
-  const finalTitle =
-    title ??
-    (rows.length === 1
-      ? rows[0].title
-      : `RSSTube ${new Date().toLocaleDateString('ja-JP')}`);
-
-  const markdown = buildMarkdown(articles, finalTitle);
-
-  const { data: settings } = await supabase
-    .from('settings')
-    .select('notebooklm_prompt')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  const prompt = settings?.notebooklm_prompt ?? '';
-
-  const { data: saved, error: saveError } = await supabase
-    .from('exports')
-    .insert({
-      user_id: userId,
-      kind,
-      title: finalTitle,
-      markdown,
-      prompt,
-      article_ids: rows.map((r) => r.id),
-    })
-    .select('id')
-    .single();
-  if (saveError) throw saveError;
-
-  // 送信済みの印を付けて、次回まとめて出すときに重複しないようにする。
-  const now = new Date().toISOString();
-  await supabase.from('article_states').upsert(
-    rows.map((r) => ({
-      article_id: r.id,
-      user_id: userId,
-      exported_at: now,
-      updated_at: now,
-    })),
-    { onConflict: 'article_id' },
-  );
+  const result = await createExportFor(supabase, auth.user.id, articleIds, kind, title);
 
   revalidatePath('/');
   revalidatePath('/exports');
 
-  return { id: saved.id, title: finalTitle, markdown, prompt };
+  return result;
+}
+
+/**
+ * 保存済みの書き出しを1件読み直す。
+ *
+ * 一覧（/exports）は見出しだけを出し、Markdown 本文はここで開いたときに取る。
+ * 1件で数十KB〜数百KBになるので、一覧に全部載せると転送量が跳ね上がる。
+ */
+export async function getExport(id: string): Promise<ExportResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('exports')
+    .select('id, title, markdown, prompt')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('書き出しが見つかりません');
+  return data as ExportResult;
 }
 
 /** 「あとで」に溜めた記事をまとめて書き出す。 */
