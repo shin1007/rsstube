@@ -1,5 +1,6 @@
 import { fetchFeed } from '@/lib/feeds/parse';
 import { ingestFeedItems } from '@/lib/feeds/ingest';
+import { relocateFeedUrl, shouldAutoRelocate } from '@/lib/feeds/relocate';
 import { authorizeCron, createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -30,7 +31,8 @@ export async function POST(request: Request) {
   // （error_count 時間ぶん待つ。10回失敗すれば10時間に1回まで落ちる）。
   const { data: feeds, error } = await db
     .from('feeds')
-    .select('id, url, etag, last_modified, last_fetched_at, error_count')
+    // site_url は、行方不明になったフィードを探し直すときの手がかりになる。
+    .select('id, url, site_url, title, etag, last_modified, last_fetched_at, error_count')
     .order('last_fetched_at', { ascending: true, nullsFirst: true })
     .limit(FEEDS_PER_RUN);
 
@@ -95,14 +97,28 @@ export async function POST(request: Request) {
         .eq('id', feed.id);
     } catch (err) {
       failed++;
+      const errorCount = feed.error_count + 1;
+
       await db
         .from('feeds')
         .update({
           last_fetched_at: new Date().toISOString(),
-          error_count: feed.error_count + 1,
+          error_count: errorCount,
           last_error: (err instanceof Error ? err.message : String(err)).slice(0, 500),
         })
         .eq('id', feed.id);
+
+      // リダイレクトが無いまま行方不明になった場合は、ここでしか気づけない。
+      // サイトから探し直して、見つかれば付け替える（購読も既読も id に
+      // 紐づいているので何も失わない）。毎回やると落ちている相手に
+      // 余計なリクエストを重ねるので、続けて失敗したときだけ。
+      if (shouldAutoRelocate(errorCount)) {
+        const r = await relocateFeedUrl(db, feed);
+        if (r.status === 'moved') {
+          moved++;
+          failed--; // 付け替わったので、この巡回は失敗として数えない。
+        }
+      }
     }
   }
 

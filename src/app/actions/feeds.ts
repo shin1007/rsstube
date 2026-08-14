@@ -3,6 +3,7 @@
 import { fetchFeed } from '@/lib/feeds/parse';
 import { discoverFeeds, type FeedCandidate } from '@/lib/feeds/discover';
 import { fanOutStates, ingestFeedItems } from '@/lib/feeds/ingest';
+import { relocateFeedUrl } from '@/lib/feeds/relocate';
 import { looksLikeUrl, searchFeeds } from '@/lib/feeds/search';
 import { parseOpml } from '@/lib/feeds/opml';
 import { createClient } from '@/lib/supabase/server';
@@ -218,7 +219,6 @@ export async function addFeed(formData: FormData) {
   await subscribeFeed(url, folder);
 }
 
-/** 購読の解除。記事とフィードは他の購読者のものでもあるので消さない。 */
 /**
  * 壊れたフィードの行き先を探し直す。
  *
@@ -239,41 +239,18 @@ export async function relocateFeed(feedId: string): Promise<{ url: string; title
     .maybeSingle();
   if (!feed) throw new Error('フィードが見つかりません');
 
-  // サイトのURLが分かっていればそこから。無ければフィードURLのドメインから。
-  const from = feed.site_url || new URL(feed.url).origin;
-
-  const found = await discoverFeeds(from);
-  const next = found[0];
-  if (!next) throw new Error('新しいフィードが見つかりませんでした');
-  if (next.url === feed.url) throw new Error('同じURLしか見つかりませんでした');
-
+  // 探し方は巡回の自動付け替えと同じものを使う（lib/feeds/relocate.ts）。
   // 書き込みは共通テーブルなので RLS を迂回するクライアントで行う。
-  const admin = createAdminClient();
+  const result = await relocateFeedUrl(createAdminClient(), feed);
 
-  const { data: taken } = await admin.from('feeds').select('id').eq('url', next.url).maybeSingle();
-  if (taken && taken.id !== feedId) {
-    throw new Error('その行き先は別のフィードとして登録済みです');
-  }
-
-  const { error } = await admin
-    .from('feeds')
-    .update({
-      url: next.url,
-      title: next.title || feed.title,
-      site_url: next.siteUrl ?? feed.site_url,
-      // 移転先の中身は別物なので、条件付きGETの値と失敗回数はやり直す。
-      etag: null,
-      last_modified: null,
-      error_count: 0,
-      last_error: null,
-    })
-    .eq('id', feedId);
-  if (error) throw error;
+  if (result.status === 'not-found') throw new Error('新しいフィードが見つかりませんでした');
+  if (result.status === 'same') throw new Error('いまと同じURLしか見つかりませんでした');
+  if (result.status === 'taken') throw new Error('その行き先は別のフィードとして登録済みです');
 
   revalidatePath('/settings');
   revalidatePath('/');
 
-  return { url: next.url, title: next.title };
+  return { url: result.url, title: result.title };
 }
 
 /** 購読をやめたときに何がどうなるか。押す前に見せるための数え上げ。 */
