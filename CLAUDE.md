@@ -80,7 +80,7 @@ Gemini 使用量の記録と表示（`ai_usage`・設定画面）。これで P3
 さらに P4/P5 の自前音声とスライド再生（台本生成・セグメントTTS・MP3化・
 Storage保存・`/listen`・`/watch/[id]`）。
 
-未: Google Drive への直接書き出し（OAuth）。
+（Drive 連携は実装済み。0017）
 
 ## 検証状況
 
@@ -212,11 +212,15 @@ Storage保存・`/listen`・`/watch/[id]`）。
    調査に使い切った日があった。枠が戻ってから `/exports` の
    「アプリ内で音声にする」で1本作る）
 
-### 未実装
+### 実装したが、実際に繋いで確かめていないもの
 
-6. Google Drive への直接書き出し（OAuth）。plan.md の P2 で唯一残っているもの。
-   Google Cloud Console でクライアントを作るところから始まる
-   （`drive.file` スコープ）。「面倒なら後回しでよい」と最初から書いてある項目
+6. Google Drive 連携（0017）。認証情報は `.env.local` に入っていて、
+   client_id / client_secret が有効なことと redirect_uri が登録済みなことは確認した。
+   **残るは設定画面の「Google Drive に接続」を押して同意すること**。
+   同意はブラウザでの操作なので自分でしかできない。繋いだら書き出しの画面に
+   「Google Drive に保存」が出る。
+
+   これで plan.md の未実装は無くなる。
 
 ### しばらく見ておくとよいもの
 
