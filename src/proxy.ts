@@ -60,7 +60,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * 静的ファイルと、シークレットで別途保護している cron/ワーカーは対象外。
+     * 静的ファイルと、シークレットで別途保護している cron/ワーカー/診断は対象外。
      * matcher を書かないと CSS や画像まで認証にかかる。
      *
      * auth/ も外す。マジックリンクのコールバックは「まだセッションが無い状態」で
@@ -70,6 +70,6 @@ export const config = {
      * 未ログインだとインストール要件を満たせず、圏外のときは offline.html 自体が
      * /login へのリダイレクトになって何も出せなくなる。
      */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline.html|auth|api/cron|api/jobs|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline.html|auth|api/cron|api/jobs|api/debug|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };

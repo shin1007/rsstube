@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "check:secrets": "bash scripts/check-secrets.sh",
     "icons": "node scripts/make-icons.mjs",
+    "check:url": "node --env-file=.env.local scripts/check-url.mjs",
     "vapid": "node scripts/gen-vapid.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:backup": "node scripts/db-backup.mjs",
