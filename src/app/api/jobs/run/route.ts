@@ -106,7 +106,13 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
 
       await db
         .from('articles')
-        .update({ content_text: text || article.content_text, content_ok: ok })
+        .update({
+          content_text: text || article.content_text,
+          content_ok: ok,
+          // 取りに行ったことを残す。これが無いと、失敗したのか順番待ちなのかが
+          // 後から区別できない（0014）。
+          extracted_at: new Date().toISOString(),
+        })
         .eq('id', articleId);
 
       await enqueue(db, 'summarize', { article_id: articleId });

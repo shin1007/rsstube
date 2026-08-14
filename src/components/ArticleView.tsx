@@ -13,6 +13,8 @@ type ArticleDetail = {
   published_at: string | null;
   content_text: string | null;
   content_ok: boolean;
+  /** 本文抽出を試みた時刻。null は未処理（0014）。 */
+  extracted_at: string | null;
   feeds: { id: string; title: string } | null;
   summaries: { bullets: string[]; tags: string[]; importance: number } | null;
   article_states: {
@@ -153,12 +155,19 @@ export function ArticleView({
               保持期間を過ぎたため本文は削除されています。元記事で読んでください。
             </p>
           ) : (
-            !a.content_ok && (
+            !a.content_ok &&
+            // 「まだ取りに行っていない」と「取りに行って取れなかった」は別物。
+            // 前者は待てば直るので、諦めさせない書き方にする（0014）。
+            (a.extracted_at ? (
               <p className="mt-4 rounded border border-amber-900/60 bg-amber-950/30 p-2 text-xs text-amber-300">
                 このサイトからは本文を取得できなかったため、RSSの抜粋のみ表示しています。
                 全文は元記事で読んでください。
               </p>
-            )
+            ) : (
+              <p className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-2 text-xs text-zinc-400">
+                本文はまだ取得していません（順番待ち）。しばらくすると全文と要約が入ります。
+              </p>
+            ))
           )}
 
           <div className="prose-article mt-5 text-[15px] text-zinc-300">
