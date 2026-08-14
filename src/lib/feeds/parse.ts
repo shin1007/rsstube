@@ -1,4 +1,5 @@
 import Parser from 'rss-parser';
+import { decodeBody } from '@/lib/feeds/charset';
 import { isRedirect, MAX_HOPS, permanentTarget } from '@/lib/feeds/redirect';
 
 /**
@@ -81,7 +82,9 @@ export async function fetchFeed(
   if (res.status === 304) return { status: 'not-modified', movedTo };
   if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
 
-  const xml = await res.text();
+  // フィードも UTF-8 とは限らない。日本語のサイトには Shift_JIS / EUC-JP が残っていて、
+  // XML 宣言の encoding にだけ書かれていることがある（本文抽出と同じ事情）。
+  const xml = decodeBody(res.headers.get('content-type'), new Uint8Array(await res.arrayBuffer()));
   const parsed = await parser.parseString(xml);
 
   const items: FetchedItem[] = [];

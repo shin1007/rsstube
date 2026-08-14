@@ -1,5 +1,6 @@
 import { Readability } from '@mozilla/readability';
 import { parseHTML } from 'linkedom';
+import { decodeBody } from '@/lib/feeds/charset';
 
 /**
  * 記事本文の抽出。
@@ -44,7 +45,11 @@ export async function extractArticle(url: string): Promise<ExtractResult> {
     throw new Error(`HTMLではない (${contentType})`);
   }
 
-  const html = await res.text();
+  // res.text() は Content-Type の charset しか見ず、無ければ UTF-8 として読む。
+  // 日本の自治体・省庁には Shift_JIS / EUC-JP が現役で残っていて、しかも
+  // charset を meta にだけ書いていることがある。そのまま読むと丸ごと文字化けし、
+  // **長さはあるので抽出は成功に見えたまま**、化けた文字列が要約に回る。
+  const html = decodeBody(res.headers.get('content-type'), new Uint8Array(await res.arrayBuffer()));
   // linkedom は外部リソースを取りに行かないので、画像やスクリプトで遅くならない。
   const { document } = parseHTML(html);
   const article = new Readability(document).parse();
