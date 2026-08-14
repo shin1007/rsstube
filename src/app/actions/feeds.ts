@@ -219,6 +219,63 @@ export async function addFeed(formData: FormData) {
 }
 
 /** 購読の解除。記事とフィードは他の購読者のものでもあるので消さない。 */
+/**
+ * 壊れたフィードの行き先を探し直す。
+ *
+ * 巡回は 301 を見て自動で移転先を覚えるが、それが効くのは**古いURLが
+ * 301 を返してくれる場合だけ**。いきなり 404 になったり、ドメインごと
+ * 変わったりすると追えない。そのときは元のサイトから探し直すしかない。
+ *
+ * 見つかったら feeds.url を差し替える。購読・フォルダ・既読はフィードの id に
+ * 紐づいているので、そのまま引き継がれる（登録し直すと全部消える）。
+ */
+export async function relocateFeed(feedId: string): Promise<{ url: string; title: string }> {
+  const { supabase } = await client();
+
+  const { data: feed } = await supabase
+    .from('feeds')
+    .select('id, url, site_url, title')
+    .eq('id', feedId)
+    .maybeSingle();
+  if (!feed) throw new Error('フィードが見つかりません');
+
+  // サイトのURLが分かっていればそこから。無ければフィードURLのドメインから。
+  const from = feed.site_url || new URL(feed.url).origin;
+
+  const found = await discoverFeeds(from);
+  const next = found[0];
+  if (!next) throw new Error('新しいフィードが見つかりませんでした');
+  if (next.url === feed.url) throw new Error('同じURLしか見つかりませんでした');
+
+  // 書き込みは共通テーブルなので RLS を迂回するクライアントで行う。
+  const admin = createAdminClient();
+
+  const { data: taken } = await admin.from('feeds').select('id').eq('url', next.url).maybeSingle();
+  if (taken && taken.id !== feedId) {
+    throw new Error('その行き先は別のフィードとして登録済みです');
+  }
+
+  const { error } = await admin
+    .from('feeds')
+    .update({
+      url: next.url,
+      title: next.title || feed.title,
+      site_url: next.siteUrl ?? feed.site_url,
+      // 移転先の中身は別物なので、条件付きGETの値と失敗回数はやり直す。
+      etag: null,
+      last_modified: null,
+      error_count: 0,
+      last_error: null,
+    })
+    .eq('id', feedId);
+  if (error) throw error;
+
+  revalidatePath('/settings');
+  revalidatePath('/');
+
+  return { url: next.url, title: next.title };
+}
+
 /** 購読をやめたときに何がどうなるか。押す前に見せるための数え上げ。 */
 export type UnsubscribeImpact = {
   /** 一覧から消える件数（未読＋ただ読んだだけのもの）。 */

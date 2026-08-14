@@ -1,5 +1,6 @@
 import { needsAttention } from '@/lib/feeds/health';
 import type { SubscribedFeed } from '@/lib/subscriptions';
+import { RelocateButton } from '@/components/RelocateButton';
 import { UnsubscribeButton } from '@/components/UnsubscribeButton';
 
 /**
@@ -52,6 +53,9 @@ export function FeedHealth({ feeds }: { feeds: SubscribedFeed[] }) {
                 {health.level === 'dead' ? '壊れている' : health.level === 'failing' ? '不調' : '更新なし'}
               </span>
               <span className="min-w-0 flex-1 truncate text-sm">{feed.title || feed.url}</span>
+              {/* URLが変わっただけのことがある。やめる前にこちらを試す
+                  （id が変わらないのでフォルダも既読もそのまま残る）。 */}
+              {health.level !== 'stale' && <RelocateButton feedId={feed.id} />}
               <UnsubscribeButton
                 feedId={feed.id}
                 title={feed.title || feed.url}

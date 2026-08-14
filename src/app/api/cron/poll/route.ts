@@ -1,6 +1,7 @@
 import { fetchFeed } from '@/lib/feeds/parse';
 import { ingestFeedItems } from '@/lib/feeds/ingest';
 import { authorizeCron, createAdminClient } from '@/lib/supabase/admin';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * フィード巡回。pg_cron から1時間毎に叩かれる（supabase/scheduler.sql）。
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
   let polled = 0;
   let skipped = 0;
   let failed = 0;
+  let moved = 0;
 
   for (const feed of feeds ?? []) {
     // バックオフ中のフィードは飛ばす。
@@ -58,6 +60,12 @@ export async function POST(request: Request) {
         lastModified: feed.last_modified,
       });
       polled++;
+
+      // フィードが恒久的に移転していたら、そちらを見るように覚え直す。
+      // 覚えないと古いURLを叩き続け、それが消えた日に「死んだフィード」になる。
+      if (result.movedTo && result.movedTo !== feed.url) {
+        if (await moveFeedUrl(db, feed.id, result.movedTo)) moved++;
+      }
 
       if (result.status === 'not-modified') {
         await db
@@ -98,7 +106,31 @@ export async function POST(request: Request) {
     }
   }
 
-  return Response.json({ polled, skipped, failed, newArticles, states });
+  return Response.json({ polled, skipped, failed, newArticles, states, moved });
+}
+
+/**
+ * 移転先を覚え直す。
+ *
+ * feeds.url は一意なので、移転先が既に別の行として登録されていることがある
+ * （移転前と移転後を両方購読していた場合）。その時は書き換えられないので何もしない。
+ * 古いほうは記事が来なくなり、「更新なし」として設定画面に出るので、そこで気づける。
+ */
+async function moveFeedUrl(db: SupabaseClient, feedId: string, to: string): Promise<boolean> {
+  const { data: taken } = await db.from('feeds').select('id').eq('url', to).maybeSingle();
+  if (taken && taken.id !== feedId) return false;
+
+  const { error } = await db
+    .from('feeds')
+    .update({
+      url: to,
+      // 移転先では中身が違うかもしれないので、条件付きGETの値は捨てる。
+      etag: null,
+      last_modified: null,
+    })
+    .eq('id', feedId);
+
+  return !error;
 }
 
 /** ブラウザから手で叩いて確認できるように GET でも同じ処理を通す。 */
