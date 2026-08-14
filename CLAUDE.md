@@ -131,6 +131,16 @@ Storage保存・`/listen`・`/watch/[id]`）。
 
 ## 踏んだ罠
 
+- **`res.text()` は日本語のサイトで文字化けする。** Content-Type に charset が無いと
+  UTF-8 として読むが、自治体・省庁には Shift_JIS / EUC-JP が現役で残っていて、
+  charset を meta にだけ書いていることがある（例: `mhlw.go.jp`）。
+  厄介なのは**化けても長さはあるので抽出は「成功」に見える**こと。化けた文字列が
+  そのまま要約に回る。`lib/feeds/charset.ts` で Content-Type → BOM → meta の順に見る。
+- **バックアップにテーブルを足し忘れると誰も気づかない。** `scripts/db-tables.mjs` が
+  一覧で、0005 で切り出した `subscriptions` が長らく漏れていた（復元しても購読ゼロ）。
+  jsonb 列は JSON 文字列にしてから戻すこと。JS の配列のまま渡すと pg が
+  Postgres の配列に直してしまい `invalid input syntax for type json` になる
+  （`text[]` の列は配列のままで正しいので、値の形では区別できない。列の型を DB に聞く）。
 - **日本語の全文検索は PGroonga（0015）。** `simple` 辞書の tsvector は空白で区切るだけで
   日本語の文が丸ごと1語になり、0001 で張ったまま一度も使えていなかった。PGroonga は
   Supabase で `create extension` できる。**索引を張るだけで既存の `ilike` が8.2倍速**に
