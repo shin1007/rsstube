@@ -2,6 +2,7 @@ import { BATCH_SIZE, summarizeBatch, type SummaryInput } from '@/lib/ai/summariz
 import { SUMMARY_MODEL } from '@/lib/ai/gemini';
 import { recordUsage } from '@/lib/ai/usage';
 import { contentHash } from '@/lib/feeds/content';
+import { sanitizeHtml } from '@/lib/feeds/sanitize';
 import { extractArticle, htmlToText } from '@/lib/feeds/extract';
 import { claim, complete, enqueue, fail, type Job } from '@/lib/jobs/queue';
 import { runScriptJob, runTtsJob, TTS_PER_RUN } from '@/lib/media/jobs';
@@ -90,10 +91,12 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
       }
 
       let text = '';
+      let html = '';
       let ok = false;
       try {
         const result = await extractArticle(article.url);
         text = result.text;
+        html = result.html;
         ok = result.ok;
       } catch {
         // 403やタイムアウトは珍しくない。ここで再試行しても大抵また失敗するので、
@@ -103,6 +106,8 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
       if (!ok && article.content_text) {
         // poll の時点で入れた RSS 本文（HTML）をテキスト化して使う。
         text = htmlToText(article.content_text);
+        // RSS の中身も第三者が書いたものなので、描画に回すぶんは必ず消毒する。
+        html = sanitizeHtml(article.content_text, article.url);
       }
 
       // 同じフィードで本文が丸ごと一致したら、記事ではなく使い回しのページ
@@ -119,6 +124,8 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
         .from('articles')
         .update({
           content_text: text || article.content_text,
+          // 描画用。抽出に失敗しても RSS 本文から作れていれば残す。
+          content_html: html || null,
           content_ok: ok,
           // 使い回しと判定したものはハッシュを残さない。残すと、次の記事が
           // それと一致して連鎖的に落ちる（判定の基準が壊れたページになる）。

@@ -2,6 +2,7 @@ import { Readability } from '@mozilla/readability';
 import { parseHTML } from 'linkedom';
 import { htmlToText as buildText } from '@/lib/feeds/text';
 import { decodeBody } from '@/lib/feeds/charset';
+import { sanitizeHtml } from '@/lib/feeds/sanitize';
 
 /**
  * 記事本文の抽出。
@@ -21,6 +22,11 @@ import { decodeBody } from '@/lib/feeds/charset';
 
 export type ExtractResult = {
   text: string;
+  /**
+   * 消毒済みの本文HTML。画面に出すのはこちら（lib/feeds/sanitize.ts）。
+   * 要約と検索はテキストのほうを使う（マークアップは AI に何も足さない）。
+   */
+  html: string;
   /** true = 本文抽出に成功。false = 取れなかった。 */
   ok: boolean;
 };
@@ -30,6 +36,12 @@ const USER_AGENT =
 
 /** 要約に渡す上限。長すぎる記事は先頭を優先して切る。 */
 const MAX_CHARS = 40_000;
+
+/**
+ * 保存するHTMLの上限。タグのぶんテキストより嵩むので広めに取るが、
+ * 無制限にすると DB（無料枠500MB）を一気に食う。
+ */
+const MAX_HTML_CHARS = 120_000;
 
 /**
  * これ未満なら「本文を取れなかった」とみなす境目。
@@ -82,14 +94,16 @@ export async function extractArticle(url: string): Promise<ExtractResult> {
   // 元HTMLの改行だけが残る。結果、見た目が書き手のHTMLの書き方に左右される
   // （改行だらけのサイトと、改行が1つも無いサイトができる）。lib/feeds/text.ts 参照。
   const text = htmlToText(article?.content ?? '');
+  // 相対パスの画像やリンクを解決するため、記事のURLを渡す。
+  const safeHtml = sanitizeHtml(article?.content ?? '', url);
 
   // 極端に短い結果は抽出失敗とみなし、RSS の抜粋に任せる
   // （同意画面・エラーページ・ナビゲーションを掴んでいることが多い）。
   if (text.length < MIN_CONTENT_CHARS) {
-    return { text, ok: false };
+    return { text, html: '', ok: false };
   }
 
-  return { text: text.slice(0, MAX_CHARS), ok: true };
+  return { text: text.slice(0, MAX_CHARS), html: safeHtml.slice(0, MAX_HTML_CHARS), ok: true };
 }
 
 /**

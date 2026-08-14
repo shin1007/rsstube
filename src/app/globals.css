@@ -44,3 +44,106 @@ body {
   background: #3f3f46;
   border-radius: 3px;
 }
+
+/*
+ * 記事本文をHTMLで出すときの体裁（0019）。
+ *
+ * 相手のサイトのCSSは持ってこないので、こちらで最低限の読みやすさを作る。
+ * 画像は横幅を超えさせない。超えると本文が横スクロールして読めなくなる。
+ */
+.prose-rich {
+  line-height: 1.9;
+  word-break: break-word;
+}
+
+.prose-rich > * + * {
+  margin-top: 1em;
+}
+
+.prose-rich h1,
+.prose-rich h2,
+.prose-rich h3,
+.prose-rich h4 {
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--color-zinc-100, #f4f4f5);
+  margin-top: 1.6em;
+}
+
+.prose-rich h1 { font-size: 1.3rem; }
+.prose-rich h2 { font-size: 1.15rem; }
+.prose-rich h3 { font-size: 1.05rem; }
+
+.prose-rich a {
+  color: #93c5fd;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 画像・動画は枠に収める。縦横比は保つ。 */
+.prose-rich img,
+.prose-rich video {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
+}
+
+.prose-rich figure { margin-block: 1.25em; }
+
+.prose-rich figcaption {
+  margin-top: 0.5em;
+  font-size: 0.8125rem;
+  color: #a1a1aa;
+}
+
+/* 埋め込み動画は16:9で出す。相手のwidth/heightは落としてあるので、こちらで決める。 */
+.prose-rich iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  border: 0;
+  border-radius: 0.25rem;
+}
+
+.prose-rich ul,
+.prose-rich ol { padding-left: 1.4em; }
+.prose-rich ul { list-style: disc; }
+.prose-rich ol { list-style: decimal; }
+.prose-rich li + li { margin-top: 0.35em; }
+
+.prose-rich blockquote {
+  border-left: 3px solid #3f3f46;
+  padding-left: 0.9em;
+  color: #a1a1aa;
+}
+
+.prose-rich pre {
+  overflow-x: auto;
+  padding: 0.75em;
+  border-radius: 0.25rem;
+  background: #18181b;
+  font-size: 0.85em;
+}
+
+.prose-rich code {
+  font-size: 0.9em;
+  background: #27272a;
+  padding: 0.1em 0.3em;
+  border-radius: 0.2rem;
+}
+
+.prose-rich pre code { background: none; padding: 0; }
+
+/* 表は幅を超えたら中だけ横スクロールさせる。本文ごと崩さない。 */
+.prose-rich table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.prose-rich th,
+.prose-rich td {
+  border: 1px solid #3f3f46;
+  padding: 0.4em 0.6em;
+}
