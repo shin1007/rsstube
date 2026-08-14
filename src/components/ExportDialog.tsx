@@ -1,8 +1,9 @@
 'use client';
 
+import { exportToDrive } from '@/app/actions/drive';
 import type { ExportResult } from '@/lib/export/create';
 import { safeFileName } from '@/lib/export/markdown';
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 
 /**
  * 書き出した Markdown の受け渡しダイアログ。
@@ -19,6 +20,22 @@ export function ExportDialog({
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState<'md' | 'prompt' | null>(null);
+  const [driveUrl, setDriveUrl] = useState<string | null>(null);
+  const [driveError, setDriveError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const saveToDrive = () => {
+    setDriveError(null);
+    startTransition(async () => {
+      try {
+        const file = await exportToDrive(result.id);
+        setDriveUrl(file.url);
+      } catch (e) {
+        // 未接続なら、その旨がそのまま出る（設定画面から繋いでもらう）。
+        setDriveError(e instanceof Error ? e.message : String(e));
+      }
+    });
+  };
 
   const copy = async (text: string, which: 'md' | 'prompt') => {
     await navigator.clipboard.writeText(text);
@@ -63,6 +80,29 @@ export function ExportDialog({
           >
             {copied === 'md' ? 'コピーしました' : '本文をクリップボードにコピー'}
           </button>
+
+          {/* Drive に置くと、NotebookLM 側は「ソースを追加 → ドライブ → 選ぶ」で済む。
+              落として上げ直す手間が2つ減るので、繋いであるならこちらが本命。 */}
+          <button
+            type="button"
+            onClick={saveToDrive}
+            disabled={pending || Boolean(driveUrl)}
+            className="w-full rounded border border-zinc-700 px-3 py-2 text-sm disabled:opacity-50"
+          >
+            {pending ? 'Drive に保存中…' : driveUrl ? 'Drive に保存しました' : 'Google Drive に保存'}
+          </button>
+
+          {driveUrl && (
+            <a
+              href={driveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-center text-xs text-zinc-400 underline"
+            >
+              保存したドキュメントを開く ↗
+            </a>
+          )}
+          {driveError && <p className="text-xs text-amber-500">{driveError}</p>}
         </div>
 
         {/* 音声の出来はこの指示文でだいぶ変わるので、目立つ位置に置く。 */}

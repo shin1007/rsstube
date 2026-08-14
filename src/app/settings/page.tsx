@@ -8,6 +8,7 @@ import {
 import { signOut } from '@/app/actions/articles';
 import { AddFeed } from '@/components/AddFeed';
 import { DeleteFolderButton } from '@/components/DeleteFolderButton';
+import { DriveConnect } from '@/components/DriveConnect';
 import { FeedHealth } from '@/components/FeedHealth';
 import { UnsubscribeButton } from '@/components/UnsubscribeButton';
 import { FolderSelect } from '@/components/FolderSelect';
@@ -15,6 +16,7 @@ import { PushToggle } from '@/components/PushToggle';
 import { UsageTable } from '@/components/UsageTable';
 import { recentUsage } from '@/lib/ai/usage';
 import { pipelineStatus } from '@/lib/pipeline';
+import { getDriveStatus } from '@/app/actions/drive';
 import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
@@ -23,16 +25,21 @@ import type { FeedRow, FolderRow } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: PageProps<'/settings'>) {
   const supabase = await createClient();
+  // OAuth から戻ってきたときの結果（?drive=connected など）。
+  const notice = typeof (await searchParams).drive === 'string'
+    ? ((await searchParams).drive as string)
+    : undefined;
 
-  const [feeds, { data: folders }, { data: settings }, usage, pipeline] = await Promise.all([
+  const [feeds, { data: folders }, { data: settings }, usage, pipeline, drive] = await Promise.all([
     listSubscribedFeeds(),
     // 並び順はサイドバーと揃える（sort_order → 名前）。
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
     supabase.from('settings').select('*').maybeSingle(),
     recentUsage(),
     pipelineStatus(),
+    getDriveStatus(),
   ]);
 
   async function saveSettings(formData: FormData) {
@@ -168,6 +175,20 @@ export default async function SettingsPage() {
         <section>
           <h2 className="mb-2 text-sm font-semibold">AI の使用量（直近7日）</h2>
           <UsageTable usage={usage} />
+        </section>
+
+        {/* ---------------- 通知 ---------------- */}
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">Google Drive</h2>
+          <p className="mb-2 text-xs text-zinc-500">
+            書き出した Markdown を Google Docs として Drive に置けます。NotebookLM は
+            ドライブ上のファイルを直接ソースに選べるので、ダウンロードして
+            アップロードし直す手間が要らなくなります。
+            <br />
+            権限は<strong className="text-zinc-400">このアプリが作ったファイルだけ</strong>
+            （drive.file）。既存のドライブの中身は読みません。
+          </p>
+          <DriveConnect connected={drive.connected} email={drive.email} notice={notice} />
         </section>
 
         {/* ---------------- 通知 ---------------- */}

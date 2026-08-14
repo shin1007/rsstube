@@ -247,6 +247,24 @@ tts    → スライド1枚ぶんずつ合成 → MP3 → Storage
 日付の区切りは日本時間なので、Google 側のリセット（太平洋時間）とは半日ほどずれる。
 失敗した呼び出しも RPD を1回ぶん食うので、`failures` として別に数えている。
 
+## Google Drive 連携
+
+書き出した Markdown を Google Docs として Drive に置ける。NotebookLM はドライブ上の
+ファイルを直接ソースに選べるので、**落として上げ直す手間が2つ減る**。
+
+設定画面の「Google Drive に接続」から繋ぐ。要求するスコープは `drive.file` だけで、
+**このアプリが作ったファイルにしか触れない**（既存のドライブの中身は読まない）。
+置き先は Drive 上の `RSSTube` フォルダで、無ければ自分で作る。
+
+必要な環境変数は `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI`。
+Google Cloud Console で OAuth クライアント（ウェブアプリケーション）を作り、
+リダイレクトURIに `http://localhost:3000/api/auth/google/callback` と
+本番のURLの両方を登録しておくこと。
+
+リフレッシュトークンは `google_accounts` に置く。**このテーブルには RLS の
+ポリシーを1つも作っていない**ので、Secret キー以外からは読めも書けもしない
+（本人にも API 越しには見せない）。接続しているかどうかはサーバー側で確かめて画面に返す。
+
 ## 通知（Web Push）
 
 朝のダイジェストができたときに端末へ通知する。アプリを開いていなくても届くので、
