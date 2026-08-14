@@ -60,7 +60,13 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   const next = index >= 0 && index < articles.length - 1 ? articles[index + 1] : undefined;
 
   return (
-    <div className="flex-1 flex min-h-0">
+    // 高さを画面ぴったりに固定する。この1行が無いと、中の列の `h-full`
+    // （= height:100%）が解決できずに auto になり、**列ごとの
+    // overflow-y-auto が一切効かない**。結果、全部が伸びてページ全体が
+    // 1本のスクロールになり、サイドバー下端の「設定」が記事リストの
+    // 下まで押し出されて見えなくなる。
+    // dvh を使うのは、スマホでアドレスバーが伸縮しても下端が隠れないため。
+    <div className="flex-1 flex h-dvh min-h-0 overflow-hidden">
       <Sidebar
         folders={(folders ?? []) as FolderRow[]}
         feeds={(feeds ?? []) as FeedRow[]}

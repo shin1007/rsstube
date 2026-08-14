@@ -1,6 +1,7 @@
 import { HelpTip } from '@/components/HelpTip';
 import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
-import { requestSummary, setReadLater, setStarred } from '@/app/actions/articles';
+import { requestSummary } from '@/app/actions/articles';
+import { ArticleActions } from '@/components/ArticleActions';
 import { ExportButton } from '@/components/ExportButton';
 import { MediaButton } from '@/components/MediaButton';
 import Link from 'next/link';
@@ -60,23 +61,11 @@ export function ArticleView({
           ← 一覧
         </Link>
 
-        <form action={setStarred.bind(null, a.id, !state?.is_starred)}>
-          <button
-            type="submit"
-            className={`rounded px-2 py-1 text-sm ${state?.is_starred ? 'text-amber-400' : 'text-zinc-500'}`}
-          >
-            ★ スター
-          </button>
-        </form>
-
-        <form action={setReadLater.bind(null, a.id, !state?.read_later)}>
-          <button
-            type="submit"
-            className={`rounded px-2 py-1 text-sm ${state?.read_later ? 'text-sky-400' : 'text-zinc-500'}`}
-          >
-            ◷ あとで
-          </button>
-        </form>
+        <ArticleActions
+          articleId={a.id}
+          starred={Boolean(state?.is_starred)}
+          readLater={Boolean(state?.read_later)}
+        />
 
         <ExportButton articleIds={[a.id]} exported={Boolean(state?.exported_at)} />
 
