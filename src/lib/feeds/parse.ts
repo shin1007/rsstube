@@ -1,4 +1,5 @@
 import Parser from 'rss-parser';
+import { isRedirect, MAX_HOPS, permanentTarget } from '@/lib/feeds/redirect';
 
 /**
  * フィードの取得と解析。
@@ -19,7 +20,7 @@ export type FetchedItem = {
 };
 
 export type FetchFeedResult =
-  | { status: 'not-modified' }
+  | { status: 'not-modified'; movedTo?: string }
   | {
       status: 'ok';
       title: string;
@@ -27,6 +28,11 @@ export type FetchFeedResult =
       etag?: string;
       lastModified?: string;
       items: FetchedItem[];
+      /**
+       * 恒久的な移転先（301/308 で辿り着いた場合だけ）。
+       * 呼び出し側が feeds.url を書き換える判断に使う。
+       */
+      movedTo?: string;
     };
 
 const parser = new Parser({
@@ -43,15 +49,36 @@ export async function fetchFeed(
   if (conditional?.etag) headers['If-None-Match'] = conditional.etag;
   if (conditional?.lastModified) headers['If-Modified-Since'] = conditional.lastModified;
 
-  const res = await fetch(url, {
-    headers,
-    redirect: 'follow',
-    // フィードはこちらで巡回間隔を管理するので、Next.js 側のキャッシュは挟まない。
-    cache: 'no-store',
-    signal: AbortSignal.timeout(20_000),
-  });
+  // リダイレクトは自分で追う。fetch に任せると読めはするが、
+  // 「恒久的に移転した」ことが分からず、古いURLを叩き続けることになる。
+  let current = url;
+  const hops: { status: number; to: string }[] = [];
+  let res: Response;
 
-  if (res.status === 304) return { status: 'not-modified' };
+  for (let i = 0; ; i++) {
+    res = await fetch(current, {
+      headers,
+      redirect: 'manual',
+      // フィードはこちらで巡回間隔を管理するので、Next.js 側のキャッシュは挟まない。
+      cache: 'no-store',
+      signal: AbortSignal.timeout(20_000),
+    });
+
+    if (!isRedirect(res.status)) break;
+
+    const location = res.headers.get('location');
+    if (!location) break; // 行き先が無いリダイレクトは追いようがない。
+    if (i >= MAX_HOPS) throw new Error(`リダイレクトが多すぎます（${MAX_HOPS}回）`);
+
+    // 相対で書かれていることがあるので、いまのURLで解決する。
+    const next = new URL(location, current).toString();
+    hops.push({ status: res.status, to: next });
+    current = next;
+  }
+
+  const movedTo = permanentTarget(hops) ?? undefined;
+
+  if (res.status === 304) return { status: 'not-modified', movedTo };
   if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
 
   const xml = await res.text();
@@ -83,5 +110,6 @@ export async function fetchFeed(
     etag: res.headers.get('etag') ?? undefined,
     lastModified: res.headers.get('last-modified') ?? undefined,
     items,
+    movedTo,
   };
 }

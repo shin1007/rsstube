@@ -3,6 +3,7 @@
 import { fetchFeed } from '@/lib/feeds/parse';
 import { discoverFeeds, type FeedCandidate } from '@/lib/feeds/discover';
 import { fanOutStates, ingestFeedItems } from '@/lib/feeds/ingest';
+import { relocateFeedUrl } from '@/lib/feeds/relocate';
 import { looksLikeUrl, searchFeeds } from '@/lib/feeds/search';
 import { parseOpml } from '@/lib/feeds/opml';
 import { createClient } from '@/lib/supabase/server';
@@ -218,7 +219,40 @@ export async function addFeed(formData: FormData) {
   await subscribeFeed(url, folder);
 }
 
-/** 購読の解除。記事とフィードは他の購読者のものでもあるので消さない。 */
+/**
+ * 壊れたフィードの行き先を探し直す。
+ *
+ * 巡回は 301 を見て自動で移転先を覚えるが、それが効くのは**古いURLが
+ * 301 を返してくれる場合だけ**。いきなり 404 になったり、ドメインごと
+ * 変わったりすると追えない。そのときは元のサイトから探し直すしかない。
+ *
+ * 見つかったら feeds.url を差し替える。購読・フォルダ・既読はフィードの id に
+ * 紐づいているので、そのまま引き継がれる（登録し直すと全部消える）。
+ */
+export async function relocateFeed(feedId: string): Promise<{ url: string; title: string }> {
+  const { supabase } = await client();
+
+  const { data: feed } = await supabase
+    .from('feeds')
+    .select('id, url, site_url, title')
+    .eq('id', feedId)
+    .maybeSingle();
+  if (!feed) throw new Error('フィードが見つかりません');
+
+  // 探し方は巡回の自動付け替えと同じものを使う（lib/feeds/relocate.ts）。
+  // 書き込みは共通テーブルなので RLS を迂回するクライアントで行う。
+  const result = await relocateFeedUrl(createAdminClient(), feed);
+
+  if (result.status === 'not-found') throw new Error('新しいフィードが見つかりませんでした');
+  if (result.status === 'same') throw new Error('いまと同じURLしか見つかりませんでした');
+  if (result.status === 'taken') throw new Error('その行き先は別のフィードとして登録済みです');
+
+  revalidatePath('/settings');
+  revalidatePath('/');
+
+  return { url: result.url, title: result.title };
+}
+
 /** 購読をやめたときに何がどうなるか。押す前に見せるための数え上げ。 */
 export type UnsubscribeImpact = {
   /** 一覧から消える件数（未読＋ただ読んだだけのもの）。 */
