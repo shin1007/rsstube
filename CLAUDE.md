@@ -131,6 +131,12 @@ Storage保存・`/listen`・`/watch/[id]`）。
 
 ## 踏んだ罠
 
+- **日本語の全文検索は PGroonga（0015）。** `simple` 辞書の tsvector は空白で区切るだけで
+  日本語の文が丸ごと1語になり、0001 で張ったまま一度も使えていなかった。PGroonga は
+  Supabase で `create extension` できる。**索引を張るだけで既存の `ilike` が8.2倍速**に
+  なる（PGroonga が `ilike` も肩代わりするため、クエリの書き換えは要らない）。
+  `&@~` を使えばさらに25倍だが、PostgREST から演算子を呼べないので RPC が要る。
+  trgm と simple の索引は落とした（プランナが選ばなくなったため）。
 - **PostgREST の `.order(col, { referencedTable: X })` は親の行順を変えない。**
   埋め込んだ X 側の並びを変えるだけ。`articles` を主に `summaries` を埋め込んで
   重要度順にしていたつもりが、実際は published_at 順のままだった（`0007` で発覚）。
