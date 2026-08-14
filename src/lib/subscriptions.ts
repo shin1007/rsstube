@@ -19,6 +19,9 @@ export type SubscribedFeed = {
   error_count: number;
   last_error: string | null;
   last_fetched_at: string | null;
+  /** 最後に新しい記事が入った時刻（0013）。更新が止まったフィードを見つけるため。 */
+  last_article_at: string | null;
+  created_at: string | null;
 };
 
 type Row = {
@@ -32,6 +35,8 @@ type Row = {
     error_count: number;
     last_error: string | null;
     last_fetched_at: string | null;
+    last_article_at: string | null;
+    created_at: string | null;
   } | null;
 };
 
@@ -42,7 +47,7 @@ export async function listSubscribedFeeds(): Promise<SubscribedFeed[]> {
     .from('subscriptions')
     .select(
       `folder_id, title,
-       feeds!inner (id, title, url, site_url, error_count, last_error, last_fetched_at)`,
+       feeds!inner (id, title, url, site_url, error_count, last_error, last_fetched_at, last_article_at, created_at)`,
     );
   if (error) throw error;
 
@@ -57,6 +62,8 @@ export async function listSubscribedFeeds(): Promise<SubscribedFeed[]> {
       error_count: r.feeds.error_count,
       last_error: r.feeds.last_error,
       last_fetched_at: r.feeds.last_fetched_at,
+      last_article_at: r.feeds.last_article_at,
+      created_at: r.feeds.created_at,
     }))
     // 並べ替えは件数が少ないのでこちらで。埋め込み先の列では order できない。
     .sort((a, b) => a.title.localeCompare(b.title, 'ja'));

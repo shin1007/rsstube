@@ -8,6 +8,7 @@ import {
 import { signOut } from '@/app/actions/articles';
 import { AddFeed } from '@/components/AddFeed';
 import { DeleteFolderButton } from '@/components/DeleteFolderButton';
+import { FeedHealth } from '@/components/FeedHealth';
 import { UnsubscribeButton } from '@/components/UnsubscribeButton';
 import { FolderSelect } from '@/components/FolderSelect';
 import { PushToggle } from '@/components/PushToggle';
@@ -159,6 +160,9 @@ export default async function SettingsPage() {
             </p>
           )}
         </section>
+
+        {/* ---------------- 手当てが要るフィード（何も無ければ出ない） ---------------- */}
+        <FeedHealth feeds={feeds} />
 
         {/* ---------------- フィード追加 ---------------- */}
         <section>
