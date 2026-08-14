@@ -30,6 +30,28 @@ const USER_AGENT =
 /** 要約に渡す上限。長すぎる記事は先頭を優先して切る。 */
 const MAX_CHARS = 40_000;
 
+/**
+ * これ未満なら「本文を取れなかった」とみなす境目。
+ *
+ * 短い記事は実在する。アメブロのように、動画を紹介するだけの300字程度の投稿は
+ * 珍しくない。一方で、ここを下げすぎると本文でないものを本文として拾う。
+ *
+ * 実データ（抽出に失敗している44件）で100〜200字の帯を調べたところ、中身は
+ * はっきり2種類に割れた:
+ *
+ *   東洋経済など  写真キャプション＋著者プロフィール（ペイウォールで本文が出ない）。
+ *                 RSS の抜粋のほうが本物のリード文で、明らかに良い
+ *   Hacker News   ナビゲーションや変更履歴。ただし RSS 抜粋が
+ *                 `<a href=…>Comments</a>` だけなので、これでもマシ
+ *
+ * つまりこの帯は当たり外れが混ざる。200 のままだと短い実記事を捨て、100 にすると
+ * キャプションを拾う。**短い記事を拾えるほうを選んで 100 にしている**（本人の判断）。
+ *
+ * 要約の質が落ちたと感じたら、まずここを 200 に戻して様子を見ること。
+ * どの記事が影響を受けているかは `npm run check:url -- <URL>` で確かめられる。
+ */
+const MIN_CONTENT_CHARS = 100;
+
 export async function extractArticle(url: string): Promise<ExtractResult> {
   const res = await fetch(url, {
     headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml' },
@@ -56,8 +78,9 @@ export async function extractArticle(url: string): Promise<ExtractResult> {
 
   const text = (article?.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
 
-  // 極端に短い結果は抽出失敗とみなす（同意画面やエラーページを掴んでいることが多い）。
-  if (text.length < 200) {
+  // 極端に短い結果は抽出失敗とみなし、RSS の抜粋に任せる
+  // （同意画面・エラーページ・ナビゲーションを掴んでいることが多い）。
+  if (text.length < MIN_CONTENT_CHARS) {
     return { text, ok: false };
   }
 
