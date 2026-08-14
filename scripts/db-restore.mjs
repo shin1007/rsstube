@@ -54,11 +54,33 @@ try {
     const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
     const sql = `insert into ${table} (${columnList}) values (${placeholders}) on conflict do nothing`;
 
+    /*
+     * jsonb の列だけは、値を JSON の文字列にしてから渡す。
+     *
+     * jsonb に配列が入っていると（summaries.bullets や media.script がそう）、
+     * 取り出したときは JS の配列になる。それをそのままパラメータに渡すと、
+     * pg は「Postgres の配列」として {a,b} の形に直してしまい、
+     * invalid input syntax for type json で落ちる。
+     *
+     * text[] の列（summaries.tags）も JS の配列で来るが、そちらは配列のままで正しい。
+     * つまり値の形だけでは区別できないので、列の型を DB に聞く。
+     */
+    const { rows: types } = await client.query(
+      `select column_name from information_schema.columns
+        where table_schema = 'public' and table_name = $1 and data_type in ('json', 'jsonb')`,
+      [table],
+    );
+    const jsonColumns = new Set(types.map((t) => t.column_name));
+
     let inserted = 0;
     for (const row of rows) {
       const { rowCount } = await client.query(
         sql,
-        columns.map((c) => row[c]),
+        columns.map((c) => {
+          const value = row[c];
+          if (value === null || value === undefined) return null;
+          return jsonColumns.has(c) ? JSON.stringify(value) : value;
+        }),
       );
       inserted += rowCount;
     }
