@@ -35,7 +35,10 @@ async function setState(
     .from('article_states')
     .upsert(
       { article_id: articleId, user_id: userId, ...patch, updated_at: new Date().toISOString() },
-      { onConflict: 'article_id' },
+      // 主キーは (article_id, user_id)。0005 で記事を全ユーザー共通にしたときに
+      // こう変わった。article_id だけを指定すると、それに合う一意制約が無いので
+      // Postgres が 42P10 で弾き、既読もスターもあとでも**全部失敗する**。
+      { onConflict: 'article_id,user_id' },
     );
   if (error) throw error;
   revalidatePath('/');
@@ -72,7 +75,8 @@ export async function setReadMany(articleIds: string[], read = true) {
       read_at: read ? now : null,
       updated_at: now,
     })),
-    { onConflict: 'article_id' },
+    // setState と同じ理由で (article_id, user_id)。
+    { onConflict: 'article_id,user_id' },
   );
   if (error) throw error;
   revalidatePath('/');
