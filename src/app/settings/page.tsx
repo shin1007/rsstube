@@ -14,6 +14,7 @@ import { FolderSelect } from '@/components/FolderSelect';
 import { PushToggle } from '@/components/PushToggle';
 import { UsageTable } from '@/components/UsageTable';
 import { recentUsage } from '@/lib/ai/usage';
+import { pipelineStatus } from '@/lib/pipeline';
 import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
@@ -25,12 +26,13 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   const supabase = await createClient();
 
-  const [feeds, { data: folders }, { data: settings }, usage] = await Promise.all([
+  const [feeds, { data: folders }, { data: settings }, usage, pipeline] = await Promise.all([
     listSubscribedFeeds(),
     // 並び順はサイドバーと揃える（sort_order → 名前）。
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
     supabase.from('settings').select('*').maybeSingle(),
     recentUsage(),
+    pipelineStatus(),
   ]);
 
   async function saveSettings(formData: FormData) {
@@ -136,6 +138,30 @@ export default async function SettingsPage() {
               保存
             </button>
           </form>
+        </section>
+
+        {/* ---------------- 取り込みの進み具合 ---------------- */}
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">取り込みの進み具合</h2>
+          <p className="mb-2 text-xs text-zinc-500">
+            記事は「本文を取りに行く → 要約する」の順に処理されます。フィードを増やした
+            直後はここに溜まりますが、5分ごとに少しずつ減っていきます。
+          </p>
+          <ul className="space-y-1 text-xs">
+            <li className="text-zinc-400">
+              本文の順番待ち: <span className="text-zinc-200">{pipeline.pendingExtract}件</span>
+              <span className="ml-1 text-zinc-600">（待てば減ります）</span>
+            </li>
+            <li className="text-zinc-400">
+              要約の順番待ち: <span className="text-zinc-200">{pipeline.pendingSummary}件</span>
+            </li>
+            <li className={pipeline.failedExtract > 0 ? 'text-amber-500' : 'text-zinc-400'}>
+              本文を取れなかった記事: {pipeline.failedExtract}件
+              <span className="ml-1 text-zinc-600">
+                （ペイウォールやアクセス制限。RSSの抜粋から要約します）
+              </span>
+            </li>
+          </ul>
         </section>
 
         {/* ---------------- 使用量 ---------------- */}

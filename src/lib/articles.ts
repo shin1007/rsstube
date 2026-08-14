@@ -31,6 +31,7 @@ type RawRow = {
   published_at: string | null;
   excerpt: string | null;
   content_ok: boolean;
+  extracted_at: string | null;
   feeds: { id: string; title: string; subscriptions?: unknown } | null;
   summaries: { bullets: string[]; tags: string[]; importance: number } | null;
   article_states: {
@@ -47,7 +48,7 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
   let q = supabase
     .from('articles')
     .select(
-      `id, title, url, author, published_at, excerpt, content_ok,
+      `id, title, url, author, published_at, excerpt, content_ok, extracted_at,
        feeds!inner (id, title, subscriptions!inner (folder_id)),
        summaries (bullets, tags, importance),
        article_states!inner (is_read, is_starred, read_later, exported_at)`,
@@ -70,7 +71,11 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
     case 'unsummarized':
       // ワーカーは要約が返らなかった記事もジョブを完了扱いにする（無料枠を
       // 食い潰さないため）。落ちたぶんはここでしか見つけられない。
-      q = q.is('summaries', null);
+      //
+      // ただし「まだ本文を取りに行っていない記事」は、要約が無くて当たり前で、
+      // 待てば付く。混ぜると順番待ちの山に埋もれて、本当に落ちたものが見えなくなる
+      // （実際に95件の順番待ちがあった）。処理済みのものだけを出す（0014）。
+      q = q.is('summaries', null).not('extracted_at', 'is', null);
       break;
     case 'all':
       break;
@@ -106,6 +111,7 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
     published_at: r.published_at,
     excerpt: r.excerpt,
     content_ok: r.content_ok,
+    extracted_at: r.extracted_at,
     feed: r.feeds ? { id: r.feeds.id, title: r.feeds.title } : null,
     summary: r.summaries ?? null,
     state: r.article_states ?? null,
@@ -117,7 +123,7 @@ export async function getArticle(id: string) {
   const { data, error } = await supabase
     .from('articles')
     .select(
-      `id, title, url, author, published_at, excerpt, content_text, content_ok,
+      `id, title, url, author, published_at, excerpt, content_text, content_ok, extracted_at,
        feeds (id, title),
        summaries (bullets, tags, importance),
        article_states (is_read, is_starred, read_later, exported_at)`,

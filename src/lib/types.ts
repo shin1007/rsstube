@@ -6,6 +6,11 @@ export type ArticleRow = {
   published_at: string | null;
   excerpt: string | null;
   content_ok: boolean;
+  /**
+   * 本文抽出を試みた時刻。null は「まだ取りに行っていない」（0014）。
+   * content_ok の false だけでは、失敗したのか順番待ちなのかが分からない。
+   */
+  extracted_at: string | null;
   feed: { id: string; title: string } | null;
   summary: { bullets: string[]; tags: string[]; importance: number } | null;
   state: {
