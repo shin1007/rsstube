@@ -16,6 +16,11 @@ NotebookLM に投げてすぐ音声にできる状態まで用意する。
 | Vercel | ホスティング | あり（Hobby） |
 | Gemini API | 要約 | あり |
 
+## いまの状態と、やること
+
+- **いま何がどうなっているか** → `docs/status.md`
+- **オーナーがやること** → `docs/owner-todo.md`
+
 ## セットアップ
 
 ### 1. Supabase
