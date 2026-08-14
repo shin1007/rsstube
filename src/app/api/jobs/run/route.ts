@@ -1,6 +1,7 @@
 import { BATCH_SIZE, summarizeBatch, type SummaryInput } from '@/lib/ai/summarize';
 import { SUMMARY_MODEL } from '@/lib/ai/gemini';
 import { recordUsage } from '@/lib/ai/usage';
+import { contentHash } from '@/lib/feeds/content';
 import { extractArticle, htmlToText } from '@/lib/feeds/extract';
 import { claim, complete, enqueue, fail, type Job } from '@/lib/jobs/queue';
 import { runScriptJob, runTtsJob, TTS_PER_RUN } from '@/lib/media/jobs';
@@ -79,7 +80,7 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
     try {
       const { data: article } = await db
         .from('articles')
-        .select('id, url, content_text')
+        .select('id, url, feed_id, content_text')
         .eq('id', articleId)
         .single();
 
@@ -104,11 +105,24 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
         text = htmlToText(article.content_text);
       }
 
+      // 同じフィードで本文が丸ごと一致したら、記事ではなく使い回しのページ
+      // （エラーページ・同意画面）とみなす。長さでは弾けないものがここで落ちる。
+      let hash: string | null = null;
+      if (ok) {
+        hash = contentHash(text);
+        if (hash && (await isRecycledPage(db, article.feed_id, articleId, hash))) {
+          ok = false;
+        }
+      }
+
       await db
         .from('articles')
         .update({
           content_text: text || article.content_text,
           content_ok: ok,
+          // 使い回しと判定したものはハッシュを残さない。残すと、次の記事が
+          // それと一致して連鎖的に落ちる（判定の基準が壊れたページになる）。
+          content_hash: ok ? hash : null,
           // 取りに行ったことを残す。これが無いと、失敗したのか順番待ちなのかが
           // 後から区別できない（0014）。
           extracted_at: new Date().toISOString(),
@@ -229,4 +243,39 @@ async function runTtsJobs(db: SupabaseClient, deadline: number): Promise<number>
     if (await runTtsJob(db, job)) done++;
   }
   return done;
+}
+
+/**
+ * 同じ本文が、同じフィードの別の記事で既に使われていないか。
+ *
+ * 使い回しのページ（エラーページ・同意画面）はどのURLでも同じものを返すので、
+ * ここで一致する。本物の記事どうしが完全一致することは原理的に無いため、
+ * 誤検出は起きない。
+ *
+ * 見つかったときは**先に保存されていたほうも取り消す**。1件目は比べる相手が
+ * まだ無かっただけで、同じ使い回しのページを本文として持っている。
+ */
+async function isRecycledPage(
+  db: SupabaseClient,
+  feedId: string,
+  articleId: string,
+  hash: string,
+): Promise<boolean> {
+  const { data: same } = await db
+    .from('articles')
+    .select('id')
+    .eq('feed_id', feedId)
+    .eq('content_hash', hash)
+    .neq('id', articleId)
+    .limit(1);
+
+  if (!same?.length) return false;
+
+  await db
+    .from('articles')
+    .update({ content_ok: false, content_hash: null })
+    .eq('feed_id', feedId)
+    .eq('content_hash', hash);
+
+  return true;
 }
