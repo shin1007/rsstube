@@ -33,7 +33,7 @@ NotebookLM に投げてすぐ音声にできる状態まで用意する。
    ダッシュボードの SQL Editor に手で貼ってもよい（`supabase/migrations/` を番号順に）
 3. Authentication > Users で自分のユーザーを1つ作る（メールアドレス）
 4. Authentication > Sign In / Providers で **新規サインアップを無効化**する
-   （自分専用のため。ログインはマジックリンクのみ）
+   （自分専用のため。ログインはメールアドレスとパスワード）
 5. 作ったユーザーの UUID を控える → `OWNER_USER_ID`
 
 ### 2. 環境変数

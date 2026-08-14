@@ -123,7 +123,7 @@ export async function getArticle(id: string) {
   const { data, error } = await supabase
     .from('articles')
     .select(
-      `id, title, url, author, published_at, excerpt, content_text, content_ok, extracted_at,
+      `id, title, url, author, published_at, excerpt, content_text, content_html, content_ok, extracted_at,
        feeds (id, title),
        summaries (bullets, tags, importance),
        article_states (is_read, is_starred, read_later, exported_at)`,

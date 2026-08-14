@@ -78,6 +78,9 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
           <Link href="/exports" className="text-xs text-zinc-500 hover:text-zinc-200">
             書き出し
           </Link>
+          <Link href="/account/password" className="text-xs text-zinc-500 hover:text-zinc-200">
+            パスワード
+          </Link>
           <form action={signOut}>
             <button type="submit" className="text-xs text-zinc-500 hover:text-zinc-200">
               ログアウト

@@ -12,6 +12,8 @@ type ArticleDetail = {
   author: string | null;
   published_at: string | null;
   content_text: string | null;
+  /** 消毒済みの本文HTML（0019）。あればこちらを描画する。 */
+  content_html: string | null;
   content_ok: boolean;
   /** 本文抽出を試みた時刻。null は未処理（0014）。 */
   extracted_at: string | null;
@@ -170,9 +172,20 @@ export function ArticleView({
             ))
           )}
 
-          <div className="prose-article mt-5 text-[15px] text-zinc-300">
-            {a.content_text ?? ''}
-          </div>
+          {/* HTML があればそちらを出す。画像・図表・動画・リンクが生きる。
+              中身は保存する前に消毒してある（lib/feeds/sanitize.ts）。許可した
+              タグと属性しか通っておらず、iframe は動画サイトだけに絞ってある。
+              古い記事は HTML を持たないので、そのときは従来どおりテキストを出す。 */}
+          {a.content_html ? (
+            <div
+              className="prose-rich mt-5 text-[15px] text-zinc-300"
+              dangerouslySetInnerHTML={{ __html: a.content_html }}
+            />
+          ) : (
+            <div className="prose-article mt-5 text-[15px] text-zinc-300">
+              {a.content_text ?? ''}
+            </div>
+          )}
 
           {/* 読み終わったところに次への導線を置く。PCは j/k があるが、
               スマホには一覧へ戻る以外の手段が無かった。 */}
