@@ -29,6 +29,21 @@ describe('contentHash', () => {
     expect(contentHash(long('記事Aの本文。'))).not.toBe(contentHash(long('記事Bの本文。')));
   });
 
+  it('書き出しが同じなら、後ろが違っても同じとみなす', () => {
+    // ナビゲーションを掴んでいる記事はこの形になる。末尾に記事ごとの違いが
+    // 少し混じるだけで全文一致は外れるので、書き出しだけを見る。
+    const nav = '有料会員登録 お知らせ ビジネス 政治・経済・投資 キャリア・教育 ライフ'.repeat(6);
+    expect(contentHash(`${nav} 記事Aの見出し`)).toBe(contentHash(`${nav} 記事Bの見出し`));
+  });
+
+  it('書き出しが違えば、後ろが同じでも別とみなす', () => {
+    // 同じフッターで終わる記事どうしを巻き添えにしない。
+    const footer = 'この記事のフッターです。'.repeat(10);
+    expect(contentHash(`記事Aの書き出し。${'本文。'.repeat(40)}${footer}`)).not.toBe(
+      contentHash(`記事Bの書き出し。${'本文。'.repeat(40)}${footer}`),
+    );
+  });
+
   it('短すぎるものはハッシュを作らない', () => {
     // 100字未満は抽出失敗として扱うので、比べる意味が無い。
     expect(contentHash('短い')).toBeNull();

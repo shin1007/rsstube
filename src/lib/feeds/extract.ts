@@ -1,5 +1,6 @@
 import { Readability } from '@mozilla/readability';
 import { parseHTML } from 'linkedom';
+import { htmlToText as buildText } from '@/lib/feeds/text';
 import { decodeBody } from '@/lib/feeds/charset';
 
 /**
@@ -76,7 +77,11 @@ export async function extractArticle(url: string): Promise<ExtractResult> {
   const { document } = parseHTML(html);
   const article = new Readability(document).parse();
 
-  const text = (article?.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
+  // textContent ではなく、Readability が整えた HTML から段落を組み立てる。
+  // textContent はブロックの境目に何も入れないので段落が全部つながり、代わりに
+  // 元HTMLの改行だけが残る。結果、見た目が書き手のHTMLの書き方に左右される
+  // （改行だらけのサイトと、改行が1つも無いサイトができる）。lib/feeds/text.ts 参照。
+  const text = htmlToText(article?.content ?? '');
 
   // 極端に短い結果は抽出失敗とみなし、RSS の抜粋に任せる
   // （同意画面・エラーページ・ナビゲーションを掴んでいることが多い）。
@@ -87,10 +92,10 @@ export async function extractArticle(url: string): Promise<ExtractResult> {
   return { text: text.slice(0, MAX_CHARS), ok: true };
 }
 
-/** HTMLタグを落として素のテキストにする。RSS本文のフォールバック用。 */
+/**
+ * HTMLタグを落として素のテキストにする。RSS本文のフォールバック用。
+ * 段落の作り方は本文抽出と共有する（片方だけ読みやすい、という差を作らない）。
+ */
 export function htmlToText(html: string): string {
-  const { document } = parseHTML(`<body>${html}</body>`);
-  return (
-    document.body?.textContent?.replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_CHARS) ?? ''
-  );
+  return buildText(html).slice(0, MAX_CHARS);
 }
