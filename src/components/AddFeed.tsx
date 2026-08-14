@@ -123,6 +123,9 @@ export function AddFeed({ folders }: { folders: FolderRow[] }) {
                     )}
                   </p>
                   <p className="truncate text-xs text-zinc-600">{c.url}</p>
+                  {/* 読めるフィードでも更新が止まっていることがある。登録してから
+                      「記事が増えない」と悩まないよう、最終更新をここで出す。 */}
+                  {c.staleDays !== undefined && <StaleNote days={c.staleDays} />}
                   <ul className="mt-1.5 space-y-0.5">
                     {c.sampleTitles.map((t, i) => (
                       <li key={i} className="truncate text-xs text-zinc-500">
@@ -146,4 +149,20 @@ export function AddFeed({ folders }: { folders: FolderRow[] }) {
       )}
     </div>
   );
+}
+
+/**
+ * 最終更新の表示。60日という線は lib/feeds/health.ts の判定と揃えてある。
+ * 日数はサーバー側（取得した時点）で数えたものを受け取る。ここで現在時刻を
+ * 見ると描画が純粋でなくなるうえ、取得時との差も出る。
+ */
+function StaleNote({ days }: { days: number }) {
+  if (days >= 60) {
+    return (
+      <p className="text-xs text-amber-500">
+        最終更新は{days}日前です。更新が止まっている可能性があります
+      </p>
+    );
+  }
+  return <p className="text-xs text-zinc-600">最終更新 {days === 0 ? '今日' : `${days}日前`}</p>;
 }

@@ -26,6 +26,14 @@ export type FeedCandidate = {
    * 「まともなフィードかどうか」の目安になる。
    */
   subscribers?: number;
+  /**
+   * いちばん新しい記事が何日前か。
+   * 読めるフィードでも更新が何年も止まっていることがあるので、登録前に見せる。
+   *
+   * 日数にして持つのは、描画のたびに現在時刻を見ないため（表示は純粋に保つ）。
+   * 取りに行った時点で数えているので、そのほうが実際とも合う。
+   */
+  staleDays?: number;
 };
 
 const USER_AGENT = 'RSSTube/0.1 (personal feed reader)';
@@ -100,12 +108,21 @@ export async function inspectFeed(url: string): Promise<FeedCandidate | null> {
     const result = await fetchFeed(url);
     if (result.status !== 'ok' || result.items.length === 0) return null;
 
+    // 並び順はフィード次第なので、いちばん新しい日付を自分で拾う。
+    const dates = result.items
+      .map((i) => (i.publishedAt ? new Date(i.publishedAt).getTime() : NaN))
+      .filter((t) => !Number.isNaN(t));
+
     return {
       url,
       title: result.title || url,
       siteUrl: result.siteUrl,
       itemCount: result.items.length,
       sampleTitles: result.items.slice(0, 3).map((i) => i.title).filter(Boolean),
+      staleDays:
+        dates.length > 0
+          ? Math.max(0, Math.floor((Date.now() - Math.max(...dates)) / 86_400_000))
+          : undefined,
     };
   } catch {
     return null;

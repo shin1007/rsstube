@@ -51,6 +51,10 @@ export async function ingestFeedItems(
   const ids = (inserted ?? []).map((r) => r.id as string);
   if (ids.length === 0) return { newArticles: 0, states: 0 };
 
+  // 新着が入った時刻を控える。取得は成功しているのに更新が止まったフィードは、
+  // これが無いと見分けられない（失敗回数は 0 のままなので）。
+  await db.from('feeds').update({ last_article_at: new Date().toISOString() }).eq('id', feedId);
+
   // 本文抽出をキューへ。要約は抽出が終わってから積まれる。
   await enqueueMany(db, 'extract', ids.map((id) => ({ article_id: id })));
 
