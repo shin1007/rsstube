@@ -19,7 +19,7 @@ type ArticleDetail = {
   /** 本文抽出を試みた時刻。null は未処理（0014）。 */
   extracted_at: string | null;
   feeds: { id: string; title: string } | null;
-  summaries: { bullets: string[]; tags: string[]; importance: number } | null;
+  summaries: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
   article_states: {
     is_read: boolean;
     is_starred: boolean;
@@ -94,7 +94,16 @@ export function ArticleView({
               })}`}
           </p>
 
-          <h1 className="mt-2 text-xl font-bold leading-snug md:text-2xl">{a.title}</h1>
+          {/*
+            本文側も訳した見出しを主にする。一覧と見出しが変わると、
+            同じ記事を開いた気がしない。原題は下に小さく残す。
+          */}
+          <h1 className="mt-2 text-xl font-bold leading-snug md:text-2xl">
+            {a.summaries?.title_ja?.trim() || a.title}
+          </h1>
+          {a.summaries?.title_ja?.trim() && a.summaries.title_ja.trim() !== a.title && (
+            <p className="mt-1 text-sm text-zinc-500">{a.title}</p>
+          )}
 
           {/* AI要約カード。 */}
           {a.summaries?.bullets?.length ? (
