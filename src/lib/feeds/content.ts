@@ -25,6 +25,25 @@ export function normalizeContent(text: string): string {
 export const MIN_HASH_CHARS = 100;
 
 /**
+ * RSS の説明文を本文の代わりに使えるか。
+ *
+ * 抽出に失敗したときは RSS の中身で妥協するが、**それが本文の代わりに
+ * ならないフィードがある**。Hacker News は全記事の description が
+ * 「Comments」というリンク1つで、テキストにすると8文字にしかならない。
+ * これを本文として保存すると、記事一覧にも要約にも「Comments」が並ぶ。
+ *
+ * 40字は、東洋経済の RSS が持っている実際の要約
+ * （「ソフトバンクグループが､半導体大手TSMCの保有株を…」で51字）を
+ * 残せる位置に置いてある。ここを100字にすると、あれも捨ててしまう。
+ */
+export const MIN_FALLBACK_CHARS = 40;
+
+/** RSS 由来のテキストが本文の代わりとして使えるか。 */
+export function usableAsFallback(text: string): boolean {
+  return normalizeContent(text).length >= MIN_FALLBACK_CHARS;
+}
+
+/**
  * 見比べる長さ。
  *
  * 全文で比べると、ナビゲーションを掴んでいる記事を取り逃がす。末尾に記事ごとの

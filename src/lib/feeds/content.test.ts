@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contentHash, normalizeContent } from './content';
+import { contentHash, normalizeContent, usableAsFallback } from './content';
 
 const long = (s: string) => s.repeat(Math.ceil(120 / s.length));
 
@@ -53,5 +53,26 @@ describe('contentHash', () => {
   it('ちょうど100字なら作る', () => {
     expect(contentHash('あ'.repeat(100))).not.toBeNull();
     expect(contentHash('あ'.repeat(99))).toBeNull();
+  });
+});
+
+describe('usableAsFallback', () => {
+  it('Hacker News の「Comments」だけの説明文は使わない', () => {
+    // HN は全記事の description が Comments へのリンク1つ。これを本文として
+    // 保存すると、一覧にも要約にも「Comments」が並ぶ。
+    expect(usableAsFallback('Comments')).toBe(false);
+  });
+
+  it('短い実要約は残す', () => {
+    // 東洋経済の RSS が実際に持っている51字の要約。ここを捨ててはいけない。
+    expect(
+      usableAsFallback(
+        'ソフトバンクグループが､半導体大手TSMCの保有株を突如72%も大幅削減したことが明らかになりました。',
+      ),
+    ).toBe(true);
+  });
+
+  it('空白だけのものは使わない', () => {
+    expect(usableAsFallback('   \n\n   ')).toBe(false);
   });
 });
