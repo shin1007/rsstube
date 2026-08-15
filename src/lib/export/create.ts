@@ -23,7 +23,7 @@ type Raw = {
   content_text: string | null;
   content_ok: boolean;
   feeds: { title: string } | null;
-  summaries: { bullets: string[] } | null;
+  summaries: { bullets: string[]; title_ja: string | null } | null;
 };
 
 export type ExportResult = {
@@ -46,7 +46,7 @@ export async function createExportFor(
     .from('articles')
     .select(
       `id, title, url, author, published_at, content_text, content_ok,
-       feeds (title), summaries (bullets)`,
+       feeds (title), summaries (bullets, title_ja)`,
     )
     .in('id', articleIds);
   if (error) throw error;
@@ -65,6 +65,7 @@ export async function createExportFor(
     author: r.author,
     publishedAt: r.published_at,
     bullets: r.summaries?.bullets ?? null,
+    titleJa: r.summaries?.title_ja ?? null,
     contentText: r.content_text,
     contentOk: r.content_ok,
   }));

@@ -22,6 +22,11 @@ export type SummaryInput = {
 
 export type SummaryOutput = {
   id: string;
+  /**
+   * 設定言語での見出し（0023）。原語のタイトルは articles.title に残る。
+   * 元からその言語なら、ほぼそのまま返ってくる。
+   */
+  title_ja: string;
   bullets: string[];
   tags: string[];
   importance: number;
@@ -42,11 +47,12 @@ const SCHEMA = {
         type: 'object',
         properties: {
           id: { type: 'string' },
+          title_ja: { type: 'string' },
           bullets: { type: 'array', items: { type: 'string' } },
           tags: { type: 'array', items: { type: 'string' } },
           importance: { type: 'integer' },
         },
-        required: ['id', 'bullets', 'tags', 'importance'],
+        required: ['id', 'title_ja', 'bullets', 'tags', 'importance'],
       },
     },
   },
@@ -71,6 +77,11 @@ function buildPrompt(articles: SummaryInput[], language: string): string {
     'あなたはRSSリーダーの要約担当です。以下の各記事について、',
     `${language === 'ja' ? '日本語で' : `${language} で`}次を出力してください。`,
     '',
+    // 見出しも訳させる。呼び出しは増えず、出力が数十トークン伸びるだけ。
+    // これが無いと、英語のフィードではダイジェストの見出しが全部英語になり、
+    // NotebookLM に「日本語で話して」と頼んでも素材に引きずられる。
+    `- title_ja: 記事の見出しを${language === 'ja' ? '日本語' : language}で。` +
+      '元からその言語ならそのまま返す。40字以内。内容を表す簡潔な見出しにし、原題の直訳に拘らなくてよい。',
     '- bullets: 要点を2〜3個。各40〜80字程度。記事を開かなくても内容がわかる具体的な文にすること。',
     '  「〜について述べている」のようなメタな説明ではなく、何が起きたか・何が主張されているかを直接書く。',
     '- tags: 内容を表す短いタグを1〜4個。一般的な語を使い、記事ごとに揺れないようにする。',
@@ -106,6 +117,9 @@ export async function summarizeBatch(
     .filter((s) => known.has(s.id))
     .map((s) => ({
       id: s.id,
+      // 長い見出しは一覧でも Markdown でも扱いにくいので切る。
+      // 返らなかったときは空にして、呼び出し側で原題に戻せるようにする。
+      title_ja: String(s.title_ja ?? '').trim().slice(0, 120),
       bullets: (s.bullets ?? []).slice(0, 4).map((b) => String(b).trim()).filter(Boolean),
       tags: (s.tags ?? []).slice(0, 6).map((t) => String(t).trim()).filter(Boolean),
       importance: Math.max(0, Math.min(100, Math.round(Number(s.importance) || 50))),
