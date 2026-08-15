@@ -222,6 +222,9 @@ async function runSummarizeJobs(db: SupabaseClient, deadline: number): Promise<n
         const { error } = await db.from('summaries').upsert(
           results.map((r) => ({
             article_id: r.id,
+            // 空で返ってきたら列を埋めない。空文字を入れると「訳した結果が空」と
+            // 区別できず、画面側で原題に戻す判断ができなくなる。
+            title_ja: r.title_ja?.trim() || null,
             bullets: r.bullets,
             tags: r.tags,
             importance: r.importance,
