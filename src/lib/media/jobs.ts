@@ -1,4 +1,4 @@
-import { generateScript, type ScriptLine, type Slide } from '@/lib/ai/script';
+import { generateScript, type ScriptLine, type Slide, type VoiceMode } from '@/lib/ai/script';
 import { synthesize } from '@/lib/ai/tts';
 import { RetryableError, SCRIPT_MODEL } from '@/lib/ai/gemini';
 import { TTS_MODEL } from '@/lib/ai/tts';
@@ -34,7 +34,7 @@ export async function runScriptJob(db: SupabaseClient, job: Job): Promise<boolea
   try {
     const { data: media } = await db
       .from('media')
-      .select('id, user_id, kind, article_id, digest_id, title')
+      .select('id, user_id, kind, article_id, digest_id, title, voice_mode')
       .eq('id', mediaId)
       .single();
 
@@ -46,7 +46,14 @@ export async function runScriptJob(db: SupabaseClient, job: Job): Promise<boolea
     await db.from('media').update({ status: 'scripting' }).eq('id', mediaId);
 
     const source = await loadSource(db, media);
-    const { lines, slides, usage } = await generateScript(source, await extraPrompt(db, media.user_id));
+    // モードは media に焼いてある（create.ts が設定から写す）。ここで設定を
+    // 見に行かないのは、生成中に設定を変えられると台本と声が食い違うため。
+    const mode = (media.voice_mode ?? 'dialogue') as VoiceMode;
+    const { lines, slides, usage } = await generateScript(
+      source,
+      await extraPrompt(db, media.user_id),
+      mode,
+    );
     await recordUsage(db, SCRIPT_MODEL, usage.inputTokens, usage.outputTokens, true);
 
     // スライド単位でまとめ、長いものはさらに分ける。これが合成の単位になる。
@@ -106,7 +113,7 @@ export async function runTtsJob(db: SupabaseClient, job: Job): Promise<boolean> 
   try {
     const { data: media } = await db
       .from('media')
-      .select('id, user_id, script, slides')
+      .select('id, user_id, script, slides, voice_mode')
       .eq('id', mediaId)
       .single();
     const { data: segment } = await db
@@ -139,7 +146,10 @@ export async function runTtsJob(db: SupabaseClient, job: Job): Promise<boolean> 
       return false;
     }
 
-    const { mp3, durationSec, usage } = await synthesize(group.lines);
+    const { mp3, durationSec, usage } = await synthesize(
+      group.lines,
+      (media.voice_mode ?? 'dialogue') as VoiceMode,
+    );
     await recordUsage(db, TTS_MODEL, usage.inputTokens, usage.outputTokens, true);
 
     // パスの先頭を持ち主にしておくと、Storage 側の権限をフォルダ名だけで判定できる。

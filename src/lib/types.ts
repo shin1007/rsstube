@@ -12,7 +12,12 @@ export type ArticleRow = {
    */
   extracted_at: string | null;
   feed: { id: string; title: string } | null;
-  summary: { bullets: string[]; tags: string[]; importance: number } | null;
+  /**
+   * 要約。title_ja は設定言語での見出し（0023）。一覧では原題より
+   * こちらを主にする。英語のフィードは記事の42%を占めていて、
+   * 原題のままだと目で追うのが重い。
+   */
+  summary: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
   state: {
     is_read: boolean;
     is_starred: boolean;

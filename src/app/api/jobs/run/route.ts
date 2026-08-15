@@ -222,6 +222,9 @@ async function runSummarizeJobs(db: SupabaseClient, deadline: number): Promise<n
         const { error } = await db.from('summaries').upsert(
           results.map((r) => ({
             article_id: r.id,
+            // 空で返ってきたら列を埋めない。空文字を入れると「訳した結果が空」と
+            // 区別できず、画面側で原題に戻す判断ができなくなる。
+            title_ja: r.title_ja?.trim() || null,
             bullets: r.bullets,
             tags: r.tags,
             importance: r.importance,
@@ -232,9 +235,33 @@ async function runSummarizeJobs(db: SupabaseClient, deadline: number): Promise<n
         if (error) throw error;
       }
 
-      // 結果が返らなかった記事も、ここで再試行し続けると無料枠を食い潰す。
-      // ジョブは完了扱いにして、必要なら手動で要約し直す。
-      for (const job of byArticle.values()) await complete(db, job.id);
+      // 返ってきたぶんは完了。
+      const returned = new Set(results.map((r) => r.id));
+      for (const [articleId, job] of byArticle) {
+        if (returned.has(articleId)) await complete(db, job.id);
+      }
+
+      /**
+       * 返らなかった記事は**1回だけ**やり直させる。
+       *
+       * モデルは5件のうち1件を落とすことがある。以前はここで完了扱いにしていたので、
+       * 落ちた記事には二度と要約が付かなかった（実データで5件が取り残されていた）。
+       * かといって無制限に再試行すると無料枠を食い潰す。
+       *
+       * `fail_job` の max_attempts に 2 を渡し、2回目で諦めさせる。次の回では
+       * 別の記事と組み合わさるので、同じ落ち方をする確率は低い。
+       * 諦めたものは「要約なし」ビューに残り、手で積み直せる。
+       */
+      for (const [articleId, job] of byArticle) {
+        if (returned.has(articleId)) continue;
+        const { error } = await db.rpc('fail_job', {
+          job_id: job.id,
+          err: 'モデルがこの記事を返しませんでした',
+          max_attempts: 2,
+        });
+        if (error) throw error;
+      }
+
       done += results.length;
     } catch (err) {
       // 失敗した呼び出しも RPD を1回ぶん食う（429 で弾かれた場合は特に、

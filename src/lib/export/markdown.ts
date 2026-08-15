@@ -9,6 +9,13 @@
 
 export type ExportArticle = {
   title: string;
+  /**
+   * 設定言語での見出し（0023）。あればこちらを主にする。
+   *
+   * 見出しまで原語だと、英語のフィードでは Markdown のほとんどが英語になり、
+   * 指示文で「日本語で話して」と頼んでも音声が英語に引きずられる（実際になった）。
+   */
+  titleJa?: string | null;
   url: string;
   feedTitle?: string | null;
   author?: string | null;
@@ -29,8 +36,11 @@ export function buildMarkdown(articles: ExportArticle[], title: string): string 
       .filter(Boolean)
       .join(' / ');
 
-    lines.push(`## ${i + 1}. ${a.title}`, '');
+    const heading = a.titleJa?.trim() || a.title;
+    lines.push(`## ${i + 1}. ${heading}`, '');
     if (meta) lines.push(`- 出典: ${meta}`);
+    // 訳した見出しを使ったときだけ原題も残す。元記事を探すときに要る。
+    if (heading !== a.title) lines.push(`- 原題: ${a.title}`);
     lines.push(`- URL: ${a.url}`);
 
     if (a.bullets?.length) {
@@ -44,7 +54,15 @@ export function buildMarkdown(articles: ExportArticle[], title: string): string 
       lines.push(`- 注記: 本文を取得できず、RSSの抜粋のみ`);
     }
 
-    lines.push('', (a.contentText ?? '').slice(0, PER_ARTICLE_LIMIT).trim(), '', '---', '');
+    const body = (a.contentText ?? '').slice(0, PER_ARTICLE_LIMIT).trim();
+    if (body) {
+      // 本文が原語のままであることを断っておく。断らないと、素材の言語に
+      // 引きずられて音声まで原語になる。見出しと要点は訳してあるので、
+      // 「読むのは原語、話すのは設定言語」と明示すれば足りる。
+      if (heading !== a.title) lines.push('', '- 以下の本文は原語です。要点は上のAI要点を参照。');
+      lines.push('', body);
+    }
+    lines.push('', '---', '');
   });
 
   return lines.join('\n');

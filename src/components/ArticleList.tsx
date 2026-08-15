@@ -440,6 +440,8 @@ function Row({
 
   const read = article.state?.is_read ?? false;
   const importance = article.summary?.importance;
+  // 訳した見出し（0023）。無ければ原題のまま。
+  const heading = article.summary?.title_ja?.trim() || article.title;
 
   // 何が起きるかをスワイプ中に見せる。滑るだけだと壊れて見える。
   const THRESHOLD = 80;
@@ -516,8 +518,18 @@ function Row({
           {!read && (
             <span aria-label="未読" className="mt-1.5 size-2 shrink-0 rounded-full bg-sky-500" />
           )}
+          {/*
+            訳した見出しがあればそれを主にする。記事の42%（1262件中531件）が
+            英語のフィードで、原題のままだと一覧を目で追うのが重い。
+            原題は捨てずに下に小さく残す（訳が的外れなときに気づけるように）。
+          */}
           <h3 className={`flex-1 text-sm leading-snug ${read ? 'text-zinc-500' : 'font-medium'}`}>
-            {article.title}
+            {heading}
+            {heading !== article.title && (
+              <span className="mt-0.5 block text-[11px] font-normal text-zinc-600">
+                {article.title}
+              </span>
+            )}
           </h3>
           {typeof importance === 'number' && importanceTier(importance).badge && (
             <span

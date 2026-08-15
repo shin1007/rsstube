@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:restore": "node scripts/db-restore.mjs",
-    "samples": "node --env-file=.env.local scripts/export-samples.mjs"
+    "samples": "node --env-file=.env.local scripts/export-samples.mjs",
+    "voices": "node --env-file=.env.local scripts/try-voices.mjs"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
