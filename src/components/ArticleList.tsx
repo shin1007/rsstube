@@ -1,5 +1,6 @@
 'use client';
 
+import { ActionFlash } from '@/components/ArticleActions';
 import { HelpTip } from '@/components/HelpTip';
 import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
 import {
@@ -62,6 +63,9 @@ export function ArticleList({
   const [helpOpen, setHelpOpen] = useState(false);
   // 全既読の取り消し用に、直前まで未読だった記事を覚えておく。
   const [undoIds, setUndoIds] = useState<string[] | null>(null);
+  // スワイプやキー操作の結果を短い帯で知らせる。行の色は薄い変化しかないので、
+  // 押した／滑らせたことが伝わらず「効いていない」と受け取られていた。
+  const [flash, setFlash] = useState<string | null>(null);
 
   // 記事が選択され直したらカーソルを合わせる。
   // effect ではなくレンダー中に調整する（effect でやると余計な再レンダーが1往復増える）。
@@ -161,19 +165,25 @@ export function ArticleList({
         case 'm':
           if (current) {
             e.preventDefault();
-            startTransition(() => void markRead(current.id, !current.state?.is_read));
+            const next = !current.state?.is_read;
+            setFlash(next ? '既読にしました' : '未読に戻しました');
+            startTransition(() => void markRead(current.id, next));
           }
           break;
         case 's':
           if (current) {
             e.preventDefault();
-            startTransition(() => void setStarred(current.id, !current.state?.is_starred));
+            const next = !current.state?.is_starred;
+            setFlash(next ? 'スターを付けました' : 'スターを外しました');
+            startTransition(() => void setStarred(current.id, next));
           }
           break;
         case 'l':
           if (current) {
             e.preventDefault();
-            startTransition(() => void setReadLater(current.id, !current.state?.read_later));
+            const next = !current.state?.read_later;
+            setFlash(next ? '「あとで読む」に入れました' : '「あとで読む」から外しました');
+            startTransition(() => void setReadLater(current.id, next));
           }
           break;
         case 'v':
@@ -308,6 +318,7 @@ export function ArticleList({
               setCursor(i);
               open(article.id);
             }}
+            onFlash={setFlash}
           />
         ))}
 
@@ -330,6 +341,9 @@ export function ArticleList({
           onDismiss={() => setUndoIds(null)}
         />
       )}
+
+      {/* 全既読の取り消し帯が出ているときは、そちらを優先して重ねない。 */}
+      {flash && !undoIds && <ActionFlash text={flash} onDismiss={() => setFlash(null)} />}
 
       {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
     </div>
@@ -408,6 +422,7 @@ function Row({
   selected,
   onOpen,
   onFocus,
+  onFlash,
 }: {
   ref: (el: HTMLElement | null) => void;
   article: ArticleRow;
@@ -415,6 +430,8 @@ function Row({
   selected: boolean;
   onOpen: () => void;
   onFocus: () => void;
+  /** スワイプで何をしたかを親に伝え、帯で出してもらう。 */
+  onFlash: (text: string) => void;
 }) {
   const [, startTransition] = useTransition();
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -475,9 +492,14 @@ function Row({
           setReleasing(true);
           setSwipe(0);
           touchStart.current = null;
-          if (dx < -THRESHOLD) startTransition(() => void markRead(article.id, !read));
-          else if (dx > THRESHOLD)
-            startTransition(() => void setReadLater(article.id, !article.state?.read_later));
+          if (dx < -THRESHOLD) {
+            onFlash(read ? '未読に戻しました' : '既読にしました');
+            startTransition(() => void markRead(article.id, !read));
+          } else if (dx > THRESHOLD) {
+            const next = !article.state?.read_later;
+            onFlash(next ? '「あとで読む」に入れました' : '「あとで読む」から外しました');
+            startTransition(() => void setReadLater(article.id, next));
+          }
         }}
         style={swipe !== 0 ? { transform: `translateX(${swipe}px)` } : undefined}
         className={`relative cursor-pointer px-3 py-2.5 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-500 ${

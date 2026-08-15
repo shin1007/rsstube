@@ -36,7 +36,24 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="ja" className="h-full antialiased">
-      <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100">
+      {/*
+        高さは `min-h-full` ではなく `h-dvh` で**確定**させる。
+
+        min-height は下限を決めるだけなので、中身が伸びれば body も伸びる。
+        すると子の `h-full`（= height:100%）や `flex-1 overflow-y-auto` が
+        寄りかかる先が無くなり、**各画面の内側スクロールが一つも効かない**。
+        実測では一覧が body 10753px まで伸び、サイドバー下端の「設定」が
+        y=10721 —— 画面の1万px下にあった。
+
+        ここを 100dvh に変えるだけで 848px に収まり、設定は y=816 に来る。
+        親の `flex-1` に高さを足しても直らない（flex-basis が height に勝つため）。
+        dvh なのはスマホのアドレスバー伸縮に追随させるため。
+
+        overflow-hidden は body 自体をスクロールさせないため。各画面は
+        自分の `overflow-y-auto` でスクロールする。新しい画面を足すときは
+        **ルート要素に overflow-y-auto を付けること**（付けないと溢れが切れる）。
+      */}
+      <body className="h-dvh overflow-hidden flex flex-col bg-zinc-950 text-zinc-100">
         {children}
         <ServiceWorker />
       </body>

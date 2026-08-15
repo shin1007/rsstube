@@ -66,26 +66,43 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
   return (
     <main className="flex-1 overflow-y-auto p-4 md:p-8">
       <div className="mx-auto max-w-2xl space-y-8 pb-24">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="text-sm text-zinc-400">
-            ← 一覧
-          </Link>
-          <h1 className="text-xl font-bold">設定</h1>
+        {/*
+          以前はここが折り返さない1行で、リンク6つを並べていた。スマホ幅（375px）に
+          対して中身が420px ほどあり、**最後の「ログアウト」がはみ出して押せなかった**。
+          見出しと導線を分け、導線側は折り返す。
+        */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="text-sm text-zinc-400">
+              ← 一覧
+            </Link>
+            <h1 className="text-xl font-bold">設定</h1>
+          </div>
           {/* スマホには下部タブしか無いので、二次画面どうしを相互に張っておく。 */}
-          <Link href="/library" className="ml-auto text-xs text-zinc-500 hover:text-zinc-200">
-            アーカイブ
-          </Link>
-          <Link href="/exports" className="text-xs text-zinc-500 hover:text-zinc-200">
-            書き出し
-          </Link>
-          <Link href="/account/password" className="text-xs text-zinc-500 hover:text-zinc-200">
-            パスワード
-          </Link>
-          <form action={signOut}>
-            <button type="submit" className="text-xs text-zinc-500 hover:text-zinc-200">
-              ログアウト
-            </button>
-          </form>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Link href="/library" className="text-xs text-zinc-500 hover:text-zinc-200">
+              アーカイブ
+            </Link>
+            <Link href="/exports" className="text-xs text-zinc-500 hover:text-zinc-200">
+              書き出し
+            </Link>
+            <Link href="/account/password" className="text-xs text-zinc-500 hover:text-zinc-200">
+              パスワード
+            </Link>
+            {/*
+              ログアウトだけ枠を付ける。以前は同じ灰色の小さな文字で右上隅に
+              置いていて、実測 44×16px。要素としては見えているが、リンクの列に
+              紛れて「ボタンがある」と気づけなかった。
+            */}
+            <form action={signOut} className="ml-auto">
+              <button
+                type="submit"
+                className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
+              >
+                ログアウト
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* ---------------- NotebookLM 用の指示文 ---------------- */}
@@ -355,6 +372,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             )}
           </ul>
         </section>
+
       </div>
     </main>
   );

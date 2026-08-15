@@ -60,7 +60,9 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   const next = index >= 0 && index < articles.length - 1 ? articles[index + 1] : undefined;
 
   return (
-    <div className="flex-1 flex min-h-0">
+    // 高さの確定は layout.tsx の body（h-dvh）が持つ。ここに h-dvh を足しても
+    // flex-basis が height に勝つので効かない（実測で確認済み）。
+    <div className="flex-1 flex min-h-0 overflow-hidden">
       <Sidebar
         folders={(folders ?? []) as FolderRow[]}
         feeds={(feeds ?? []) as FeedRow[]}
