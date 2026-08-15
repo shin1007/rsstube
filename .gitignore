@@ -44,3 +44,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# できあがったものの取り出し先（scripts/export-samples.mjs）。
+# ダイジェストには他サイトの記事本文が丸ごと入るので追跡しない。
+# 音声も書き出しも DB と Storage から作り直せる。
+samples/

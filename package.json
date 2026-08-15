@@ -16,7 +16,8 @@
     "db:backup": "node scripts/db-backup.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:restore": "node scripts/db-restore.mjs"
+    "db:restore": "node scripts/db-restore.mjs",
+    "samples": "node --env-file=.env.local scripts/export-samples.mjs"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
