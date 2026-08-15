@@ -35,6 +35,31 @@
 | **ElevenLabs** | 1万文字/月（10〜15分ぶん） | $0.30/1000文字 | × | ○ | 声の質を最優先にするとき。**毎朝10分だと無料枠に入らない** |
 | **VOICEVOX / AivisSpeech** | 完全無料（ローカル） | 0 | ○（話者を変えて合成） | ◎ | 費用をゼロに固定したいとき。**ただしサーバーが要る**（Vercel では動かない） |
 
+## 追記（2026-08-16）: 実際に叩いて分かったこと
+
+### Google Cloud TTS は APIキーでは使えない
+
+手元の `GEMINI_API_KEY` で `texttospeech.googleapis.com` を叩いたら **401**。
+
+```
+API keys are not supported by this API.
+Expected OAuth2 access token or other authentication credentials
+```
+
+つまり乗り換えるときは**サービスアカウントの鍵が要る**（GCPプロジェクトを作り、
+Cloud Text-to-Speech API を有効にし、鍵を発行して Vercel に入れる）。
+コードを書くだけでは移れないので、**オーナー作業として `owner-todo.md` に書いてある**。
+Gemini TTS が動いているうちは急がなくてよい。
+
+### Gemini TTS の声は6種類を実際に鳴らした
+
+`npm run voices` で同じニュース原稿を各声に読ませ、`samples/voices/*.wav` に出せる。
+文字で説明しても分からないので、聴いて選ぶ。1人語りを選べるようにしたぶん、
+声の当たり外れが出来に直結する。
+
+**毎分の上限がある。**6声を続けて叩いたら4声目までは通り、残り2つが 429 になった。
+直後に単発で叩くと 200 が返るので、1日ぶんが尽きたのではない。20秒空ければ通る。
+
 ### 現実的な次の一手は Google Cloud TTS
 
 Gemini TTS の preview が終わったら、ここが本命。無料枠400万文字/月は、毎朝10分
