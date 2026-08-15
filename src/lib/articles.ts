@@ -33,7 +33,7 @@ type RawRow = {
   content_ok: boolean;
   extracted_at: string | null;
   feeds: { id: string; title: string; subscriptions?: unknown } | null;
-  summaries: { bullets: string[]; tags: string[]; importance: number } | null;
+  summaries: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
   article_states: {
     is_read: boolean;
     is_starred: boolean;
@@ -50,7 +50,7 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
     .select(
       `id, title, url, author, published_at, excerpt, content_ok, extracted_at,
        feeds!inner (id, title, subscriptions!inner (folder_id)),
-       summaries (bullets, tags, importance),
+       summaries (bullets, tags, importance, title_ja),
        article_states!inner (is_read, is_starred, read_later, exported_at)`,
     )
     .limit(PAGE_SIZE);
@@ -125,7 +125,7 @@ export async function getArticle(id: string) {
     .select(
       `id, title, url, author, published_at, excerpt, content_text, content_html, content_ok, extracted_at,
        feeds (id, title),
-       summaries (bullets, tags, importance),
+       summaries (bullets, tags, importance, title_ja),
        article_states (is_read, is_starred, read_later, exported_at)`,
     )
     .eq('id', id)
