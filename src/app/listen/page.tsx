@@ -1,3 +1,4 @@
+import { AppShell } from '@/components/AppShell';
 import { listMedia } from '@/lib/media/list';
 import Link from 'next/link';
 
@@ -23,7 +24,8 @@ export default async function ListenPage() {
   const media = await listMedia();
 
   return (
-    <main className="flex-1 overflow-y-auto p-4 md:p-8">
+    <AppShell>
+      <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-8">
       <div className="mx-auto max-w-2xl space-y-4 pb-24">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-sm text-zinc-400">
@@ -110,8 +112,9 @@ export default async function ListenPage() {
             );
           })}
         </ul>
-      </div>
-    </main>
+        </div>
+      </main>
+    </AppShell>
   );
 }
 

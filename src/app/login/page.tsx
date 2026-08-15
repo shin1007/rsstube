@@ -60,8 +60,20 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
     const email = String(formData.get('email') ?? '').trim();
     if (!email) redirect('/login?error=' + encodeURIComponent('メールアドレスを入力してください'));
 
-    // 許可していないアドレスには送らない。文面は成功時と区別しない。
-    if (!isAllowedEmail(email)) redirect('/login?sent=1');
+    // 許可していないアドレスには送らない。
+    //
+    // 以前はここで黙って `sent=1` に飛ばしていた。総当たりでアドレスの有無を
+    // 探られないための配慮だったが、**押しても何も起きないのと区別が付かない**。
+    // 実際「送った」と出たまま Supabase 側に recovery_sent_at が付かず、
+    // 何時間も届かないメールを待つことになった。
+    // サインアップは止めてあり、許可アドレスは1つなので、隠す実益より
+    // 「なぜ来ないか分かる」ほうが大事。
+    if (!isAllowedEmail(email)) {
+      redirect(
+        '/login?error=' +
+          encodeURIComponent('このアドレスは許可されていません（ALLOWED_EMAILS を確認してください）'),
+      );
+    }
 
     // 戻り先は localhost と本番で変わるので、実際のリクエストのホストから組み立てる。
     // ここで渡す URL は Supabase の Redirect URLs に登録されている必要がある。
@@ -70,11 +82,17 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
     const proto = head.get('x-forwarded-proto') ?? (host?.startsWith('localhost') ? 'http' : 'https');
 
     const supabase = await createClient();
-    await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${proto}://${host}/auth/callback?next=/account/password`,
     });
 
-    // 送れたかどうかも伏せる（存在しないアドレスを試されたときに差が出ないように）。
+    // 戻り値を捨ててはいけない。SMTP の送信上限（Supabase の内蔵メールは
+    // 既定で1時間あたり数通）に当たっても、捨てると「送信しました」と出て
+    // しまい、来ないメールを待ち続けることになる。
+    if (error) {
+      redirect('/login?error=' + encodeURIComponent(`メールを送れませんでした: ${error.message}`));
+    }
+
     redirect('/login?sent=1');
   }
 

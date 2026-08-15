@@ -13,6 +13,7 @@ export function Sidebar({
   folderId,
   feedId,
   sort,
+  active = true,
 }: {
   folders: FolderRow[];
   feeds: FeedRow[];
@@ -22,6 +23,12 @@ export function Sidebar({
   feedId?: string;
   /** 並び順は絞り込みを変えても保つ。フォルダを移るたびに戻ると使いにくい。 */
   sort?: string;
+  /**
+   * いま一覧を見ているか。設定などの二次画面では false にして、どこも
+   * 選択中にしない。false にしないと、設定を開いている間ずっと「未読」が
+   * 光ったままになり、どこにいるのか分からなくなる。
+   */
+  active?: boolean;
 }) {
   const feedsByFolder = new Map<string, FeedRow[]>();
   for (const feed of feeds) {
@@ -63,7 +70,7 @@ export function Sidebar({
               key={v}
               href={link({ view: v })}
               className={`block rounded px-2 py-1.5 text-sm ${
-                view === v && !folderId && !feedId
+                active && view === v && !folderId && !feedId
                   ? "bg-zinc-800 text-zinc-100"
                   : "text-zinc-400 hover:bg-zinc-900"
               }`}

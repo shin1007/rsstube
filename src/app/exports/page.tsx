@@ -1,3 +1,4 @@
+import { AppShell } from '@/components/AppShell';
 import { ExportList, type ExportSummary } from '@/components/ExportList';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
@@ -43,7 +44,8 @@ export default async function ExportsPage() {
   }));
 
   return (
-    <main className="flex-1 overflow-y-auto p-4 md:p-8">
+    <AppShell>
+      <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-8">
       <div className="mx-auto max-w-2xl space-y-4 pb-24">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-sm text-zinc-400">
@@ -64,8 +66,9 @@ export default async function ExportsPage() {
           前日24時間ぶんの未読から、重要度の高いものをフォルダが偏らないように選びます。
         </p>
 
-        <ExportList exports={exports} />
-      </div>
-    </main>
+          <ExportList exports={exports} />
+        </div>
+      </main>
+    </AppShell>
   );
 }

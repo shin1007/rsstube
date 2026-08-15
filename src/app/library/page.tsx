@@ -1,3 +1,4 @@
+import { AppShell } from '@/components/AppShell';
 import { LIBRARY_PAGE_SIZE, listTags, searchLibrary } from '@/lib/library';
 import { importanceTier, importanceTitle } from '@/lib/importance';
 import Link from 'next/link';
@@ -61,7 +62,8 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
   };
 
   return (
-    <main className="flex-1 overflow-y-auto p-4 md:p-8">
+    <AppShell>
+      <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-8">
       <div className="mx-auto max-w-3xl space-y-5 pb-24">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-sm text-zinc-400">
@@ -246,8 +248,9 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
             )}
           </div>
         )}
-      </div>
-    </main>
+        </div>
+      </main>
+    </AppShell>
   );
 }
 
