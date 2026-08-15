@@ -79,7 +79,9 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
   }
 
   return (
-    <main className="flex-1 flex items-center justify-center p-6">
+    // body が高さを固定したので、ここが自分でスクロールする必要がある。
+    // 画面の低い端末で入力欄にキーボードが被ったときに動かせなくなるため。
+    <main className="flex-1 overflow-y-auto flex items-center justify-center p-6">
       <div className="w-full max-w-sm">
         <h1 className="text-2xl font-bold mb-1">RSSTube</h1>
         <p className="text-sm text-zinc-400 mb-6">AI要約つきの個人用RSSリーダー</p>

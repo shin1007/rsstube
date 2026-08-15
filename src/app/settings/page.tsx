@@ -89,6 +89,19 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             <Link href="/account/password" className="text-xs text-zinc-500 hover:text-zinc-200">
               パスワード
             </Link>
+            {/*
+              ログアウトだけ枠を付ける。以前は同じ灰色の小さな文字で右上隅に
+              置いていて、実測 44×16px。要素としては見えているが、リンクの列に
+              紛れて「ボタンがある」と気づけなかった。
+            */}
+            <form action={signOut} className="ml-auto">
+              <button
+                type="submit"
+                className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
+              >
+                ログアウト
+              </button>
+            </form>
           </div>
         </div>
 
@@ -360,23 +373,6 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
           </ul>
         </section>
 
-        {/*
-          ログアウトは設定の一番下に置く（そういうものだという場所が一番探しやすい）。
-          小さな文字で上の行に混ぜていたときは、はみ出して押せなかった。
-        */}
-        <section className="border-t border-zinc-800 pt-6">
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="rounded border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
-            >
-              ログアウト
-            </button>
-          </form>
-          <p className="mt-2 text-xs text-zinc-600">
-            次に開くときはメールアドレスとパスワードが要ります。
-          </p>
-        </section>
       </div>
     </main>
   );
