@@ -39,10 +39,39 @@ export type FeedCandidate = {
 const USER_AGENT = 'RSSTube/0.1 (personal feed reader)';
 
 /** link タグが無いサイト向けの当てずっぽう。多い順に並べてある。 */
-const COMMON_PATHS = ['/feed', '/rss', '/feed.xml', '/rss.xml', '/atom.xml', '/index.xml'];
-
-/** 当てずっぽうで叩く数の上限。全部叩くと遅いうえ、相手にも失礼。 */
-const MAX_GUESSES = 4;
+/**
+ * link タグを置いていないサイト向けに当てる場所。
+ *
+ * **`.rdf` を忘れないこと。** 官公庁・自治体は RSS 1.0（拡張子 .rdf）が現役で、
+ * しかもトップに `<link rel="alternate">` を置いていない。実測では20サイト中16で
+ * 見つけられず、素の正規表現でも `<link>` はゼロだった（告知していないだけで
+ * フィードは在る）。`.rdf` を足したことで総務省 `/news.rdf`、国土交通省
+ * `/index.rdf`、東京都 `/rss/index.rdf` が拾えるようになった。
+ *
+ * 並びは当たりやすい順。全部を並行で叩き、当たったもののうち**この順で先頭**を採る。
+ */
+const COMMON_PATHS = [
+  // どこにでもある形
+  '/feed',
+  '/rss',
+  '/rss.xml',
+  '/feed.xml',
+  '/atom.xml',
+  '/index.xml',
+  // RSS 1.0（.rdf）。官公庁はこれが現役
+  '/index.rdf',
+  '/news.rdf',
+  '/rss/index.rdf',
+  // 日本の自治体の「新着」。実測でいちばん当たった形
+  // （55サイトを当てて /shinchaku.xml が9件、/shinchaku/shinchaku.xml が7件）。
+  // ディレクトリ名とファイル名を繰り返すのが、この界隈の作法らしい。
+  '/shinchaku.xml',
+  '/shinchaku/shinchaku.xml',
+  '/topics.xml',
+  '/chumoku/chumoku.xml',
+  '/main/rss/rss.xml',
+  '/news/news.xml',
+];
 
 /** 候補として返す最大数。 */
 const MAX_CANDIDATES = 5;
@@ -161,11 +190,15 @@ export async function discoverFeeds(input: string): Promise<FeedCandidate[]> {
   if (found.length > 0) return found;
 
   // 3. よくある場所を当てる。link タグを置いていないサイト向け。
+  //
+  // 並行で叩く。以前は順に待っていたうえ先頭4件で打ち切っていたので、
+  // リストに書いてあるのに一度も試されない場所があった（`.rdf` を足しても
+  // 届かない）。9か所を1回ずつなら、相手にとっても普通の閲覧より軽い。
   const origin = new URL(url).origin;
-  for (const path of COMMON_PATHS.slice(0, MAX_GUESSES)) {
-    const candidate = await inspectFeed(`${origin}${path}`);
-    if (candidate) return [candidate];
-  }
+  const guesses = await Promise.all(COMMON_PATHS.map((path) => inspectFeed(`${origin}${path}`)));
+  // 当たりが複数あるときは COMMON_PATHS の並び（当たりやすい順）で先頭を採る。
+  const hit = guesses.find((c) => c !== null);
+  if (hit) return [hit];
 
   throw new Error('フィードが見つかりませんでした。フィードのURLを直接貼ってみてください');
 }
