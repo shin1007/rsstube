@@ -37,6 +37,10 @@ export async function ingestFeedItems(
     excerpt: item.excerpt ?? null,
     // 本文は後段の extract ジョブが上書きする。それまでは RSS の内容を出しておく。
     content_text: item.contentHtml ?? item.excerpt ?? null,
+    // **上書きされない控え（0021）。** content_text は抽出結果に置き換わるので、
+    // 「失敗したら RSS に戻す」ための元をここに残す。これが無いと、取り直しの
+    // たびに前回掴んだゴミを読み直すことになる。
+    rss_html: item.contentHtml ?? null,
     content_ok: false,
   }));
 

@@ -1,7 +1,7 @@
 import { BATCH_SIZE, summarizeBatch, type SummaryInput } from '@/lib/ai/summarize';
 import { SUMMARY_MODEL } from '@/lib/ai/gemini';
 import { recordUsage } from '@/lib/ai/usage';
-import { contentHash } from '@/lib/feeds/content';
+import { contentHash, usableAsFallback } from '@/lib/feeds/content';
 import { sanitizeHtml } from '@/lib/feeds/sanitize';
 import { extractArticle, htmlToText } from '@/lib/feeds/extract';
 import { claim, complete, enqueue, fail, type Job } from '@/lib/jobs/queue';
@@ -81,7 +81,7 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
     try {
       const { data: article } = await db
         .from('articles')
-        .select('id, url, feed_id, content_text')
+        .select('id, url, feed_id, rss_html, excerpt')
         .eq('id', articleId)
         .single();
 
@@ -89,6 +89,29 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
         await complete(db, job.id);
         continue;
       }
+
+      /**
+       * RSS の中身で妥協する。抽出が失敗したときと、掴んだものが記事で
+       * なかったとき（使い回しページ）の両方から呼ぶ。
+       *
+       * 使えないときは**何も返さない**。「Comments」のような、本文の代わりに
+       * ならない説明文を保存すると、一覧にも要約にもそれが並ぶ。
+       */
+      const fromRss = (): { text: string; html: string } | null => {
+        // **content_text を見てはいけない。** あの列は抽出結果で上書きされるので、
+        // 取り直しのときに読むと前回掴んだゴミが返ってくる（東洋経済で実際に
+        // メニュー1244字を「RSSの内容」として拾い直していた）。
+        // 0021 で足した rss_html が上書きされない控え。古い記事にはまだ無いので、
+        // そのときは excerpt を使う（東洋経済の場合はここに実要約が入っている）。
+        for (const source of [article.rss_html, article.excerpt]) {
+          if (!source) continue;
+          const t = htmlToText(source);
+          if (!usableAsFallback(t)) continue;
+          // RSS の中身も第三者が書いたものなので、描画に回すぶんは必ず消毒する。
+          return { text: t, html: sanitizeHtml(source, article.url) };
+        }
+        return null;
+      };
 
       let text = '';
       let html = '';
@@ -103,15 +126,8 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
         // RSSの内容で妥協して先へ進める。
       }
 
-      if (!ok && article.content_text) {
-        // poll の時点で入れた RSS 本文（HTML）をテキスト化して使う。
-        text = htmlToText(article.content_text);
-        // RSS の中身も第三者が書いたものなので、描画に回すぶんは必ず消毒する。
-        html = sanitizeHtml(article.content_text, article.url);
-      }
-
       // 同じフィードで本文が丸ごと一致したら、記事ではなく使い回しのページ
-      // （エラーページ・同意画面）とみなす。長さでは弾けないものがここで落ちる。
+      // （エラーページ・同意画面・グローバルメニュー）とみなす。
       let hash: string | null = null;
       if (ok) {
         hash = contentHash(text);
@@ -120,10 +136,22 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
         }
       }
 
+      if (!ok) {
+        // **ここが抜けていた。** 使い回しと判定したあとに落とし直していなかったので、
+        // 掴んだメニューがそのまま content_text に残っていた（東洋経済で実際に
+        // 「有料会員登録 お知らせ ビジネス…」が1244字ぶん保存されていた）。
+        // 判定したなら中身も捨てること。
+        const rss = fromRss();
+        text = rss?.text ?? '';
+        html = rss?.html ?? '';
+      }
+
       await db
         .from('articles')
         .update({
-          content_text: text || article.content_text,
+          // 使えるものが無ければ空にする。ゴミを残すくらいなら
+          // 「取れなかった」と分かるほうがよい（一覧には excerpt が出る）。
+          content_text: text || null,
           // 描画用。抽出に失敗しても RSS 本文から作れていれば残す。
           content_html: html || null,
           content_ok: ok,
@@ -278,11 +306,31 @@ async function isRecycledPage(
 
   if (!same?.length) return false;
 
-  await db
+  // 取り消す対象を先に控える。update のあとでは content_hash が消えて引けない。
+  const { data: peers } = await db
     .from('articles')
-    .update({ content_ok: false, content_hash: null })
+    .select('id')
     .eq('feed_id', feedId)
     .eq('content_hash', hash);
+
+  await db
+    .from('articles')
+    .update({
+      content_ok: false,
+      content_hash: null,
+      // **本文も一緒に捨てる。** 印だけ外して中身を残すと、掴んでしまった
+      // メニューが本文として画面に出続ける（東洋経済で実際にそうなっていた）。
+      content_text: null,
+      content_html: null,
+    })
+    .eq('feed_id', feedId)
+    .eq('content_hash', hash);
+
+  // 消しっぱなしにせず、取り直させる。RSS の中身に落とし直せば
+  // 「メニューしか無い」より読めるものが残る。
+  for (const peer of peers ?? []) {
+    if (peer.id !== articleId) await enqueue(db, 'extract', { article_id: peer.id });
+  }
 
   return true;
 }
