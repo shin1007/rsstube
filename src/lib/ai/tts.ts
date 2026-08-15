@@ -1,7 +1,7 @@
 import lamejs from '@breezystack/lamejs';
 import { GoogleGenAI } from '@google/genai';
 import { RetryableError, type Usage } from './gemini';
-import { SPEAKERS, type ScriptLine } from './script';
+import { SPEAKERS, type ScriptLine, type VoiceMode } from './script';
 
 /**
  * マルチスピーカーTTS と、その出力を MP3 にするところ。
@@ -57,15 +57,40 @@ export function toSpeechText(lines: ScriptLine[]): string {
     .join('\n');
 }
 
-export async function synthesize(lines: ScriptLine[]): Promise<Synthesized> {
+export async function synthesize(
+  lines: ScriptLine[],
+  mode: VoiceMode = 'dialogue',
+): Promise<Synthesized> {
   if (lines.length === 0) throw new Error('読み上げる台本がありません');
 
-  const prompt = [
-    '次の2人の会話を、自然な間合いで読み上げてください。',
-    '話者名は読み上げないこと。',
-    '',
-    toSpeechText(lines),
-  ].join('\n');
+  const solo = mode === 'solo';
+
+  const prompt = solo
+    ? ['次の文章を、自然な間合いで読み上げてください。', '', lines.map((l) => l.text).join('\n')].join('\n')
+    : [
+        '次の2人の会話を、自然な間合いで読み上げてください。',
+        '話者名は読み上げないこと。',
+        '',
+        toSpeechText(lines),
+      ].join('\n');
+
+  /**
+   * 1人のときは multiSpeakerVoiceConfig を使わない。
+   *
+   * 話者が1人しかいないのに複数話者の設定を渡すと、モデルが台本の中に
+   * 話者の切り替わりを探しに行く。名前を前置きしない素の文章を渡すぶん、
+   * 単一話者の設定のほうが素直に読む。
+   */
+  const speechConfig = solo
+    ? { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_A } } }
+    : {
+        multiSpeakerVoiceConfig: {
+          speakerVoiceConfigs: [
+            { speaker: SPEAKERS.A.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_A } } },
+            { speaker: SPEAKERS.B.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_B } } },
+          ],
+        },
+      };
 
   let res;
   try {
@@ -74,14 +99,7 @@ export async function synthesize(lines: ScriptLine[]): Promise<Synthesized> {
       contents: prompt,
       config: {
         responseModalities: ['AUDIO'],
-        speechConfig: {
-          multiSpeakerVoiceConfig: {
-            speakerVoiceConfigs: [
-              { speaker: SPEAKERS.A.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_A } } },
-              { speaker: SPEAKERS.B.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_B } } },
-            ],
-          },
-        },
+        speechConfig,
       },
     });
   } catch (err) {

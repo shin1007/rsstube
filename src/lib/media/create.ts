@@ -19,6 +19,15 @@ export async function requestMedia(
   target: MediaTarget,
   title: string,
 ): Promise<{ id: string; created: boolean }> {
+  // 設定を**この時点で写して** media に焼く。あとで設定を変えても、
+  // 作り始めたものの形は変わらない（対話の台本を1人の声で読む、といった
+  // 食い違いを防ぐ）。行が無いときの既定は対話。
+  const { data: settings } = await db
+    .from('settings')
+    .select('voice_mode')
+    .eq('user_id', userId)
+    .maybeSingle();
+
   const row = {
     user_id: userId,
     kind: target.kind,
@@ -26,6 +35,7 @@ export async function requestMedia(
     digest_id: target.kind === 'digest' ? target.digestId : null,
     title,
     status: 'queued' as const,
+    voice_mode: settings?.voice_mode === 'solo' ? 'solo' : 'dialogue',
   };
 
   // 同じ対象を二重に音声化しない（0010 の一意制約）。既にあるならそれを返す。

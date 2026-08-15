@@ -37,6 +37,20 @@ export const SPEAKERS = {
 } as const;
 
 /**
+ * 音声の作り。
+ *
+ * `dialogue` は NotebookLM の音声概要と同じ形で、専門外の話題でも耳で追いやすい。
+ * ただし相槌と質問のぶんだけ長くなる。`solo` は1人が淡々と読むので、
+ * 同じ中身でも短く済み、内容を早く取りたいときに向く。好みが分かれるので選べるようにした。
+ */
+export type VoiceMode = 'dialogue' | 'solo';
+
+export const VOICE_MODE_LABELS: Record<VoiceMode, string> = {
+  dialogue: '2人の対話（聞き手が質問する形。耳で追いやすい）',
+  solo: '1人の語り（淡々と読む。同じ中身でも短い）',
+};
+
+/**
  * 出力の上限。
  *
  * JSON は途中で切れると parse できず、生成そのものが丸ごと無駄になる。
@@ -117,8 +131,9 @@ function textLimit(articleCount: number): number {
 /** 1本の目安の長さ。長すぎると聴き通せないし、TTS の呼び出しも増える。 */
 const TARGET_MINUTES = 8;
 
-function buildPrompt(source: ScriptSource, extra: string): string {
+function buildPrompt(source: ScriptSource, extra: string, mode: VoiceMode): string {
   const limit = textLimit(source.articles.length);
+  const solo = mode === 'solo';
 
   const body = source.articles
     .map((a, i) =>
@@ -136,11 +151,18 @@ function buildPrompt(source: ScriptSource, extra: string): string {
     .join('\n\n');
 
   return [
-    'あなたはニュース番組の構成作家です。次の記事群から、2人の対話による',
+    solo
+      ? 'あなたはニュース番組の構成作家です。次の記事群から、1人の語りによる'
+      : 'あなたはニュース番組の構成作家です。次の記事群から、2人の対話による',
     `音声番組の台本と、それに合わせて表示するスライドを作ってください。日本語で。`,
     '',
-    `話者A = ${SPEAKERS.A.name}（${SPEAKERS.A.role}）`,
-    `話者B = ${SPEAKERS.B.name}（${SPEAKERS.B.role}）`,
+    solo
+      ? // 話者は1人でも、出力の形（speaker を持つ配列）は共通にしておく。
+        // スキーマを分けると受け取り側も分岐が増える。
+        `話者は${SPEAKERS.A.name}（${SPEAKERS.A.role}）ただ1人。` +
+        'lines の speaker は全て "A" にすること。"B" を使ってはいけない。' +
+        '相槌・質問・呼びかけは入れず、聴き手に語りかける独白にする。'
+      : `話者A = ${SPEAKERS.A.name}（${SPEAKERS.A.role}）\n話者B = ${SPEAKERS.B.name}（${SPEAKERS.B.role}）`,
     '',
     '## 分量（守ること）',
     `- スライドは最大${MAX_SLIDES}枚、発話は最大${MAX_LINES}個。これを超えてはいけない。`,
@@ -160,7 +182,9 @@ function buildPrompt(source: ScriptSource, extra: string): string {
     '- slide は前の発話と同じか+1のみ。戻ってはいけない。スライドは必ず順に進む。',
     '- 最後のスライドまで必ず進めること。全部の発話が slide=0 のままではいけない。',
     '- ある記事の話をしている間は、その記事のスライドを指すこと。',
-    '- 1発話は40〜120字程度。長い説明は相手の相槌や質問を挟んで分ける。',
+    solo
+      ? '- 1発話は40〜120字程度。長い説明は文を切って並べる。相手はいないので問いかけない。'
+      : '- 1発話は40〜120字程度。長い説明は相手の相槌や質問を挟んで分ける。',
     '- 「何が新しいのか」「なぜ重要か」を軸にする。記事に書かれていないことは足さない。',
     '- 冒頭で全体を予告し、最後に一言でまとめる。',
     '- 読み上げられるので、記号や箇条書き、URL、英略語の羅列は避けて話し言葉にする。',
@@ -178,10 +202,11 @@ function buildPrompt(source: ScriptSource, extra: string): string {
 export async function generateScript(
   source: ScriptSource,
   extra = '',
+  mode: VoiceMode = 'dialogue',
 ): Promise<ScriptResult> {
   const { data, usage } = await generateJson<{ slides: Slide[]; lines: ScriptLine[] }>({
     model: SCRIPT_MODEL,
-    prompt: buildPrompt(source, extra),
+    prompt: buildPrompt(source, extra, mode),
     schema: SCHEMA,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     thinkingBudget: THINKING_BUDGET,
@@ -193,7 +218,10 @@ export async function generateScript(
   // 欲しいのは音声のほうで、スライドはその添え物。ここで諦めると
   // 生成に使ったぶんが丸ごと無駄になる。
   const usable = slides.length > 0 ? slides : [{ type: 'title' as const, title: source.title }];
-  const lines = normalizeLines(data.lines ?? [], usable.length);
+  const raw = normalizeLines(data.lines ?? [], usable.length);
+  // 1人の語りを頼んでも B が混じることがある。プロンプトの言いつけだけに
+  // 頼ると、TTS 側で「いないはずの話者」の声を割り当てる羽目になる。
+  const lines = mode === 'solo' ? raw.map((l) => ({ ...l, speaker: 'A' as const })) : raw;
 
   if (lines.length === 0) {
     // 何を受け取って何が残らなかったのかが分からないと直しようがない。
