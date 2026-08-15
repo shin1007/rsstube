@@ -1,3 +1,4 @@
+import { stripRepeatedTails } from '@/lib/feeds/title';
 import { urlHash } from '@/lib/feeds/url';
 import { enqueueMany } from '@/lib/jobs/queue';
 import type { FetchFeedResult } from '@/lib/feeds/parse';
@@ -26,12 +27,19 @@ export async function ingestFeedItems(
 ): Promise<IngestResult> {
   if (result.items.length === 0) return { newArticles: 0, states: 0 };
 
-  const rows = result.items.map((item) => ({
+  // サイト名・連載名がタイトルに混ざっているフィードがある
+  // （東洋経済は75件中75件が「| 政治・経済・投資 | 東洋経済オンライン」付き）。
+  // 一覧でも要約でも音声でも毎回同じ十数文字が付いて回るので、ここで落とす。
+  // 判断は1回の取得ぶんの中だけで完結する（lib/feeds/title.ts）。
+  const titles = stripRepeatedTails(result.items.map((i) => i.title));
+
+  const rows = result.items.map((item, i) => ({
     feed_id: feedId,
     guid: item.guid ?? null,
     url: item.url,
     url_hash: urlHash(item.url),
-    title: item.title,
+    // 落としたあとの見出し。原題ではなくこちらを保存する（一覧・要約・音声の全部に効く）。
+    title: titles[i],
     author: item.author ?? null,
     published_at: item.publishedAt ?? null,
     excerpt: item.excerpt ?? null,
