@@ -1,4 +1,5 @@
 import { AppShell } from '@/components/AppShell';
+import { VOICE_MODE_LABELS, type VoiceMode } from '@/lib/ai/script';
 import { listSubscribedFeeds } from '@/lib/subscriptions';
 import {
   createFolder,
@@ -56,6 +57,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
         digest_count: Number(formData.get('digest_count') ?? 8),
         digest_hour: Number(formData.get('digest_hour') ?? 6),
         retention_days: Number(formData.get('retention_days') ?? 90),
+        voice_mode: formData.get('voice_mode') === 'solo' ? 'solo' : 'dialogue',
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' },
@@ -163,6 +165,28 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
               保持期間を過ぎた既読記事は本文だけを消します（スター・あとで・書き出し済みは対象外）。
               記事の行自体は残るので、既読の記事が未読で戻ってくることはありません。0 で無効。
             </p>
+
+            <div>
+              <label className="block text-xs text-zinc-400" htmlFor="voice_mode">
+                アプリ内音声の作り
+              </label>
+              <select
+                id="voice_mode"
+                name="voice_mode"
+                defaultValue={settings?.voice_mode ?? 'dialogue'}
+                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
+              >
+                {(Object.keys(VOICE_MODE_LABELS) as VoiceMode[]).map((m) => (
+                  <option key={m} value={m}>
+                    {VOICE_MODE_LABELS[m]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-zinc-500">
+                次に作るものから効きます。作成済みの音声は作られたときの形のままです
+                （台本が話者の数に縛られているので、後から声だけ替えることはできません）。
+              </p>
+            </div>
             <button type="submit" className="rounded bg-zinc-100 px-3 py-1.5 text-sm text-zinc-900">
               保存
             </button>
