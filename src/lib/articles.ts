@@ -135,20 +135,23 @@ export async function getArticle(id: string) {
   return data;
 }
 
-/** サイドバーに出す未読件数。フィード単位で集計する（呼び出し側でフォルダにまとめる）。 */
+/**
+ * サイドバーに出す未読件数。フィード単位で集計する（呼び出し側でフォルダにまとめる）。
+ *
+ * 数えるのは DB 側（0020 の `unread_counts()`）。以前は未読の記事を最大5000行
+ * 取ってきて JS で数えていたが、実測で1171行が返っていた。欲しいのは18個の
+ * 数字だけなので、その65倍を毎回運んでいたことになる。
+ * しかもこれは全ページで呼ばれる（AppShell が持つため）ので、常時かかる。
+ */
 export async function unreadCounts(): Promise<Map<string, number>> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('articles')
-    .select('feed_id, article_states!inner (is_read)')
-    .eq('article_states.is_read', false)
-    .limit(5000);
+  const { data, error } = await supabase.rpc('unread_counts');
 
   if (error) throw error;
 
   const counts = new Map<string, number>();
-  for (const row of (data ?? []) as unknown as { feed_id: string }[]) {
-    counts.set(row.feed_id, (counts.get(row.feed_id) ?? 0) + 1);
+  for (const row of (data ?? []) as { feed_id: string; unread: number }[]) {
+    counts.set(row.feed_id, Number(row.unread));
   }
   return counts;
 }
