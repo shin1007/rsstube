@@ -51,15 +51,26 @@ const USER_AGENT = 'RSSTube/0.1 (personal feed reader)';
  * 並びは当たりやすい順。全部を並行で叩き、当たったもののうち**この順で先頭**を採る。
  */
 const COMMON_PATHS = [
+  // どこにでもある形
   '/feed',
   '/rss',
   '/rss.xml',
   '/feed.xml',
+  '/atom.xml',
+  '/index.xml',
+  // RSS 1.0（.rdf）。官公庁はこれが現役
   '/index.rdf',
   '/news.rdf',
   '/rss/index.rdf',
-  '/atom.xml',
-  '/index.xml',
+  // 日本の自治体の「新着」。実測でいちばん当たった形
+  // （55サイトを当てて /shinchaku.xml が9件、/shinchaku/shinchaku.xml が7件）。
+  // ディレクトリ名とファイル名を繰り返すのが、この界隈の作法らしい。
+  '/shinchaku.xml',
+  '/shinchaku/shinchaku.xml',
+  '/topics.xml',
+  '/chumoku/chumoku.xml',
+  '/main/rss/rss.xml',
+  '/news/news.xml',
 ];
 
 /** 候補として返す最大数。 */
