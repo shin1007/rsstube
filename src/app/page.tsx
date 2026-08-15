@@ -33,13 +33,32 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
 
   const supabase = await createClient();
 
-  const [{ data: folders }, feeds, articles, counts, selected] = await Promise.all([
+  const [{ data: folders }, feeds, articles, counts, picked] = await Promise.all([
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
     listSubscribedFeeds(),
     listArticles({ view, folderId, feedId, sort, search }),
     unreadCounts(),
     selectedId ? getArticle(selectedId) : Promise.resolve(null),
   ]);
+
+  /**
+   * 何も選んでいないときは先頭の記事を出す。
+   *
+   * 以前は「記事を選択してください」という空の枠だった。開いた直後に読むものが
+   * 出ていないと、必ず1回クリックしてからでないと始められない。
+   *
+   * **これは既読にしない。**既読を付けるのは一覧で明示的に開いたとき（ArticleList の
+   * open）だけで、ここは表示しているだけ。自動で既読にすると、開いただけで未読が
+   * 1件ずつ静かに減っていく。
+   *
+   * スマホには波及しない。記事ペインは `article` が無いと `hidden md:block` で
+   * 隠れるので、スマホでは今までどおり一覧が出る。
+   *
+   * 一覧を取ってからでないと先頭が分からないので、この1回だけ往復が増える。
+   * 東京に寄せたあとなので10ms程度。
+   */
+  const previewId = selectedId ?? articles[0]?.id;
+  const selected = selectedId ? picked : previewId ? await getArticle(previewId) : null;
 
   // 記事を開いていても、戻り先と前後の記事は「今の絞り込み」を保った URL にする。
   // ここを / にしてしまうと、フォルダや検索を選んだ状態が戻るたびに消える。
@@ -55,7 +74,9 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
     return qs ? `/?${qs}` : '/';
   };
 
-  const index = selectedId ? articles.findIndex((a) => a.id === selectedId) : -1;
+  // 前後の記事は「いま出しているもの」を基準にする。先頭を自動で出したときも
+  // 「次へ」で読み進められるように。
+  const index = previewId ? articles.findIndex((a) => a.id === previewId) : -1;
   const prev = index > 0 ? articles[index - 1] : undefined;
   const next = index >= 0 && index < articles.length - 1 ? articles[index + 1] : undefined;
 
