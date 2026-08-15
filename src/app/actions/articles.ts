@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -12,10 +13,35 @@ import { redirect } from 'next/navigation';
  * 実データの保護は RLS（user_id = auth.uid()）が担保している。
  */
 
-/** ログアウト。自分専用とはいえ、端末を貸すときに抜ける手段は要る。 */
+/**
+ * ログアウト。自分専用とはいえ、端末を貸すときに抜ける手段は要る。
+ *
+ * **`supabase.auth.signOut()` だけに任せてはいけない。**
+ * GoTrueClient は、セッションを読む段階で「セッションが無い」以外のエラーが出ると
+ * **Cookie を消さずにエラーを返して戻る**（refresh token が既に使われていた、
+ * Supabase に届かなかった、など）。こちらがその戻り値を見ずに `/login` へ飛ばすと、
+ * Cookie が生きたままなので proxy の「ログイン済みで /login なら / へ」に引っかかり、
+ * **押しても元の画面に戻るだけ**になる。出口が無くなるので、Cookie は自分で消す。
+ */
 export async function signOut() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+
+  // 他の端末のセッションも切りたいので既定（global）のまま。ただし
+  // 失敗してもここで止まらない。抜けられないほうが困る。
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // 通信できなくても、下で Cookie を消せばこの端末からは抜けられる。
+  }
+
+  // 消し残しが1つでもあると proxy に「ログイン済み」と見なされる。
+  // 分割された Cookie（`.0` `.1`）も一緒に消すこと。セッションが大きいと
+  // @supabase/ssr が勝手に分割するので、本体だけ消しても残る。
+  const cookieStore = await cookies();
+  for (const cookie of cookieStore.getAll()) {
+    if (/^sb-.+-auth-token(\.\d+)?$/.test(cookie.name)) cookieStore.delete(cookie.name);
+  }
+
   redirect('/login');
 }
 
