@@ -1,3 +1,4 @@
+import { AppShell } from '@/components/AppShell';
 import { listSubscribedFeeds } from '@/lib/subscriptions';
 import {
   createFolder,
@@ -64,7 +65,8 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
   }
 
   return (
-    <main className="flex-1 overflow-y-auto p-4 md:p-8">
+    <AppShell>
+      <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-8">
       <div className="mx-auto max-w-2xl space-y-8 pb-24">
         {/*
           以前はここが折り返さない1行で、リンク6つを並べていた。スマホ幅（375px）に
@@ -373,7 +375,8 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
           </ul>
         </section>
 
-      </div>
-    </main>
+        </div>
+      </main>
+    </AppShell>
   );
 }
