@@ -57,6 +57,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
         digest_count: Number(formData.get('digest_count') ?? 8),
         digest_hour: Number(formData.get('digest_hour') ?? 6),
         retention_days: Number(formData.get('retention_days') ?? 90),
+        media_retention_days: Number(formData.get('media_retention_days') ?? 30),
         voice_mode: formData.get('voice_mode') === 'solo' ? 'solo' : 'dialogue',
         updated_at: new Date().toISOString(),
       },
@@ -148,6 +149,18 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
                 />
                 時
               </label>
+              <label className="text-xs text-zinc-400" title="0で無効（音声を永久に保持）">
+                音声の保持
+                <input
+                  type="number"
+                  name="media_retention_days"
+                  min={0}
+                  max={3650}
+                  defaultValue={settings?.media_retention_days ?? 30}
+                  className="ml-2 w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+                />
+                日
+              </label>
               <label className="text-xs text-zinc-400" title="0で無効（本文を永久に保持）">
                 本文の保持
                 <input
@@ -162,6 +175,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
               </label>
             </div>
             <p className="text-xs text-zinc-500">
+              音声はサーバー容量の都合で既定30日。消える前に「聴く」から MP3 で保存できます。
               保持期間を過ぎた既読記事は本文だけを消します（スター・あとで・書き出し済みは対象外）。
               記事の行自体は残るので、既読の記事が未読で戻ってくることはありません。0 で無効。
             </p>

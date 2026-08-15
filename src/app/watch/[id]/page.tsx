@@ -28,6 +28,17 @@ export default async function WatchPage({ params }: PageProps<'/watch/[id]'>) {
           // 途中まででも聴ける。全部できるのを待たせない。
           <span className="shrink-0 text-xs text-amber-500">生成中</span>
         )}
+        {/*
+          サーバー側の音声は30日で消える（Storage の無料枠が1GBで、1本あたり
+          473KB/分あるため）。手元に置きたいものは消える前に落としてもらう。
+          a のままにしているのは、ダウンロードは画面遷移が要らないため。
+        */}
+        <a
+          href={`/api/media/${id}/download`}
+          className="shrink-0 rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
+        >
+          ⤓ 保存
+        </a>
       </header>
 
       <Player
