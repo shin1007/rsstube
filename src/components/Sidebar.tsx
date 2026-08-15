@@ -5,6 +5,14 @@ import { VIEW_LABELS } from "@/lib/types";
 /**
  * フォルダとフィードの一覧。PCでのみ表示する（スマホは下部タブで代替）。
  */
+
+/** 下端に常駐する画面への導線。フィードとは別の見た目にしてある（下の注記）。 */
+const NAV = [
+  { href: '/listen', label: '聴く' },
+  { href: '/library', label: 'アーカイブを検索' },
+  { href: '/exports', label: '書き出し・朝のダイジェスト' },
+  { href: '/settings', label: '設定・フィード管理' },
+];
 export function Sidebar({
   folders,
   feeds,
@@ -134,32 +142,29 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* 常に見えているところ。フィードが増えても埋もれない。 */}
-      <div className="shrink-0 p-3 border-t border-zinc-800 space-y-1.5">
-        <Link
-          href="/listen"
-          className="block text-sm text-zinc-400 hover:text-zinc-100"
-        >
-          聴く
-        </Link>
-        <Link
-          href="/library"
-          className="block text-sm text-zinc-400 hover:text-zinc-100"
-        >
-          アーカイブを検索
-        </Link>
-        <Link
-          href="/exports"
-          className="block text-sm text-zinc-400 hover:text-zinc-100"
-        >
-          書き出し・朝のダイジェスト
-        </Link>
-        <Link
-          href="/settings"
-          className="block text-sm text-zinc-400 hover:text-zinc-100"
-        >
-          設定・フィード管理
-        </Link>
+      {/*
+        常に見えているところ。フィードが増えても埋もれない。
+
+        **フィードと同じ見た目にしない。**ここは読むものではなく道具で、
+        性質が違う。以前は上の一覧とまったく同じ `text-sm text-zinc-400` で、
+        フィード名の続きにしか見えなかった。
+
+        区別は3つ: 小さく（text-xs）、字間を広げ（tracking-wide）、
+        少し太く（font-medium）。**色は落とさない**（フィードと同じ zinc-400）。
+        小さくしたうえに暗くすると、先日の「設定が見つからない」を作り直すことになる。
+        大きさと字面だけで十分に別物に見える。
+        フィード名は「固有名詞の一覧」、こちらは「機能の名前」として読ませたい。
+      */}
+      <div className="shrink-0 border-t border-zinc-800 p-3 pt-2.5">
+        {NAV.map(({ href, label }) => (
+          <Link
+            key={href}
+            href={href}
+            className="block rounded px-1 py-1.5 text-xs font-medium tracking-wide text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+          >
+            {label}
+          </Link>
+        ))}
       </div>
     </nav>
   );
