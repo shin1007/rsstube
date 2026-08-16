@@ -65,7 +65,13 @@ export async function ingestFeedItems(
 
   // 新着が入った時刻を控える。取得は成功しているのに更新が止まったフィードは、
   // これが無いと見分けられない（失敗回数は 0 のままなので）。
-  await db.from('feeds').update({ last_article_at: new Date().toISOString() }).eq('id', feedId);
+  // ここが黙って失敗すると、更新が止まったフィードを見つける手立てが消える
+  // （失敗回数は 0 のままなので、一覧を眺めても分からない型の死に方）。
+  const { error: stampError } = await db
+    .from('feeds')
+    .update({ last_article_at: new Date().toISOString() })
+    .eq('id', feedId);
+  if (stampError) throw stampError;
 
   // 本文抽出をキューへ。要約は抽出が終わってから積まれる。
   await enqueueMany(db, 'extract', ids.map((id) => ({ article_id: id })));

@@ -147,7 +147,16 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
         html = rss?.html ?? '';
       }
 
-      await db
+      /**
+       * **戻り値を必ず見ること。**
+       *
+       * ここだけエラーを捨てていた。書き込みが失敗しても要約へ進んで
+       * ジョブを完了扱いにするので、記事は `extracted_at` が null のまま
+       * 誰も拾い直さない。画面には永久に「順番待ち」と出続ける
+       * （実データで17件がこの状態だった。要約は付いているのに未抽出扱い）。
+       * 投げておけば catch が fail_job に回し、あとで再試行される。
+       */
+      const { error: updateError } = await db
         .from('articles')
         .update({
           // 使えるものが無ければ空にする。ゴミを残すくらいなら
@@ -164,6 +173,7 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
           extracted_at: new Date().toISOString(),
         })
         .eq('id', articleId);
+      if (updateError) throw updateError;
 
       await enqueue(db, 'summarize', { article_id: articleId });
       await complete(db, job.id);

@@ -52,6 +52,8 @@ export async function POST(request: Request) {
 
   let removed = 0;
   let files = 0;
+  // 消せなかったものは黙って捨てず、応答に出す（cron の戻りを見れば気づける）。
+  const failed: string[] = [];
 
   for (const media of candidates ?? []) {
     const days = retentionByUser.get(media.user_id) ?? DEFAULT_RETENTION_DAYS;
@@ -72,11 +74,20 @@ export async function POST(request: Request) {
     }
 
     // media_segments は外部キーの cascade で一緒に消える。
-    await db.from('media').delete().eq('id', media.id);
+    //
+    // ここで失敗すると **Storage のファイルだけ消えて行が残る**。
+    // 一覧には残るのに再生できない音声ができあがり、しかも次回以降は
+    // list が空なので「消すものが無い」として素通りされ、永久に居座る。
+    // 数えないだけでなく、気づけるように残す。
+    const { error: deleteError } = await db.from('media').delete().eq('id', media.id);
+    if (deleteError) {
+      failed.push(`${media.id}: ${deleteError.message}`);
+      continue;
+    }
     removed++;
   }
 
-  return Response.json({ removed, files });
+  return Response.json({ removed, files, ...(failed.length ? { failed } : {}) });
 }
 
 /** ブラウザから手で叩いて確認できるように GET でも同じ処理を通す。 */
