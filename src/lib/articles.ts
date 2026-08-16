@@ -85,7 +85,11 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
     // 日本語は形態素解析が無いので、タイトルと本文の部分一致で引く。
     // 検索語をそのまま埋めるとカンマや括弧で or 式が壊れるので落としておく。
     const term = sanitizeSearch(query.search);
-    if (term) q = q.or(`title.ilike.%${term}%,content_text.ilike.%${term}%`);
+    // 訳した見出しも対象にする。一覧に出しているのはそちらなので、原題だけだと
+    // 「見えている語で検索して当たらない」ことになる（0024 の複製を引く）。
+    if (term) {
+      q = q.or(`title.ilike.%${term}%,title_ja.ilike.%${term}%,content_text.ilike.%${term}%`);
+    }
   }
 
   if (query.sort === 'important') {

@@ -96,6 +96,22 @@ export function sanitizeHtml(html: string, baseUrl?: string): string {
   if (!body) return '';
 
   const walk = (node: Element) => {
+    /*
+      コメントを落とす。
+      `node.children` は要素しか返さないので、コメントは走査から漏れて
+      そのまま出力に残っていた（`<!--<script>…</script>-->` が素通しだった）。
+      コメントの中身はブラウザが実行しないので、それ自体が穴ではない。
+      ただ、本文を読むのに要るものではないし、パーサの解釈の違いを突く手口
+      （mXSS）はコメントの扱いを足がかりにする。信用できない文字列を
+      DOM に残しておく理由が無いので消す。
+    */
+    for (const child of Array.from(node.childNodes)) {
+      // nodeType 8 = コメント。linkedom も同じ番号を使う。
+      if ((child as { nodeType?: number }).nodeType === 8) {
+        (child as unknown as { remove: () => void }).remove();
+      }
+    }
+
     // 後ろから見る。取り除いても添字がずれない。
     for (const child of Array.from(node.children).reverse()) {
       const tag = child.tagName?.toUpperCase() ?? '';
