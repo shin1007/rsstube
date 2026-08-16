@@ -1,4 +1,5 @@
 import { generateJson, SUMMARY_MODEL, type Usage } from './gemini';
+import { languageName } from '@/lib/language';
 
 /**
  * 記事の要約と重要度スコア。
@@ -75,12 +76,14 @@ function buildPrompt(articles: SummaryInput[], language: string): string {
 
   return [
     'あなたはRSSリーダーの要約担当です。以下の各記事について、',
-    `${language === 'ja' ? '日本語で' : `${language} で`}次を出力してください。`,
+    // コード（ja）ではなくその言語自身の呼び名で頼む。コードのままだと揺れる。
+    `すべて${languageName(language)}で書いてください。` +
+      `記事が何語で書かれていても、出力は${languageName(language)}にすること。`,
     '',
     // 見出しも訳させる。呼び出しは増えず、出力が数十トークン伸びるだけ。
     // これが無いと、英語のフィードではダイジェストの見出しが全部英語になり、
     // NotebookLM に「日本語で話して」と頼んでも素材に引きずられる。
-    `- title_ja: 記事の見出しを${language === 'ja' ? '日本語' : language}で。` +
+    `- title_ja: 記事の見出しを${languageName(language)}で。` +
       '元からその言語ならそのまま返す。40字以内。内容を表す簡潔な見出しにし、原題の直訳に拘らなくてよい。',
     '- bullets: 要点を2〜3個。各40〜80字程度。記事を開かなくても内容がわかる具体的な文にすること。',
     '  「〜について述べている」のようなメタな説明ではなく、何が起きたか・何が主張されているかを直接書く。',

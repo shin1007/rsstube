@@ -1,4 +1,5 @@
 import { generateScript, type ScriptLine, type Slide, type VoiceMode } from '@/lib/ai/script';
+import { normalizeLanguage } from '@/lib/language';
 import { synthesize } from '@/lib/ai/tts';
 import { RetryableError, SCRIPT_MODEL } from '@/lib/ai/gemini';
 import { TTS_MODEL } from '@/lib/ai/tts';
@@ -49,11 +50,8 @@ export async function runScriptJob(db: SupabaseClient, job: Job): Promise<boolea
     // モードは media に焼いてある（create.ts が設定から写す）。ここで設定を
     // 見に行かないのは、生成中に設定を変えられると台本と声が食い違うため。
     const mode = (media.voice_mode ?? 'dialogue') as VoiceMode;
-    const { lines, slides, usage } = await generateScript(
-      source,
-      await extraPrompt(db, media.user_id),
-      mode,
-    );
+    const { extra, language } = await scriptSettings(db, media.user_id);
+    const { lines, slides, usage } = await generateScript(source, extra, mode, language);
     await recordUsage(db, SCRIPT_MODEL, usage.inputTokens, usage.outputTokens, true);
 
     // スライド単位でまとめ、長いものはさらに分ける。これが合成の単位になる。
@@ -331,14 +329,27 @@ async function loadSource(
   };
 }
 
-/** 台本の言い回しは NotebookLM 用の指示文を流用する（同じ好みが効くはずなので）。 */
-async function extraPrompt(db: SupabaseClient, userId: string): Promise<string> {
+/**
+ * 台本づくりの設定。
+ *
+ * 言い回しは NotebookLM 用の指示文を流用する（同じ好みが効くはずなので）。
+ * 言語は要約と同じものを使う。ここを分けると、要約は英語で音声は日本語という
+ * ちぐはぐが起きる（実際、台本側は日本語が直書きになっていた）。
+ */
+async function scriptSettings(
+  db: SupabaseClient,
+  userId: string,
+): Promise<{ extra: string; language: string }> {
   const { data } = await db
     .from('settings')
-    .select('notebooklm_prompt')
+    .select('notebooklm_prompt, summary_language')
     .eq('user_id', userId)
     .maybeSingle();
-  return (data?.notebooklm_prompt ?? '').trim();
+
+  return {
+    extra: (data?.notebooklm_prompt ?? '').trim(),
+    language: normalizeLanguage(data?.summary_language),
+  };
 }
 
 export type { Slide };

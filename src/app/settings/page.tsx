@@ -1,5 +1,6 @@
 import { AppShell } from '@/components/AppShell';
 import { VOICE_MODE_LABELS, type VoiceMode } from '@/lib/ai/script';
+import { LANGUAGES, normalizeLanguage, type LanguageCode } from '@/lib/language';
 import { listSubscribedFeeds } from '@/lib/subscriptions';
 import {
   createFolder,
@@ -59,6 +60,8 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
         retention_days: Number(formData.get('retention_days') ?? 90),
         media_retention_days: Number(formData.get('media_retention_days') ?? 30),
         voice_mode: formData.get('voice_mode') === 'solo' ? 'solo' : 'dialogue',
+        // 知らない値が入ると要約の言語が黙って壊れるので、必ず通す。
+        summary_language: normalizeLanguage(formData.get('summary_language')),
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' },
@@ -179,6 +182,32 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
               保持期間を過ぎた既読記事は本文だけを消します（スター・あとで・書き出し済みは対象外）。
               記事の行自体は残るので、既読の記事が未読で戻ってくることはありません。0 で無効。
             </p>
+
+            <div>
+              <label className="block text-xs text-zinc-400" htmlFor="summary_language">
+                出力の言語
+              </label>
+              <select
+                id="summary_language"
+                name="summary_language"
+                defaultValue={normalizeLanguage(settings?.summary_language)}
+                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
+              >
+                {(Object.keys(LANGUAGES) as LanguageCode[]).map((code) => (
+                  <option key={code} value={code}>
+                    {LANGUAGES[code].label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-zinc-500">
+                要約・見出し・音声の台本をこの言語で作ります。記事が何語で書かれていても構いません。
+                <strong className="text-zinc-400">効くのはこれから処理する記事から</strong>で、
+                既にある要約は作り直しません（作り直すと無料枠を大きく使うため）。
+                過去ぶんも揃えたいときは <code>npm run db:migrate</code> と同じ場所にある
+                <code className="mx-1">scripts/backfill-titles.mjs</code>
+                を使うか、記事を開いて「AI要約を生成する」を押してください。
+              </p>
+            </div>
 
             <div>
               <label className="block text-xs text-zinc-400" htmlFor="voice_mode">
