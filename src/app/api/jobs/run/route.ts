@@ -2,6 +2,7 @@ import { BATCH_SIZE, summarizeBatch, type SummaryInput } from '@/lib/ai/summariz
 import { SUMMARY_MODEL } from '@/lib/ai/gemini';
 import { recordUsage } from '@/lib/ai/usage';
 import { contentHash, usableAsFallback } from '@/lib/feeds/content';
+import { normalizeLanguage } from '@/lib/language';
 import { sanitizeHtml } from '@/lib/feeds/sanitize';
 import { extractArticle, htmlToText } from '@/lib/feeds/extract';
 import { claim, complete, enqueue, fail, type Job } from '@/lib/jobs/queue';
@@ -185,7 +186,7 @@ async function runSummarizeJobs(db: SupabaseClient, deadline: number): Promise<n
     .select('summary_language')
     .eq('user_id', ownerUserId())
     .maybeSingle();
-  const language = settings?.summary_language ?? 'ja';
+  const language = normalizeLanguage(settings?.summary_language);
 
   let done = 0;
 

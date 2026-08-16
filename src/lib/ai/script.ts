@@ -1,4 +1,5 @@
 import { generateJson, SCRIPT_MODEL, type Usage } from './gemini';
+import { DEFAULT_LANGUAGE, languageName } from '@/lib/language';
 
 /**
  * 2話者の対話台本とスライドを、1回の生成でまとめて作る。
@@ -58,10 +59,11 @@ export const VOICE_MODE_LABELS: Record<VoiceMode, string> = {
  * 書いてきて、出力の上限で切れた）ので、渡す素材の量（textLimit）と
  * maxOutputTokens、そして受け取ってからの切り詰めの3段で抑える。
  *
- * スキーマの maxItems は使えない。項目数の多いオブジェクトと組み合わせると
- * Gemini が 400 INVALID_ARGUMENT を返す（項目3つのスキーマでは通り、
- * 7つにすると落ちることを確認した）。エラー本文に理由が出ないので、
- * 足すと原因不明の400として跳ね返ってくる。
+ * **`maxItems` は項目3つまでのオブジェクトなら使える。**7つにすると
+ * Gemini が 400 INVALID_ARGUMENT を返す（理由は本文に出ないので原因不明の400に見える）。
+ * だからスライドを3項目に平たくして（buildSchema）、上限を効かせている。
+ * ここを戻して項目を増やすと、`maxItems` を諦めることになり、
+ * 「同じスライドを延々と繰り返して出力を使い切る」壊れ方がまた起きる。
  */
 const MAX_SLIDES = 12;
 const MAX_LINES = 70;
@@ -74,40 +76,80 @@ const MAX_LINES = 70;
 const MAX_OUTPUT_TOKENS = 24_576;
 const THINKING_BUDGET = 4_096;
 
-const SCHEMA = {
-  type: 'object',
-  properties: {
-    slides: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          type: { type: 'string', enum: ['title', 'bullets', 'quote'] },
-          title: { type: 'string' },
-          subtitle: { type: 'string' },
-          heading: { type: 'string' },
-          bullets: { type: 'array', items: { type: 'string' } },
-          text: { type: 'string' },
-          cite: { type: 'string' },
+/**
+ * モデルに返させる形。**画面で使う `Slide` とはわざと別**にしてある。
+ *
+ * 理由は `maxItems`。項目の多いオブジェクトに付けると Gemini が
+ * 400 INVALID_ARGUMENT を返すが、項目3つなら通る（このファイル上部の注記）。
+ * 以前のスライドは項目7つ（type/title/subtitle/heading/bullets/text/cite）で
+ * 上限を付けられず、**モデルが同じスライドを延々と繰り返して出力を使い切った**
+ * ——実測で23302トークン・73639字が全部同じ `bullets` の反復だった。
+ * 記事1本から音声を作ると必ずこれで落ちていた。
+ *
+ * そこで「見出し1つ＋本文の行」という3項目に平たくして、上限を効かせる。
+ * 型ごとの違いは受け取ってから組み立て直す（toSlide）。
+ */
+function buildSchema(maxSlides: number, maxLines: number) {
+  return {
+    type: 'object',
+    properties: {
+      slides: {
+        type: 'array',
+        maxItems: maxSlides,
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['title', 'bullets', 'quote'] },
+            heading: { type: 'string' },
+            body: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['type', 'heading', 'body'],
         },
-        required: ['type'],
+      },
+      lines: {
+        type: 'array',
+        maxItems: maxLines,
+        items: {
+          type: 'object',
+          properties: {
+            speaker: { type: 'string', enum: ['A', 'B'] },
+            text: { type: 'string' },
+            slide: { type: 'integer' },
+          },
+          required: ['speaker', 'text', 'slide'],
+        },
       },
     },
-    lines: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          speaker: { type: 'string', enum: ['A', 'B'] },
-          text: { type: 'string' },
-          slide: { type: 'integer' },
-        },
-        required: ['speaker', 'text', 'slide'],
-      },
-    },
-  },
-  required: ['slides', 'lines'],
-};
+    required: ['slides', 'lines'],
+  };
+}
+
+/** モデルから受け取るスライド。 */
+type RawSlide = { type?: string; heading?: string; body?: string[] };
+
+/**
+ * 平たい形から画面用の `Slide` に戻す。
+ *
+ *   title   heading = 主題、body[0] = 副題
+ *   bullets heading = 見出し、body = 箇条書き
+ *   quote   heading = 出典（省略可）、body[0] = 引用
+ */
+function toSlide(raw: RawSlide): Slide | null {
+  const heading = String(raw.heading ?? '').trim();
+  const body = (raw.body ?? []).map((b) => String(b).trim()).filter(Boolean);
+
+  if (raw.type === 'quote' && body.length > 0) {
+    return { type: 'quote', text: body[0], cite: heading || undefined };
+  }
+  if (raw.type === 'title' && heading) {
+    return { type: 'title', title: heading, subtitle: body[0] || undefined };
+  }
+  if (heading && body.length > 0) {
+    return { type: 'bullets', heading, bullets: body };
+  }
+  // 見出しだけ来たときは表紙として拾う。捨てるより出したほうがまし。
+  return heading ? { type: 'title', title: heading } : null;
+}
 
 export type ScriptSource = {
   title: string;
@@ -128,11 +170,47 @@ function textLimit(articleCount: number): number {
   return 1_000;
 }
 
-/** 1本の目安の長さ。長すぎると聴き通せないし、TTS の呼び出しも増える。 */
-const TARGET_MINUTES = 8;
+/**
+ * 1本の目安の長さ。長すぎると聴き通せないし、TTS の呼び出しも増える。
+ *
+ * **素材の量に合わせること。** 8分で固定していたら、記事1本から音声を作るときに
+ * モデルが尺を埋めようとして膨らみ、**必ず出力の上限で落ちていた**
+ * （実測: 日本語で49605字、英語で22705字。どちらも JSON が途中で切れて丸ごと無駄になる）。
+ * ダイジェスト（8件）では起きず、記事1本の「音声にする」だけが壊れていた。
+ *
+ * 分数だけでなく字数でも言うこと。モデルは「8分程度」より
+ * 「3000字以内」のほうがよく従う。
+ */
+function targetChars(articleCount: number): number {
+  if (articleCount <= 1) return 1_200;
+  if (articleCount <= 3) return 2_000;
+  return 3_000;
+}
 
-function buildPrompt(source: ScriptSource, extra: string, mode: VoiceMode): string {
+/**
+ * 発話数の上限も素材に合わせる。
+ *
+ * 字数で頼むだけでは止まらなかった（1件の素材に対して43000字を書き、
+ * 出力トークンを使い切った）。**モデルは「何個作るか」のほうがよく守る**ので、
+ * 個数で縛る。スライドが2枚しかないのに発話を70個まで許していたのが、
+ * 延々と喋り続けられる余地になっていた。
+ */
+function maxLines(articleCount: number): number {
+  if (articleCount <= 1) return 14;
+  if (articleCount <= 3) return 30;
+  return MAX_LINES;
+}
+
+function buildPrompt(
+  source: ScriptSource,
+  extra: string,
+  mode: VoiceMode,
+  language: string,
+): string {
   const limit = textLimit(source.articles.length);
+  const chars = targetChars(source.articles.length);
+  const lines = maxLines(source.articles.length);
+  const slideCount = Math.min(source.articles.length + 1, MAX_SLIDES);
   const solo = mode === 'solo';
 
   const body = source.articles
@@ -154,7 +232,10 @@ function buildPrompt(source: ScriptSource, extra: string, mode: VoiceMode): stri
     solo
       ? 'あなたはニュース番組の構成作家です。次の記事群から、1人の語りによる'
       : 'あなたはニュース番組の構成作家です。次の記事群から、2人の対話による',
-    `音声番組の台本と、それに合わせて表示するスライドを作ってください。日本語で。`,
+    // 言語は設定に従う。ここを日本語で直書きしていたので、設定を英語にすると
+    // 要約は英語・音声は日本語という食い違いが起きていた。
+    `音声番組の台本と、それに合わせて表示するスライドを作ってください。` +
+      `台本もスライドの文字も、すべて${languageName(language)}で書くこと。`,
     '',
     solo
       ? // 話者は1人でも、出力の形（speaker を持つ配列）は共通にしておく。
@@ -165,13 +246,17 @@ function buildPrompt(source: ScriptSource, extra: string, mode: VoiceMode): stri
       : `話者A = ${SPEAKERS.A.name}（${SPEAKERS.A.role}）\n話者B = ${SPEAKERS.B.name}（${SPEAKERS.B.role}）`,
     '',
     '## 分量（守ること）',
-    `- スライドは最大${MAX_SLIDES}枚、発話は最大${MAX_LINES}個。これを超えてはいけない。`,
-    `- 全体で読み上げて${TARGET_MINUTES}分程度（1分あたり約350字が目安、合計3000字前後）。`,
-    '- 記事が多いときは1件あたりを短くして収める。全部を深く語ろうとしないこと。',
+    `- スライドは${slideCount}枚ちょうど、発話は${lines}個以内。これを超えてはいけない。`,
+    // 字数で言い切る。分数だけだと、素材が少ないときに尺を埋めようとして膨らむ。
+    `- **lines の text を合計して${chars}字以内。これを超えてはいけない。**` +
+      `（読み上げて約${Math.max(1, Math.round(chars / 350))}分）`,
+    source.articles.length <= 1
+      ? '- 素材は1件だけ。短くてよい。無理に長くしたり、書かれていないことで尺を埋めたりしないこと。'
+      : '- 記事が多いときは1件あたりを短くして収める。全部を深く語ろうとしないこと。',
     '',
     '## スライド',
     `- 枚数は「1（表紙）＋記事の数」。今回は素材が${source.articles.length}件なので` +
-      `${Math.min(source.articles.length + 1, MAX_SLIDES)}枚にすること。1枚だけで済ませてはいけない。`,
+      `${slideCount}枚にすること。1枚だけで済ませてはいけない。`,
     '- 先頭は必ず type="title" の1枚。全体の主題を出す。',
     '- 続けて記事ごとに type="bullets" を1枚ずつ。heading は記事の主題、bullets は2〜4個の短い要点。',
     '- 特に印象的な一文があれば type="quote" を挟んでよい（多用しない）。',
@@ -203,11 +288,17 @@ export async function generateScript(
   source: ScriptSource,
   extra = '',
   mode: VoiceMode = 'dialogue',
+  /** 出力の言語。設定（settings.summary_language）から渡す。 */
+  language: string = DEFAULT_LANGUAGE,
 ): Promise<ScriptResult> {
-  const { data, usage } = await generateJson<{ slides: Slide[]; lines: ScriptLine[] }>({
+  // 上限はプロンプトとスキーマの両方で言う。プロンプトだけだと守られなかった。
+  const slideCount = Math.min(source.articles.length + 1, MAX_SLIDES);
+  const lineCount = maxLines(source.articles.length);
+
+  const { data, usage } = await generateJson<{ slides: RawSlide[]; lines: ScriptLine[] }>({
     model: SCRIPT_MODEL,
-    prompt: buildPrompt(source, extra, mode),
-    schema: SCHEMA,
+    prompt: buildPrompt(source, extra, mode, language),
+    schema: buildSchema(slideCount, lineCount),
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     thinkingBudget: THINKING_BUDGET,
   });
@@ -234,34 +325,16 @@ export async function generateScript(
 }
 
 /**
- * 型ごとに要る項目が欠けている行が来ることがあるので、ここで形を整える。
- * 枚数の上限もここで切る（スキーマ側の maxItems が使えないため）。
+ * 受け取ったスライドを画面用の形に直し、枚数を切る。
+ * 上限はスキーマ側の maxItems でも掛けてあるが、こちらでも念のため守る。
  */
-function normalizeSlides(raw: Slide[]): Slide[] {
+function normalizeSlides(raw: RawSlide[]): Slide[] {
   const out: Slide[] = [];
-
-  for (const raws of raw) {
-    // 型ごとに使う項目が決まっているのに、モデルは heading と title を
-    // 入れ替えて返してくることがある。名前で厳密に見ずに、
-    // 「その型として出せるだけの中身があるか」で拾う。
-    const s = raws as Partial<Record<'type' | 'title' | 'subtitle' | 'heading' | 'text' | 'cite', string>> & {
-      bullets?: string[];
-    };
-    const bullets = (s.bullets ?? []).map((b) => String(b).trim()).filter(Boolean).slice(0, 5);
-    const heading = (s.heading || s.title || '').trim();
-
-    if (s.type === 'bullets' && (bullets.length > 0 || heading)) {
-      out.push({ type: 'bullets', heading, bullets });
-    } else if (s.type === 'quote' && s.text) {
-      out.push({ type: 'quote', text: s.text, cite: s.cite || undefined });
-    } else if (heading) {
-      // type が欠けている・知らない値でも、見出しがあるなら表紙として出せる。
-      out.push({ type: 'title', title: heading, subtitle: s.subtitle || undefined });
-    }
-
+  for (const r of raw) {
+    const slide = toSlide(r);
+    if (slide) out.push(slide);
     if (out.length >= MAX_SLIDES) break;
   }
-
   return out;
 }
 
