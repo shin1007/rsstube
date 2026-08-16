@@ -77,9 +77,13 @@ export async function searchLibrary(
 
   const term = query.q ? sanitizeSearch(query.q) : '';
   if (term) {
+    // **訳した見出しも見ること。** 一覧に出しているのは title_ja のほうなので、
+    // 原題だけを引くと「画面に見えている語で検索しても当たらない」ことになる
+    // （英語のフィードは記事の42%）。埋め込んだ summaries の列では親を絞れないため、
+    // articles 側の複製を引く（0024）。
     q = query.deep
-      ? q.or(`title.ilike.%${term}%,content_text.ilike.%${term}%`)
-      : q.ilike('title', `%${term}%`);
+      ? q.or(`title.ilike.%${term}%,title_ja.ilike.%${term}%,content_text.ilike.%${term}%`)
+      : q.or(`title.ilike.%${term}%,title_ja.ilike.%${term}%`);
   }
 
   if (query.tag) q = q.contains('summaries.tags', [query.tag]);
