@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { PlaybackProvider } from '@/components/Playback';
 import { ServiceWorker } from '@/components/ServiceWorker';
 import './globals.css';
 
@@ -54,7 +55,15 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         **ルート要素に overflow-y-auto を付けること**（付けないと溢れが切れる）。
       */}
       <body className="h-dvh overflow-hidden flex flex-col bg-zinc-950 text-zinc-100">
-        {children}
+        {/*
+          下部プレイヤーは**ここ**に置く。
+
+          聴くページの中に置いていたので、一覧へ戻った時点で消えて音も止まっていた。
+          ルートの layout に居れば、ページを移っても React が作り直さないので、
+          鳴らしたまま記事を読みに行ける。<audio> ごと生き残るのも大事で、
+          作り直すとブラウザが「操作で起こした要素」ではなくなって鳴らせなくなる。
+        */}
+        <PlaybackProvider>{children}</PlaybackProvider>
         <ServiceWorker />
       </body>
     </html>
