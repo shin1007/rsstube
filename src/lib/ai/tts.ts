@@ -60,6 +60,15 @@ export function toSpeechText(lines: ScriptLine[]): string {
 export async function synthesize(
   lines: ScriptLine[],
   mode: VoiceMode = 'dialogue',
+  /**
+   * 打ち切りの合図。**必ず渡すこと。**
+   *
+   * 合成は1回に数十秒かかる。上限が無いと Vercel の maxDuration(60秒)を
+   * 超えて関数ごと落とされ、running のジョブが宙に浮く
+   * （FUNCTION_INVOCATION_TIMEOUT。実際に起きた）。落とされると
+   * complete も fail も呼べないので、拾い直しの15分待ちになる。
+   */
+  signal?: AbortSignal,
 ): Promise<Synthesized> {
   if (lines.length === 0) throw new Error('読み上げる台本がありません');
 
@@ -100,6 +109,7 @@ export async function synthesize(
       config: {
         responseModalities: ['AUDIO'],
         speechConfig,
+        abortSignal: signal,
       },
     });
   } catch (err) {
