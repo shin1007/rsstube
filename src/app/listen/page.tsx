@@ -133,6 +133,23 @@ export default async function ListenPage() {
                         <div className="min-w-0 flex-1">{row}</div>
                       )}
 
+                      {/*
+                        元記事へ。別タブで開くのは、同じタブだと下部プレイヤーで
+                        鳴らしている音が止まるため。ダイジェストは記事が複数あって
+                        1本に決まらないので、再生ページ側で一覧にする。
+                      */}
+                      {m.sourceUrl && (
+                        <a
+                          href={m.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-0.5 shrink-0 rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-500 hover:text-zinc-100"
+                          title="元記事を開く"
+                        >
+                          ↗ 記事
+                        </a>
+                      )}
+
                       {/* 全部できてから出す。途中のものを落としても尻切れになる。 */}
                       {m.status === 'ready' && (
                         <a
