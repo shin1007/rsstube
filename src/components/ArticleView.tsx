@@ -3,6 +3,7 @@ import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importan
 import { requestSummary } from '@/app/actions/articles';
 import { ArticleActions } from '@/components/ArticleActions';
 import { ExportButton } from '@/components/ExportButton';
+import { ActionForm } from '@/components/ActionForm';
 import { MediaButton } from '@/components/MediaButton';
 import Link from 'next/link';
 
@@ -138,14 +139,14 @@ export function ArticleView({
               )}
             </section>
           ) : (
-            <form action={requestSummary.bind(null, a.id)} className="mt-4">
+            <ActionForm action={requestSummary.bind(null, a.id)} className="mt-4">
               <button
                 type="submit"
                 className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-100"
               >
                 AI要約を生成する
               </button>
-            </form>
+            </ActionForm>
           )}
 
           {/* 本文が空なら、抽出に失敗したのではなく保持期間を過ぎて消したほう。

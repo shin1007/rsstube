@@ -221,7 +221,14 @@ export function ArticleList({
             <button
               type="button"
               disabled={articles.length === 0}
-              onClick={() => startTransition(() => void requestSummaries(articles.map((a) => a.id)))}
+              onClick={() =>
+                startTransition(async () => {
+                  // 結果を捨てない。捨てると、無料枠切れも未ログインも
+                  // 「押しても何も起きない」として同じに見える。
+                  const r = await requestSummaries(articles.map((a) => a.id));
+                  setFlash(r.ok ? '再要約を受け付けました。順に処理されます。' : r.message);
+                })
+              }
               className="ml-auto rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100 disabled:opacity-40"
             >
               まとめて再要約

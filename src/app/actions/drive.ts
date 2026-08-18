@@ -1,5 +1,7 @@
 'use server';
 
+import { attempt } from '@/lib/actions/result';
+
 import { driveStatus, uploadToDrive } from '@/lib/export/drive';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
@@ -20,6 +22,10 @@ export async function getDriveStatus() {
 }
 
 export async function disconnectDrive() {
+  return attempt(() => disconnectDriveImpl());
+}
+
+async function disconnectDriveImpl() {
   const { userId } = await me();
   // トークンの行は Secret キーからしか触れない（0017）。
   const db = createAdminClient();
@@ -34,7 +40,11 @@ export async function disconnectDrive() {
  * 置いた先は exports に控える。同じものを二度置かないためと、
  * あとから「あれはどこに置いたか」を辿れるようにするため。
  */
-export async function exportToDrive(exportId: string): Promise<{ url: string; name: string }> {
+export async function exportToDrive(exportId: string) {
+  return attempt(() => exportToDriveImpl(exportId));
+}
+
+async function exportToDriveImpl(exportId: string): Promise<{ url: string; name: string }> {
   const { supabase, userId } = await me();
 
   const { data: row, error } = await supabase

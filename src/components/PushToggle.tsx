@@ -1,5 +1,6 @@
 'use client';
 
+import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import { removePushSubscription, savePushSubscription, sendTestPush } from '@/app/actions/push';
 import { useEffect, useState, useTransition } from 'react';
 
@@ -70,16 +71,17 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey: string }) {
         });
 
         const json = sub.toJSON();
-        await savePushSubscription({
+        const saved = await savePushSubscription({
           endpoint: sub.endpoint,
           p256dh: json.keys?.p256dh ?? '',
           auth: json.keys?.auth ?? '',
         });
+        if (!saved.ok) return setMessage(saved.message);
 
         setState('on');
         setMessage('オンにしました。テスト送信で確かめられます。');
-      } catch (e) {
-        setMessage(e instanceof Error ? e.message : String(e));
+      } catch {
+        setMessage(UNEXPECTED_ERROR);
       }
     });
   };
@@ -91,13 +93,14 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey: string }) {
         const reg = await navigator.serviceWorker.getRegistration();
         const sub = await reg?.pushManager.getSubscription();
         if (sub) {
-          await removePushSubscription(sub.endpoint);
+          const removed = await removePushSubscription(sub.endpoint);
+          if (!removed.ok) return setMessage(removed.message);
           await sub.unsubscribe();
         }
         setState('off');
         setMessage('オフにしました。');
-      } catch (e) {
-        setMessage(e instanceof Error ? e.message : String(e));
+      } catch {
+        setMessage(UNEXPECTED_ERROR);
       }
     });
   };
@@ -106,9 +109,10 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey: string }) {
     setMessage(null);
     startTransition(async () => {
       try {
-        setMessage(await sendTestPush());
-      } catch (e) {
-        setMessage(e instanceof Error ? e.message : String(e));
+        const r = await sendTestPush();
+        setMessage(r.ok ? r.value : r.message);
+      } catch {
+        setMessage(UNEXPECTED_ERROR);
       }
     });
   };

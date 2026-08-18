@@ -1,5 +1,6 @@
 'use client';
 
+import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import { disconnectDrive } from '@/app/actions/drive';
 import { useState, useTransition } from 'react';
 
@@ -45,9 +46,10 @@ export function DriveConnect({
               setError(null);
               startTransition(async () => {
                 try {
-                  await disconnectDrive();
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : String(e));
+                  const r = await disconnectDrive();
+                  if (!r.ok) setError(r.message);
+                } catch {
+                  setError(UNEXPECTED_ERROR);
                 }
               });
             }}

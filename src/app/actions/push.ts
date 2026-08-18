@@ -1,5 +1,7 @@
 'use server';
 
+import { attempt } from '@/lib/actions/result';
+
 import { sendToUser, pushConfigured } from '@/lib/push/send';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -17,7 +19,11 @@ export type PushSubscriptionInput = {
   auth: string;
 };
 
-export async function savePushSubscription(input: PushSubscriptionInput): Promise<void> {
+export async function savePushSubscription(input: PushSubscriptionInput) {
+  return attempt(() => savePushSubscriptionImpl(input));
+}
+
+async function savePushSubscriptionImpl(input: PushSubscriptionInput): Promise<void> {
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) throw new Error('未ログインです');
@@ -36,7 +42,11 @@ export async function savePushSubscription(input: PushSubscriptionInput): Promis
   revalidatePath('/settings');
 }
 
-export async function removePushSubscription(endpoint: string): Promise<void> {
+export async function removePushSubscription(endpoint: string) {
+  return attempt(() => removePushSubscriptionImpl(endpoint));
+}
+
+async function removePushSubscriptionImpl(endpoint: string): Promise<void> {
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) throw new Error('未ログインです');
@@ -53,7 +63,11 @@ export async function removePushSubscription(endpoint: string): Promise<void> {
  * 通知は「届かないこと」が分かりにくい。権限・購読・鍵・サービスワーカーと
  * 噛み合うところが多いので、朝を待たずに1回試せる導線を置いておく。
  */
-export async function sendTestPush(): Promise<string> {
+export async function sendTestPush() {
+  return attempt(() => sendTestPushImpl());
+}
+
+async function sendTestPushImpl(): Promise<string> {
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) throw new Error('未ログインです');

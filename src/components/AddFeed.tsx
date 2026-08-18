@@ -1,5 +1,6 @@
 'use client';
 
+import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import { findFeeds, subscribeFeed } from '@/app/actions/feeds';
 import type { FeedCandidate } from '@/lib/feeds/discover';
 import type { FolderRow } from '@/lib/types';
@@ -28,9 +29,11 @@ export function AddFeed({ folders }: { folders: FolderRow[] }) {
     setCandidates(null);
     startTransition(async () => {
       try {
-        setCandidates(await findFeeds(input));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        const r = await findFeeds(input);
+        if (!r.ok) return setError(r.message);
+        setCandidates(r.value);
+      } catch {
+        setError(UNEXPECTED_ERROR);
       }
     });
   };
@@ -41,15 +44,16 @@ export function AddFeed({ folders }: { folders: FolderRow[] }) {
     startTransition(async () => {
       try {
         const r = await subscribeFeed(candidate.url, folder);
+        if (!r.ok) return setError(r.message);
         setMessage(
-          r.newArticles > 0
-            ? `「${r.title}」を登録し、記事を${r.newArticles}件取り込みました。`
-            : `「${r.title}」を登録しました。記事は次の巡回で入ります。`,
+          r.value.newArticles > 0
+            ? `「${r.value.title}」を登録し、記事を${r.value.newArticles}件取り込みました。`
+            : `「${r.value.title}」を登録しました。記事は次の巡回で入ります。`,
         );
         setCandidates(null);
         setInput('');
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+      } catch {
+        setError(UNEXPECTED_ERROR);
       } finally {
         setAdding(null);
       }
