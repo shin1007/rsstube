@@ -6,7 +6,7 @@ import { SourceLinks } from '@/components/SourceLinks';
 import type { MediaSource, PlayableSegment } from '@/lib/media/list';
 import { fmtTime, usePlayer } from '@/lib/media/usePlayer';
 import Link from 'next/link';
-import { createContext, useCallback, useContext, useState, useTransition } from 'react';
+import { createContext, useCallback, useContext, useRef, useState, useTransition } from 'react';
 
 /**
  * 一覧ページから直接聴くための下部プレイヤー。
@@ -20,6 +20,15 @@ import { createContext, useCallback, useContext, useState, useTransition } from 
  * 一覧の全件ぶんを先に発行しても大半は使われずに切れる。
  */
 
+/**
+ * 8ミリ秒の無音（16bit 8kHz の WAV）。
+ *
+ * ▶ を押した流れの中で、この無音を鳴らして <audio> を起こす。src が空の要素に
+ * play() しても起きないので、鳴らせる中身を最初から持たせておく。
+ * 素材が届いたら usePlayer が src を差し替える。
+ */
+const SILENCE = 'data:audio/wav;base64,UklGRqQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
+
 type Target = { id: string; title: string };
 
 const PlaybackContext = createContext<((t: Target) => void) | null>(null);
@@ -31,7 +40,25 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
 
+  /**
+   * 鳴らす <audio> はここが持つ。**プレイヤーより上に置くのが肝。**
+   *
+   * ブラウザは「ユーザー操作で一度鳴らした要素」しか後から鳴らせない。
+   * 音声を切り替えるたびに要素ごと作り直すと、そのたび鳴らせなくなる。
+   */
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   const play = useCallback((t: Target) => {
+    // **押した流れの中で**一度鳴らしにいく。素材を取りに行くのを待ってから
+    // play() すると、操作から離れた再生とみなされて弾かれることがある
+    // （iOS が厳しい）。ここで要素を起こしておけば、あとは差し替えるだけ。
+    const el = audioRef.current;
+    if (el) {
+      // src が空の要素に play() しても起きない。無音を入れてから鳴らす。
+      if (!el.getAttribute('src')) el.setAttribute('src', SILENCE);
+      void el.play().catch(() => {});
+    }
+
     setTarget(t);
     setSegments(null);
     setSources([]);
@@ -68,7 +95,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
               </Link>
               <button
                 type="button"
-                onClick={() => setTarget(null)}
+                onClick={() => {
+                  // 要素はプレイヤーより上に居るので、閉じただけでは鳴り止まない。
+                  audioRef.current?.pause();
+                  setTarget(null);
+                }}
                 className="shrink-0 rounded px-1.5 py-0.5 text-sm text-zinc-500 hover:text-zinc-200"
                 aria-label="プレイヤーを閉じる"
               >
@@ -80,13 +111,25 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             {error && <p className="py-3 text-center text-xs text-red-400">{error}</p>}
             {segments && (
               // key を付けて、別の音声に切り替えたら状態ごと作り直す。
-              <DockPlayer key={target.id} mediaId={target.id} title={target.title} segments={segments} />
+              <DockPlayer
+                key={target.id}
+                mediaId={target.id}
+                title={target.title}
+                segments={segments}
+                audioRef={audioRef}
+              />
             )}
           </div>
           {/* スマホの下部タブぶんの余白。プレイヤーがタブに隠れないように。 */}
           <div className="h-12 md:hidden" />
         </div>
       )}
+
+      {/*
+        音声を切り替えても**この要素は作り直さない**。作り直すと、
+        ユーザー操作で起こした状態が失われて鳴らせなくなる。
+      */}
+      <audio ref={audioRef} preload="auto" />
     </PlaybackContext.Provider>
   );
 }
@@ -112,12 +155,21 @@ function DockPlayer({
   mediaId,
   title,
   segments,
+  audioRef,
 }: {
   mediaId: string;
   title: string;
   segments: PlayableSegment[];
+  audioRef: React.RefObject<HTMLAudioElement | null>;
 }) {
-  const { audioRef, audioProps, ...p } = usePlayer({ mediaId, title, segments });
+  // 一覧の ▶ は1回で鳴ってほしいので、素材が届いたら勝手に始める。
+  const p = usePlayer({
+    mediaId,
+    title,
+    segments,
+    audioRef,
+    autoPlay: true,
+  });
 
   return (
     <>
@@ -172,7 +224,6 @@ function DockPlayer({
         </button>
       </div>
 
-      <audio ref={audioRef} {...audioProps} />
     </>
   );
 }
