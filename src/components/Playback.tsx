@@ -6,7 +6,8 @@ import { SourceLinks } from '@/components/SourceLinks';
 import type { MediaSource, PlayableSegment } from '@/lib/media/list';
 import { fmtTime, usePlayer } from '@/lib/media/usePlayer';
 import Link from 'next/link';
-import { createContext, useCallback, useContext, useRef, useState, useTransition } from 'react';
+import { usePathname } from 'next/navigation';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useTransition } from 'react';
 
 /**
  * 一覧ページから直接聴くための下部プレイヤー。
@@ -47,6 +48,57 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
    * 音声を切り替えるたびに要素ごと作り直すと、そのたび鳴らせなくなる。
    */
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const dockRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * 再生ページには自前のプレイヤーがある。そこでは出さない。
+   *
+   * 出したままだと**同じ音が2つ鳴る**（要素が別なので、両方が勝手に進む）。
+   * 消すだけでなく止めるのは、隠れたまま鳴り続けるのが一番たちが悪いため。
+   */
+  const pathname = usePathname();
+  const onWatchPage = pathname?.startsWith('/watch/') ?? false;
+
+  useEffect(() => {
+    if (onWatchPage) audioRef.current?.pause();
+  }, [onWatchPage]);
+
+  /**
+   * プレイヤーのぶんだけ画面を詰める。
+   *
+   * プレイヤーは fixed なので、そのままだと各ページの一番下に被る
+   * （一覧の最後の記事が読めない）。body に padding を入れると、
+   * 中の `flex-1 overflow-y-auto` が自分から縮んでくれるので、
+   * ページ側に手を入れずに済む。
+   *
+   * 高さは測る。決め打ちにすると、タイトルが折り返した時や
+   * 読み込み中の表示との差でズレる。
+   */
+  useEffect(() => {
+    const dock = dockRef.current;
+    if (!dock) {
+      document.body.style.paddingBottom = '';
+      return;
+    }
+
+    const apply = () => {
+      // プレイヤーはタブの上に浮いているので、下端までの高さで譲る。
+      const bottom = window.innerHeight - dock.getBoundingClientRect().top;
+      document.body.style.paddingBottom = `${Math.ceil(bottom)}px`;
+    };
+    apply();
+
+    const observer = new ResizeObserver(apply);
+    observer.observe(dock);
+    // 画面が回ったり、スマホのアドレスバーが伸縮したときにも 測り直す。
+    window.addEventListener('resize', apply);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', apply);
+      document.body.style.paddingBottom = '';
+    };
+  }, [target, onWatchPage]);
 
   const play = useCallback((t: Target) => {
     // **押した流れの中で**一度鳴らしにいく。素材を取りに行くのを待ってから
@@ -77,10 +129,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     <PlaybackContext.Provider value={play}>
       {children}
 
-      {target && (
+      {target && !onWatchPage && (
         <div
-          className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur md:bottom-0"
-          style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
+          ref={dockRef}
+          /*
+            スマホでは下部タブの**上**に置く。以前はタブと同じ bottom-0 に置いて、
+            中に高さ12の余白を持たせていたが、その余白ごと自分の背景で塗るので
+            タブが隠れて他の画面へ移れなくなっていた。
+            タブの高さは py-3 + text-xs ＝ 40px と枠線、それに安全領域。
+          */
+          className="fixed inset-x-0 bottom-[calc(2.6rem+env(safe-area-inset-bottom))] z-20 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur md:bottom-0"
+          style={{ paddingBottom: '0.25rem' }}
         >
           {/* 下部タブと重なるぶんだけ、スマホでは持ち上げる。 */}
           <div className="mx-auto max-w-2xl space-y-2 p-3 pb-2 md:pb-3">
@@ -120,8 +179,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
               />
             )}
           </div>
-          {/* スマホの下部タブぶんの余白。プレイヤーがタブに隠れないように。 */}
-          <div className="h-12 md:hidden" />
         </div>
       )}
 
