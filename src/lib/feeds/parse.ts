@@ -1,4 +1,5 @@
 import Parser from 'rss-parser';
+import { pickImageFromRss } from '@/lib/feeds/image';
 import { decodeBody } from '@/lib/feeds/charset';
 import { isRedirect, MAX_HOPS, permanentTarget } from '@/lib/feeds/redirect';
 
@@ -18,6 +19,12 @@ export type FetchedItem = {
   excerpt?: string;
   /** RSS本文（content:encoded など）。本文抽出に失敗したときのフォールバックに使う。 */
   contentHtml?: string;
+  /**
+   * 項目に付いていた画像（enclosure / 本文の1枚目）。
+   * 本文が取れないサイトでもフィードには絵が付いていることがあるので、
+   * og:image とは別の経路として拾っておく（lib/feeds/image.ts）。
+   */
+  imageUrl?: string;
 };
 
 export type FetchFeedResult =
@@ -103,6 +110,7 @@ export async function fetchFeed(
       publishedAt: item.isoDate ?? undefined,
       excerpt: item.contentSnippet?.slice(0, 500) ?? undefined,
       contentHtml,
+      imageUrl: pickImageFromRss({ enclosure: item.enclosure, contentHtml }, link) ?? undefined,
     });
   }
 

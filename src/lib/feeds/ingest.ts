@@ -49,6 +49,9 @@ export async function ingestFeedItems(
     // 「失敗したら RSS に戻す」ための元をここに残す。これが無いと、取り直しの
     // たびに前回掴んだゴミを読み直すことになる。
     rss_html: item.contentHtml ?? null,
+    // フィードに絵が付いていればここで控える。og:image が取れれば
+    // 抽出のときに上書きされる（あちらのほうが記事の代表として当たりが良い）。
+    image_url: item.imageUrl ?? null,
     content_ok: false,
   }));
 

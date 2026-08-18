@@ -5,6 +5,8 @@ import { RetryableError, SCRIPT_MODEL } from '@/lib/ai/gemini';
 import { TTS_MODEL } from '@/lib/ai/tts';
 import { recordUsage } from '@/lib/ai/usage';
 import { complete, enqueueMany, fail, type Job } from '@/lib/jobs/queue';
+import { fetchImageUrl } from '@/lib/feeds/image';
+import { storeCover } from '@/lib/media/cover';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -19,6 +21,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  */
 
 const BUCKET = 'media';
+
+/** 表紙を探すために og:image を読みに行く記事の数。絵の無いフィードで外部を叩きすぎない。 */
+const COVER_LOOKUPS = 3;
 
 /** 1回のワーカー実行で合成するセグメント数。無料枠の1日あたり回数を食い潰さない量。 */
 export const TTS_PER_RUN = 4;
@@ -54,6 +59,16 @@ export async function runScriptJob(db: SupabaseClient, job: Job): Promise<boolea
     const { lines, slides, usage } = await generateScript(source, extra, mode, language);
     await recordUsage(db, SCRIPT_MODEL, usage.inputTokens, usage.outputTokens, true);
 
+    // 表紙。絵を持っている最初の記事のものを使う（ダイジェストなら選抜順の先頭）。
+    // 台本ができてから取りに行く。台本が失敗する回のぶんまで相手のサイトを
+    // 叩きたくないし、絵が取れなくても音声づくりは止めない。
+    const coverPath = await storeCover(
+      db,
+      media.user_id,
+      mediaId,
+      await resolveCoverUrl(db, source.articles),
+    );
+
     // スライド単位でまとめ、長いものはさらに分ける。これが合成の単位になる。
     const groups = groupIntoSegments(lines, slides.length);
 
@@ -76,6 +91,9 @@ export async function runScriptJob(db: SupabaseClient, job: Job): Promise<boolea
         status: 'synthesizing',
         script: lines,
         slides,
+        // 取れなかったときに null で潰さない。作り直しのたびに相手が
+        // 落ちていると、前に取れていた表紙まで消える。
+        ...(coverPath ? { cover_path: coverPath } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', mediaId);
@@ -303,7 +321,7 @@ async function loadSource(
 
   const { data } = await db
     .from('articles')
-    .select('id, title, url, content_text, summaries (bullets)')
+    .select('id, title, url, content_text, image_url, summaries (bullets)')
     .in('id', ids);
 
   const rows = (data ?? []) as unknown as {
@@ -311,6 +329,7 @@ async function loadSource(
     title: string;
     url: string;
     content_text: string | null;
+    image_url: string | null;
     summaries: { bullets: string[] } | null;
   }[];
 
@@ -321,9 +340,11 @@ async function loadSource(
   return {
     title: media.title,
     articles: rows.map((r) => ({
+      id: r.id,
       title: r.title,
       url: r.url,
       bullets: r.summaries?.bullets ?? [],
+      imageUrl: r.image_url,
       text: r.content_text ?? '',
     })),
   };
@@ -353,3 +374,33 @@ async function scriptSettings(
 }
 
 export type { Slide };
+
+/**
+ * 表紙に使う画像のURLを決める。
+ *
+ * まず記事に控えてある image_url を見る（取り込みか本文抽出のときに付く）。
+ * 0025 より前からある記事には付いていないので、そのときだけ**この場で**
+ * og:image を読みに行き、次からのために記事側へ書き戻す。
+ *
+ * 全記事を後から浚う形にしないのは、実データで2024件が未設定だったため。
+ * 表紙が要るのは音声にする1本だけなので、要るときに1件だけ取りに行く。
+ * 先頭から数件しか試さないのは、絵が無いフィード（テキストのみのブログ等）で
+ * 何十件も外部へ当てにいかないため。
+ */
+async function resolveCoverUrl(
+  db: SupabaseClient,
+  articles: { id: string; url: string; imageUrl: string | null }[],
+): Promise<string | null> {
+  const known = articles.find((a) => a.imageUrl)?.imageUrl;
+  if (known) return known;
+
+  for (const article of articles.slice(0, COVER_LOOKUPS)) {
+    const found = await fetchImageUrl(article.url);
+    if (!found) continue;
+    // 書き戻しは失敗しても構わない（次回もう一度取りに行くだけ）。
+    await db.from('articles').update({ image_url: found }).eq('id', article.id);
+    return found;
+  }
+
+  return null;
+}

@@ -3,6 +3,7 @@ import { parseHTML } from 'linkedom';
 import { htmlToText as buildText } from '@/lib/feeds/text';
 import { decodeBody } from '@/lib/feeds/charset';
 import { sanitizeHtml } from '@/lib/feeds/sanitize';
+import { pickImageFromDocument } from '@/lib/feeds/image';
 
 /**
  * 記事本文の抽出。
@@ -29,6 +30,11 @@ export type ExtractResult = {
   html: string;
   /** true = 本文抽出に成功。false = 取れなかった。 */
   ok: boolean;
+  /**
+   * 記事の代表画像（og:image）。スライドの表紙に使う。
+   * 本文が短すぎて ok=false のときも、絵だけは使えるので返す。
+   */
+  imageUrl: string | null;
 };
 
 const USER_AGENT =
@@ -88,6 +94,8 @@ export async function extractArticle(url: string): Promise<ExtractResult> {
   // linkedom は外部リソースを取りに行かないので、画像やスクリプトで遅くならない。
   const { document } = parseHTML(html);
   const article = new Readability(document).parse();
+  // Readability は meta を落とすので、掴む前の document から取る。
+  const imageUrl = pickImageFromDocument(document, url);
 
   // textContent ではなく、Readability が整えた HTML から段落を組み立てる。
   // textContent はブロックの境目に何も入れないので段落が全部つながり、代わりに
@@ -100,10 +108,15 @@ export async function extractArticle(url: string): Promise<ExtractResult> {
   // 極端に短い結果は抽出失敗とみなし、RSS の抜粋に任せる
   // （同意画面・エラーページ・ナビゲーションを掴んでいることが多い）。
   if (text.length < MIN_CONTENT_CHARS) {
-    return { text, html: '', ok: false };
+    return { text, html: '', ok: false, imageUrl };
   }
 
-  return { text: text.slice(0, MAX_CHARS), html: safeHtml.slice(0, MAX_HTML_CHARS), ok: true };
+  return {
+    text: text.slice(0, MAX_CHARS),
+    html: safeHtml.slice(0, MAX_HTML_CHARS),
+    ok: true,
+    imageUrl,
+  };
 }
 
 /**

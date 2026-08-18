@@ -71,12 +71,14 @@ export async function getPlayable(id: string): Promise<{
   status: MediaSummary['status'];
   slides: Slide[];
   segments: PlayableSegment[];
+  /** 表紙画像の署名付きURL。記事に絵が無ければ null（スライドは文字だけになる）。 */
+  coverUrl: string | null;
 } | null> {
   const supabase = await createClient();
 
   const { data: media } = await supabase
     .from('media')
-    .select('id, title, status, slides')
+    .select('id, title, status, slides, cover_path')
     .eq('id', id)
     .maybeSingle();
   if (!media) return null;
@@ -96,9 +98,16 @@ export async function getPlayable(id: string): Promise<{
 
   const urlByPath = new Map((signed ?? []).map((s) => [s.path ?? '', s.signedUrl]));
 
+  // 表紙も同じバケットなので、セグメントと一緒に署名する。
+  const coverUrl = media.cover_path
+    ? ((await supabase.storage.from(BUCKET).createSignedUrl(media.cover_path, SIGN_TTL_SEC)).data
+        ?.signedUrl ?? null)
+    : null;
+
   return {
     title: media.title,
     status: media.status,
+    coverUrl,
     slides: (media.slides ?? []) as Slide[],
     segments: ready
       .map((r) => ({
