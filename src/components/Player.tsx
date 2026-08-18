@@ -5,7 +5,7 @@ import { SlideView } from '@/components/SlideView';
 import type { Slide } from '@/lib/ai/script';
 import type { PlayableSegment } from '@/lib/media/list';
 import { fmtTime, usePlayer } from '@/lib/media/usePlayer';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 /**
  * スライド同期の再生。
@@ -27,7 +27,8 @@ export function Player({
   coverUrl: string | null;
 }) {
   const [showText, setShowText] = useState(false);
-  const { audioRef, audioProps, ...p } = usePlayer({ mediaId, title, segments });
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const p = usePlayer({ mediaId, title, segments, audioRef });
 
   if (segments.length === 0) {
     return (
@@ -126,7 +127,7 @@ export function Player({
         </div>
       </div>
 
-      <audio ref={audioRef} {...audioProps} />
+      <audio ref={audioRef} preload="auto" />
     </div>
   );
 }

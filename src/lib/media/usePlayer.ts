@@ -25,14 +25,32 @@ export function usePlayer({
   mediaId,
   title,
   segments,
+  audioRef,
+  autoPlay = false,
 }: {
   mediaId: string;
   title: string;
   segments: PlayableSegment[];
+  /**
+   * 鳴らす <audio>。**要素は使う側が持つ。**
+   *
+   * 一覧の下部プレイヤーでは、要素をプレイヤーより上（常に居る側）に置く。
+   * ブラウザは「一度ユーザー操作で鳴らした要素」しか後から鳴らせないので、
+   * 音声を切り替えるたびに要素ごと作り直すと、そのたびに鳴らせなくなる。
+   */
+  audioRef: React.RefObject<HTMLAudioElement | null>;
+  /** 素材が揃った時点で鳴らし始める。一覧の ▶ は1回で鳴ってほしい。 */
+  autoPlay?: boolean;
 }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [current, setCurrent] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  /**
+   * 鳴っているか。
+   *
+   * autoPlay のときは最初から true にしておく。effect で後から立てるより素直で、
+   * 一覧の下部プレイヤーは素材が揃ってから出るので、mount した時点で
+   * 「鳴らしてよい」が確定している。
+   */
+  const [playing, setPlaying] = useState(autoPlay);
   const [speed, setSpeed] = useState(1);
   const [elapsed, setElapsed] = useState(0);
   /** つまみを掴んでいる間の位置。離すまで音は動かさない（クリップを跨ぐたびに読み直すと重い）。 */
@@ -102,7 +120,7 @@ export function usePlayer({
       }
       setElapsed(offset);
     },
-    [starts, total, current],
+    [audioRef, starts, total, current],
   );
 
   const toggle = useCallback(() => {
@@ -122,7 +140,7 @@ export function usePlayer({
 
     if (el.paused) void el.play();
     else el.pause();
-  }, [storageKey, segments.length, current]);
+  }, [audioRef, storageKey, segments.length, current]);
 
   const cycleSpeed = useCallback(() => {
     setSpeed((v) => SPEEDS[(SPEEDS.indexOf(v) + 1) % SPEEDS.length]);
@@ -131,7 +149,14 @@ export function usePlayer({
   // クリップを跨いでも再生し続ける。src が変わったら鳴らし直す必要がある。
   useEffect(() => {
     const el = audioRef.current;
-    if (!el) return;
+    if (!el || !segment) return;
+
+    // 要素は使う側が持っているので、src はここで入れる。同じURLなら触らない
+    // （代入し直すと読み込みが走り、鳴っている音が途切れる）。
+    if (el.getAttribute('src') !== segment.url) {
+      el.setAttribute('src', segment.url);
+      el.load();
+    }
     el.playbackRate = speed;
     if (!playing) return;
 
@@ -142,7 +167,7 @@ export function usePlayer({
       if (err instanceof DOMException && err.name === 'AbortError') return;
       setPlaying(false);
     });
-  }, [current, speed, playing]);
+  }, [audioRef, segment, current, speed, playing]);
 
   /** ロック画面・イヤホンからの操作。これが無いとポケットに入れたまま使えない。 */
   useEffect(() => {
@@ -165,7 +190,7 @@ export function usePlayer({
         navigator.mediaSession.setActionHandler(a, null);
       }
     };
-  }, [title, current, segments.length, go]);
+  }, [audioRef, title, current, segments.length, go]);
 
   /**
    * ロック画面のシークバー。
@@ -195,30 +220,42 @@ export function usePlayer({
   }, [position, total, speed, seek]);
 
   /** そのまま <audio> に渡す。要素は使う側が置く（画面ごとに置き場所が違うため）。 */
-  const audioProps = {
-    src: segment?.url,
-    preload: 'auto' as const,
-    onPlay: () => setPlaying(true),
+  /**
+   * <audio> の出来事を拾う。
+   *
+   * JSX の props ではなく手で貼るのは、**要素が使う側にあるから**。
+   * 一覧の下部プレイヤーでは、要素はプレイヤーより上（音声を切り替えても
+   * 生き残る側）に置いてあり、ここから props は渡せない。
+   */
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+
+    const onPlay = () => setPlaying(true);
+
     /**
      * **終端でも pause が飛ぶ。**しかも ended より先に来る（仕様の順番が
      * 「paused を立てる → pause → ended」）。素直に受けると、次のクリップへ
      * 進んだ時点で playing が false になっていて、再生の effect が動かない。
-     * 1本ぶん鳴らして止まるのはこれ。終端ぶんは無視して、onEnded に任せる。
+     * 1本ぶん鳴らして止まるのはこれ。終端ぶんは無視して、ended に任せる。
      */
-    onPause: (e: React.SyntheticEvent<HTMLAudioElement>) => {
-      if (e.currentTarget.ended) return;
+    const onPause = () => {
+      if (el.ended) return;
       setPlaying(false);
-    },
-    onLoadedMetadata: (e: React.SyntheticEvent<HTMLAudioElement>) => {
+    };
+
+    const onLoadedMetadata = () => {
       if (pending.current === null) return;
-      e.currentTarget.currentTime = pending.current;
+      el.currentTime = pending.current;
       pending.current = null;
-    },
-    onTimeUpdate: (e: React.SyntheticEvent<HTMLAudioElement>) => {
+    };
+
+    const onTimeUpdate = () => {
       // つまみを掴んでいる間は表示を動かさない（掴んだ位置が戻されて操作できない）。
-      if (scrub === null) setElapsed(e.currentTarget.currentTime);
-    },
-    onEnded: () => {
+      if (scrub === null) setElapsed(el.currentTime);
+    };
+
+    const onEnded = () => {
       // 最後まで来たら止める。次があるなら続けて鳴らす。
       if (current < segments.length - 1) {
         go(current + 1);
@@ -228,12 +265,23 @@ export function usePlayer({
       } else {
         setPlaying(false);
       }
-    },
-  };
+    };
 
+    el.addEventListener('play', onPlay);
+    el.addEventListener('pause', onPause);
+    el.addEventListener('loadedmetadata', onLoadedMetadata);
+    el.addEventListener('timeupdate', onTimeUpdate);
+    el.addEventListener('ended', onEnded);
+
+    return () => {
+      el.removeEventListener('play', onPlay);
+      el.removeEventListener('pause', onPause);
+      el.removeEventListener('loadedmetadata', onLoadedMetadata);
+      el.removeEventListener('timeupdate', onTimeUpdate);
+      el.removeEventListener('ended', onEnded);
+    };
+  }, [audioRef, scrub, current, segments.length, go]);
   return {
-    audioRef,
-    audioProps,
     segment,
     current,
     playing,
