@@ -9,6 +9,10 @@ import { useState, useTransition } from 'react';
  *
  * 押しても即座には何もできない（ワーカーが台本→合成を進める）。
  * 押した手応えが無いと二度三度押されるので、状態と行き先を出す。
+ *
+ * 失敗の文面は Server Action の**戻り値**から取る。本番では throw された
+ * エラーの中身が digest に置き換わり、ここで catch できるのは
+ * 「Minified React error #441」だけになるため（actions/media.ts のコメント）。
  */
 export function MediaButton({
   articleId,
@@ -32,9 +36,14 @@ export function MediaButton({
           : digestId
             ? await requestDigestMedia(digestId)
             : null;
-        if (r) setResult({ id: r.id, message: r.message });
+        if (!r) return;
+        if (r.ok) setResult({ id: r.id, message: r.message });
+        else setError(r.message);
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        // ここに来るのは通信断か、サーバー側で想定していない落ち方をしたとき。
+        // 本番だと中身は伏せられるので、開発時のために console にだけ残す。
+        console.error(e);
+        setError('音声化を受け付けられませんでした。通信を確かめて、もう一度お試しください。');
       }
     });
   };
