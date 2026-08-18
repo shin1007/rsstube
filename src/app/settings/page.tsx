@@ -16,6 +16,7 @@ import { FeedHealth } from '@/components/FeedHealth';
 import { UnsubscribeButton } from '@/components/UnsubscribeButton';
 import { FolderSelect } from '@/components/FolderSelect';
 import { PushToggle } from '@/components/PushToggle';
+import { SettingsForm, type SaveState } from '@/components/SettingsForm';
 import { UsageTable } from '@/components/UsageTable';
 import { recentUsage } from '@/lib/ai/usage';
 import { pipelineStatus } from '@/lib/pipeline';
@@ -45,11 +46,18 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
     getDriveStatus(),
   ]);
 
-  async function saveSettings(formData: FormData) {
+  /**
+   * 設定の保存。
+   *
+   * 結果を**戻り値で**返す。throw すると本番では中身が digest に置き換わり、
+   * 画面には「Minified React error #441」しか届かない（actions/media.ts の注記）。
+   * 保存できたかどうかは SettingsForm が出す。
+   */
+  async function saveSettings(_prev: SaveState, formData: FormData): Promise<SaveState> {
     'use server';
     const supabase = await createClient();
     const { data } = await supabase.auth.getUser();
-    if (!data.user) throw new Error('未ログインです');
+    if (!data.user) return { ok: false, message: '未ログインです' };
 
     const { error } = await supabase.from('settings').upsert(
       {
@@ -66,8 +74,17 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
       },
       { onConflict: 'user_id' },
     );
-    if (error) throw error;
+    if (error) return { ok: false, message: `保存できませんでした: ${error.message}` };
+
     revalidatePath('/settings');
+    return {
+      ok: true,
+      at: new Date().toLocaleTimeString('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
   }
 
   return (
@@ -120,7 +137,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             書き出しのたびにここの文面がコピーできるようになります。音声の口調・長さ・
             話の焦点はこの指示文でほぼ決まるので、聴きながら調整してください。
           </p>
-          <form action={saveSettings} className="space-y-3">
+          <SettingsForm action={saveSettings}>
             <textarea
               name="notebooklm_prompt"
               rows={4}
@@ -230,10 +247,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
                 （台本が話者の数に縛られているので、後から声だけ替えることはできません）。
               </p>
             </div>
-            <button type="submit" className="rounded bg-zinc-100 px-3 py-1.5 text-sm text-zinc-900">
-              保存
-            </button>
-          </form>
+          </SettingsForm>
         </section>
 
         {/* ---------------- 取り込みの進み具合 ---------------- */}
