@@ -1,4 +1,5 @@
 import { enqueue } from '@/lib/jobs/queue';
+import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -53,7 +54,20 @@ export async function requestMedia(
   const { data, error } = await db.from('media').insert(row).select('id').single();
   if (error) throw error;
 
-  await enqueue(db, 'script', { media_id: data.id }, userId);
+  // ジョブは**必ず Secret キーで積む**。jobs は 0005 で RLS のポリシーを全部
+  // 落としてある（ユーザーに他人のジョブを見せない・作らせないため）ので、
+  // ログイン中のユーザーとして insert すると 42501 で必ず弾かれる。
+  // ここを user のクライアントで叩いていたせいで、media の行だけができて
+  // script ジョブが積まれず、「音声にする」が毎回失敗していた。
+  try {
+    await enqueue(createAdminClient(), 'script', { media_id: data.id }, userId);
+  } catch (e) {
+    // ジョブが無い media は永久に queued のまま残り、一意索引のせいで
+    // 押し直しても「既に作ってあります」になって二度と作れなくなる。
+    // 積めなかったら行ごと引き取る（次に押せば作り直せる）。
+    await db.from('media').delete().eq('id', data.id);
+    throw e;
+  }
 
   return { id: data.id, created: true };
 }
