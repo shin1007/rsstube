@@ -1,6 +1,7 @@
 'use server';
 
 import { requestMedia, type MediaTarget } from '@/lib/media/create';
+import { getPlayable, type PlayableSegment } from '@/lib/media/list';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
@@ -79,4 +80,24 @@ async function run(
       ? '音声化をキューに入れました。数分後に「聴く」に出ます。'
       : '既に作ってあります。「聴く」から開けます。',
   };
+}
+
+/**
+ * 一覧ページの下部プレイヤー用に、1本ぶんの再生材料を取り出す。
+ *
+ * 一覧が持っているのは要約だけで、音声のURLは無い（署名付きURLは有効期限が
+ * あるので、一覧の全件ぶんを先に発行すると無駄が大きい）。押されたものだけ
+ * その場で取りに行く。
+ */
+export type PlayableResult =
+  | { ok: true; title: string; segments: PlayableSegment[] }
+  | { ok: false; message: string };
+
+export async function loadPlayable(id: string): Promise<PlayableResult> {
+  const media = await getPlayable(id);
+  if (!media) return { ok: false, message: '音声が見つかりません' };
+  if (media.segments.length === 0) {
+    return { ok: false, message: 'まだ再生できる音声がありません' };
+  }
+  return { ok: true, title: media.title, segments: media.segments };
 }
