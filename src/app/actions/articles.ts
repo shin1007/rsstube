@@ -1,5 +1,7 @@
 'use server';
 
+import { attempt } from '@/lib/actions/result';
+
 import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
@@ -113,6 +115,10 @@ export async function setReadMany(articleIds: string[], read = true) {
  * 一気に積んでも、ワーカーが1回の実行で食べる量は絞ってあるので溢れない。
  */
 export async function requestSummaries(articleIds: string[]) {
+  return attempt(() => requestSummariesImpl(articleIds));
+}
+
+async function requestSummariesImpl(articleIds: string[]) {
   if (articleIds.length === 0) return;
   const { supabase, userId } = await client();
 
@@ -140,6 +146,10 @@ export async function requestSummaries(articleIds: string[]) {
 
 /** 要約が無い記事、または要約をやり直したい記事をキューに積む。 */
 export async function requestSummary(articleId: string) {
+  return attempt(() => requestSummaryImpl(articleId));
+}
+
+async function requestSummaryImpl(articleId: string) {
   const { supabase, userId } = await client();
   const { error } = await supabase
     .from('jobs')

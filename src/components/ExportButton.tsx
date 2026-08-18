@@ -1,5 +1,6 @@
 'use client';
 
+import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import { createExport } from '@/app/actions/exports';
 import { ExportDialog } from '@/components/ExportDialog';
 import type { ExportResult } from '@/lib/export/create';
@@ -26,9 +27,11 @@ export function ExportButton({
     setError(null);
     startTransition(async () => {
       try {
-        setResult(await createExport(articleIds));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        const r = await createExport(articleIds);
+        if (!r.ok) return setError(r.message);
+        setResult(r.value);
+      } catch {
+        setError(UNEXPECTED_ERROR);
       }
     });
   };

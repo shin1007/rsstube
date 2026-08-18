@@ -1,5 +1,6 @@
 'use client';
 
+import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import { relocateFeed } from '@/app/actions/feeds';
 import { useState, useTransition } from 'react';
 
@@ -29,9 +30,10 @@ export function RelocateButton({ feedId }: { feedId: string }) {
           startTransition(async () => {
             try {
               const r = await relocateFeed(feedId);
-              setResult(`「${r.title}」に付け替えました`);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : String(e));
+              if (!r.ok) return setError(r.message);
+              setResult(`「${r.value.title}」に付け替えました`);
+            } catch {
+              setError(UNEXPECTED_ERROR);
             }
           });
         }}

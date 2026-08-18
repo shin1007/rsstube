@@ -1,5 +1,6 @@
 'use client';
 
+import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import {
   deleteFeed,
   feedImpact,
@@ -37,9 +38,11 @@ export function UnsubscribeButton({
     setError(null);
     startTransition(async () => {
       try {
-        setImpact(await feedImpact(feedId));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        const r = await feedImpact(feedId);
+        if (!r.ok) return setError(r.message);
+        setImpact(r.value);
+      } catch {
+        setError(UNEXPECTED_ERROR);
       }
     });
   };
@@ -47,11 +50,12 @@ export function UnsubscribeButton({
   const confirm = () => {
     startTransition(async () => {
       try {
-        await deleteFeed(feedId);
+        const r = await deleteFeed(feedId);
+        if (!r.ok) return setError(r.message);
         setImpact(null);
         setDone(true);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+      } catch {
+        setError(UNEXPECTED_ERROR);
       }
     });
   };
@@ -59,10 +63,11 @@ export function UnsubscribeButton({
   const undo = () => {
     startTransition(async () => {
       try {
-        await resubscribeFeed(feedId, folderId);
+        const r = await resubscribeFeed(feedId, folderId);
+        if (!r.ok) return setError(r.message);
         setDone(false);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+      } catch {
+        setError(UNEXPECTED_ERROR);
       }
     });
   };

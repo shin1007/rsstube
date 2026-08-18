@@ -1,5 +1,6 @@
 'use client';
 
+import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import { exportToDrive } from '@/app/actions/drive';
 import type { ExportResult } from '@/lib/export/create';
 import { safeFileName } from '@/lib/export/markdown';
@@ -29,10 +30,11 @@ export function ExportDialog({
     startTransition(async () => {
       try {
         const file = await exportToDrive(result.id);
-        setDriveUrl(file.url);
-      } catch (e) {
         // 未接続なら、その旨がそのまま出る（設定画面から繋いでもらう）。
-        setDriveError(e instanceof Error ? e.message : String(e));
+        if (!file.ok) return setDriveError(file.message);
+        setDriveUrl(file.value.url);
+      } catch {
+        setDriveError(UNEXPECTED_ERROR);
       }
     });
   };

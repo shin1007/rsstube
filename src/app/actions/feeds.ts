@@ -1,5 +1,7 @@
 'use server';
 
+import { attempt } from '@/lib/actions/result';
+
 import { fetchFeed } from '@/lib/feeds/parse';
 import { discoverFeeds, type FeedCandidate } from '@/lib/feeds/discover';
 import { fanOutStates, ingestFeedItems } from '@/lib/feeds/ingest';
@@ -44,6 +46,10 @@ async function folderId(
 }
 
 export async function createFolder(formData: FormData) {
+  return attempt(() => createFolderImpl(formData));
+}
+
+async function createFolderImpl(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim();
   if (!name) return;
 
@@ -67,6 +73,10 @@ export async function createFolder(formData: FormData) {
 }
 
 export async function renameFolder(id: string, formData: FormData) {
+  return attempt(() => renameFolderImpl(id, formData));
+}
+
+async function renameFolderImpl(id: string, formData: FormData) {
   const name = String(formData.get('name') ?? '').trim();
   if (!name) return;
 
@@ -80,6 +90,10 @@ export async function renameFolder(id: string, formData: FormData) {
 
 /** フォルダだけ消す。中のフィードは feeds.folder_id が null になって未分類に残る。 */
 export async function deleteFolder(id: string) {
+  return attempt(() => deleteFolderImpl(id));
+}
+
+async function deleteFolderImpl(id: string) {
   const { supabase } = await client();
   const { error } = await supabase.from('folders').delete().eq('id', id);
   if (error) throw error;
@@ -93,6 +107,10 @@ export async function deleteFolder(id: string) {
  * 現在の表示順どおりに 0..n-1 を振り直してから入れ替える。
  */
 export async function moveFolder(id: string, direction: 'up' | 'down') {
+  return attempt(() => moveFolderImpl(id, direction));
+}
+
+async function moveFolderImpl(id: string, direction: 'up' | 'down') {
   const { supabase, userId } = await client();
 
   const { data: folders } = await supabase
@@ -123,6 +141,10 @@ export async function moveFolder(id: string, direction: 'up' | 'down') {
 
 /** フィードのフォルダを移す。空文字なら未分類に戻す。フォルダは購読ごとの持ち物。 */
 export async function moveFeed(feedId: string, formData: FormData) {
+  return attempt(() => moveFeedImpl(feedId, formData));
+}
+
+async function moveFeedImpl(feedId: string, formData: FormData) {
   const raw = String(formData.get('folder_id') ?? '').trim();
 
   const { supabase, userId } = await client();
@@ -147,7 +169,11 @@ export async function moveFeed(feedId: string, formData: FormData) {
  * 画面はこれを呼んでから候補を出し、選ばせてから subscribeFeed に渡す。
  * 登録してから「違うフィードだった」と気づくより、先に見せたほうが早い。
  */
-export async function findFeeds(input: string): Promise<FeedCandidate[]> {
+export async function findFeeds(input: string) {
+  return attempt(() => findFeedsImpl(input));
+}
+
+async function findFeedsImpl(input: string): Promise<FeedCandidate[]> {
   await client(); // 未ログインなら弾く（任意のURLを叩かせる踏み台にしない）。
 
   if (!looksLikeUrl(input)) return searchFeeds(input);
@@ -163,6 +189,13 @@ export async function findFeeds(input: string): Promise<FeedCandidate[]> {
 }
 
 export async function subscribeFeed(
+  url: string,
+  folder?: string,
+) {
+  return attempt(() => subscribeFeedImpl(url, folder));
+}
+
+async function subscribeFeedImpl(
   url: string,
   folder?: string,
 ): Promise<{ title: string; newArticles: number }> {
@@ -212,6 +245,10 @@ export async function subscribeFeed(
 
 /** 旧来のフォーム経由の登録。OPML の隣に残してある。 */
 export async function addFeed(formData: FormData) {
+  return attempt(() => addFeedImpl(formData));
+}
+
+async function addFeedImpl(formData: FormData) {
   const url = String(formData.get('url') ?? '').trim();
   const folder = String(formData.get('folder') ?? '').trim() || undefined;
   if (!url) return;
@@ -229,7 +266,11 @@ export async function addFeed(formData: FormData) {
  * 見つかったら feeds.url を差し替える。購読・フォルダ・既読はフィードの id に
  * 紐づいているので、そのまま引き継がれる（登録し直すと全部消える）。
  */
-export async function relocateFeed(feedId: string): Promise<{ url: string; title: string }> {
+export async function relocateFeed(feedId: string) {
+  return attempt(() => relocateFeedImpl(feedId));
+}
+
+async function relocateFeedImpl(feedId: string): Promise<{ url: string; title: string }> {
   const { supabase } = await client();
 
   const { data: feed } = await supabase
@@ -263,7 +304,11 @@ export type UnsubscribeImpact = {
   exported: number;
 };
 
-export async function feedImpact(feedId: string): Promise<UnsubscribeImpact> {
+export async function feedImpact(feedId: string) {
+  return attempt(() => feedImpactImpl(feedId));
+}
+
+async function feedImpactImpl(feedId: string): Promise<UnsubscribeImpact> {
   const { supabase, userId } = await client();
 
   const { data, error } = await supabase
@@ -298,6 +343,10 @@ export async function feedImpact(feedId: string): Promise<UnsubscribeImpact> {
  * 印を付けていないものだけが消える（スター・あとで・書き出し済みは残る。0012）。
  */
 export async function deleteFeed(feedId: string) {
+  return attempt(() => deleteFeedImpl(feedId));
+}
+
+async function deleteFeedImpl(feedId: string) {
   const { supabase } = await client();
   const { error } = await supabase.rpc('unsubscribe_feed', { in_feed_id: feedId });
   if (error) throw error;
@@ -313,6 +362,10 @@ export async function deleteFeed(feedId: string) {
  * ただし印の無かった記事の既読・未読は戻らない。そのことは画面に出す。
  */
 export async function resubscribeFeed(feedId: string, folderId?: string | null) {
+  return attempt(() => resubscribeFeedImpl(feedId, folderId));
+}
+
+async function resubscribeFeedImpl(feedId: string, folderId?: string | null) {
   const { supabase } = await client();
 
   const { data: feed } = await supabase.from('feeds').select('url, title, site_url').eq('id', feedId).maybeSingle();
@@ -353,6 +406,10 @@ export async function resubscribeFeed(feedId: string, folderId?: string | null) 
  * タイトルと記事は、次の巡回で埋まる。
  */
 export async function importOpml(formData: FormData) {
+  return attempt(() => importOpmlImpl(formData));
+}
+
+async function importOpmlImpl(formData: FormData) {
   const file = formData.get('opml');
   if (!(file instanceof File) || file.size === 0) return;
 

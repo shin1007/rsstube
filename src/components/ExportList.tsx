@@ -1,5 +1,6 @@
 'use client';
 
+import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import { getExport } from '@/app/actions/exports';
 import { ExportDialog } from '@/components/ExportDialog';
 import { MediaButton } from '@/components/MediaButton';
@@ -34,9 +35,11 @@ export function ExportList({ exports }: { exports: ExportSummary[] }) {
     setOpenId(id);
     startTransition(async () => {
       try {
-        setResult(await getExport(id));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        const r = await getExport(id);
+        if (!r.ok) return setError(r.message);
+        setResult(r.value);
+      } catch {
+        setError(UNEXPECTED_ERROR);
         setOpenId(null);
       }
     });

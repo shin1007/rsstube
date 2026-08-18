@@ -1,5 +1,7 @@
 'use server';
 
+import { attempt } from '@/lib/actions/result';
+
 import { createExportFor, type ExportResult } from '@/lib/export/create';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -15,6 +17,14 @@ import { revalidatePath } from 'next/cache';
 export type { ExportResult };
 
 export async function createExport(
+  articleIds: string[],
+  kind: 'manual' | 'digest' = 'manual',
+  title?: string,
+) {
+  return attempt(() => createExportImpl(articleIds, kind, title));
+}
+
+async function createExportImpl(
   articleIds: string[],
   kind: 'manual' | 'digest' = 'manual',
   title?: string,
@@ -37,7 +47,11 @@ export async function createExport(
  * 一覧（/exports）は見出しだけを出し、Markdown 本文はここで開いたときに取る。
  * 1件で数十KB〜数百KBになるので、一覧に全部載せると転送量が跳ね上がる。
  */
-export async function getExport(id: string): Promise<ExportResult> {
+export async function getExport(id: string) {
+  return attempt(() => getExportImpl(id));
+}
+
+async function getExportImpl(id: string): Promise<ExportResult> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('exports')
@@ -50,7 +64,11 @@ export async function getExport(id: string): Promise<ExportResult> {
 }
 
 /** 「あとで」に溜めた記事をまとめて書き出す。 */
-export async function exportReadLater(): Promise<ExportResult> {
+export async function exportReadLater() {
+  return attempt(() => exportReadLaterImpl());
+}
+
+async function exportReadLaterImpl(): Promise<ExportResult> {
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) throw new Error('未ログインです');
@@ -68,5 +86,6 @@ export async function exportReadLater(): Promise<ExportResult> {
   const ids = (data ?? []).map((r) => r.article_id);
   if (ids.length === 0) throw new Error('書き出せる「あとで」の記事がありません');
 
-  return createExport(ids, 'manual');
+  // 内側では包まない版を呼ぶ。ここで ActionResult を返すと二重に包まれる。
+  return createExportImpl(ids, 'manual');
 }

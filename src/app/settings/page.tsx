@@ -9,6 +9,7 @@ import {
   renameFolder,
 } from '@/app/actions/feeds';
 import { signOut } from '@/app/actions/articles';
+import { ActionForm } from '@/components/ActionForm';
 import { AddFeed } from '@/components/AddFeed';
 import { DeleteFolderButton } from '@/components/DeleteFolderButton';
 import { DriveConnect } from '@/components/DriveConnect';
@@ -337,7 +338,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             記事は次の巡回で入ります。「書き出す」で今の購読一覧を OPML として保存できます
             （バックアップ用。フォルダの構成も一緒に出ます）。
           </p>
-          <form action={importOpml} className="flex flex-col gap-2 sm:flex-row">
+          <ActionForm action={importOpml} className="flex flex-col gap-2 sm:flex-row" success="取り込みました。記事は次の巡回で入ります。">
             <input
               type="file"
               name="opml"
@@ -348,7 +349,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             <button type="submit" className="rounded bg-zinc-100 px-3 py-2 text-sm text-zinc-900">
               取り込む
             </button>
-          </form>
+          </ActionForm>
         </section>
 
         {/* ---------------- フォルダ ---------------- */}
@@ -362,7 +363,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
           <ul className="mb-2 divide-y divide-zinc-900 rounded border border-zinc-800">
             {(folders ?? []).map((f: FolderRow, i: number) => (
               <li key={f.id} className="flex items-center gap-2 px-3 py-2">
-                <form action={renameFolder.bind(null, f.id)} className="min-w-0 flex-1">
+                <ActionForm action={renameFolder.bind(null, f.id)} className="min-w-0 flex-1">
                   <input
                     type="text"
                     name="name"
@@ -370,8 +371,8 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
                     aria-label="フォルダ名"
                     className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-zinc-800 focus:border-zinc-700 focus:bg-zinc-900 focus:outline-none"
                   />
-                </form>
-                <form action={moveFolder.bind(null, f.id, 'up')}>
+                </ActionForm>
+                <ActionForm action={moveFolder.bind(null, f.id, 'up')}>
                   <button
                     type="submit"
                     disabled={i === 0}
@@ -380,8 +381,8 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
                   >
                     ↑
                   </button>
-                </form>
-                <form action={moveFolder.bind(null, f.id, 'down')}>
+                </ActionForm>
+                <ActionForm action={moveFolder.bind(null, f.id, 'down')}>
                   <button
                     type="submit"
                     disabled={i === (folders ?? []).length - 1}
@@ -390,7 +391,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
                   >
                     ↓
                   </button>
-                </form>
+                </ActionForm>
                 <DeleteFolderButton
                   id={f.id}
                   name={f.name}
@@ -405,7 +406,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             )}
           </ul>
 
-          <form action={createFolder} className="flex gap-2">
+          <ActionForm action={createFolder} className="flex gap-2">
             <input
               type="text"
               name="name"
@@ -416,7 +417,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             <button type="submit" className="rounded bg-zinc-100 px-3 py-2 text-sm text-zinc-900">
               追加
             </button>
-          </form>
+          </ActionForm>
         </section>
 
         {/* ---------------- 登録済みフィード ---------------- */}
