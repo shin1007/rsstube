@@ -4,6 +4,7 @@ import { requestSummary } from '@/app/actions/articles';
 import { ArticleActions } from '@/components/ArticleActions';
 import { ExportButton } from '@/components/ExportButton';
 import { ActionForm } from '@/components/ActionForm';
+import { MarkReadOnView } from '@/components/MarkReadOnView';
 import { MediaButton } from '@/components/MediaButton';
 import Link from 'next/link';
 
@@ -56,6 +57,9 @@ export function ArticleView({
 
   return (
     <div className="flex h-full flex-col min-h-0">
+      {/* 出したなら既読にする。押して開いたものは ArticleList の open が見る。 */}
+      <MarkReadOnView articleId={a.id} isRead={state?.is_read ?? false} />
+
       <header className="flex items-center gap-1 border-b border-zinc-800 px-3 py-2">
         {/* スマホでリストへ戻る導線。PCではリストが常に見えているので不要。 */}
         <Link href={backHref} className="md:hidden rounded px-2 py-1 text-sm text-zinc-400">
