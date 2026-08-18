@@ -165,8 +165,8 @@ export type ScriptSource = {
  * ダイジェストで効くのは要点（summaries.bullets）のほうで、本文は雰囲気を掴む程度でよい。
  */
 function textLimit(articleCount: number): number {
-  if (articleCount <= 1) return 6_000;
-  if (articleCount <= 3) return 2_500;
+  if (articleCount <= 1) return 9_000;
+  if (articleCount <= 3) return 3_500;
   return 1_000;
 }
 
@@ -182,9 +182,26 @@ function textLimit(articleCount: number): number {
  * 「3000字以内」のほうがよく従う。
  */
 function targetChars(articleCount: number): number {
-  if (articleCount <= 1) return 1_200;
-  if (articleCount <= 3) return 2_000;
-  return 3_000;
+  if (articleCount <= 1) return 2_400;
+  if (articleCount <= 3) return 3_400;
+  return 4_400;
+}
+
+/**
+ * スライドの枚数。
+ *
+ * 「1（表紙）＋記事の数」にしていたので、**記事1本の音声は表紙＋1枚しか無かった**。
+ * 3行の箇条書きで記事を1本片付けることになり、スライドも台本も薄くなる。
+ * 1本を掘り下げるときこそ論点ごとに割るべきなので、素材が1件のときは多めに取る。
+ * 複数件のときは記事ごとに1枚＋まとめ1枚。
+ *
+ * 増やしても壊れないのは、スライドを3項目に平たくして `maxItems` が
+ * 効くようになったため（CLAUDE.md の罠）。項目を増やすと maxItems が
+ * 弾かれ、モデルが同じスライドを延々と繰り返す壊れ方に戻る。
+ */
+function slideTarget(articleCount: number): number {
+  if (articleCount <= 1) return 5;
+  return Math.min(articleCount + 2, MAX_SLIDES);
 }
 
 /**
@@ -192,12 +209,13 @@ function targetChars(articleCount: number): number {
  *
  * 字数で頼むだけでは止まらなかった（1件の素材に対して43000字を書き、
  * 出力トークンを使い切った）。**モデルは「何個作るか」のほうがよく守る**ので、
- * 個数で縛る。スライドが2枚しかないのに発話を70個まで許していたのが、
- * 延々と喋り続けられる余地になっていた。
+ * 個数で縛る。ただし絞りすぎると今度は中身が薄くなる——記事1本に14個では、
+ * 1発話40〜120字なので最大でも1700字にしかならず、要点を3つ挙げて終わっていた。
+ * 頼む字数（targetChars）を1発話の下限で割った数を下回らないようにする。
  */
 function maxLines(articleCount: number): number {
-  if (articleCount <= 1) return 14;
-  if (articleCount <= 3) return 30;
+  if (articleCount <= 1) return 28;
+  if (articleCount <= 3) return 44;
   return MAX_LINES;
 }
 
@@ -210,7 +228,7 @@ function buildPrompt(
   const limit = textLimit(source.articles.length);
   const chars = targetChars(source.articles.length);
   const lines = maxLines(source.articles.length);
-  const slideCount = Math.min(source.articles.length + 1, MAX_SLIDES);
+  const slideCount = slideTarget(source.articles.length);
   const solo = mode === 'solo';
 
   const body = source.articles
@@ -251,16 +269,28 @@ function buildPrompt(
     `- **lines の text を合計して${chars}字以内。これを超えてはいけない。**` +
       `（読み上げて約${Math.max(1, Math.round(chars / 350))}分）`,
     source.articles.length <= 1
-      ? '- 素材は1件だけ。短くてよい。無理に長くしたり、書かれていないことで尺を埋めたりしないこと。'
+      ? // 「短くてよい」と言っていたら、要点を3つ読み上げるだけの90秒になっていた。
+        // 尺を埋めるなという歯止めは残しつつ、掘る方向へ向ける。
+        '- 素材は1件。その1件を掘り下げることに字数を使うこと。' +
+        'ただし書かれていないことで尺を埋めたり、同じ話を言い換えて伸ばしたりしてはいけない。'
       : '- 記事が多いときは1件あたりを短くして収める。全部を深く語ろうとしないこと。',
     '',
     '## スライド',
-    `- 枚数は「1（表紙）＋記事の数」。今回は素材が${source.articles.length}件なので` +
-      `${slideCount}枚にすること。1枚だけで済ませてはいけない。`,
+    `- ${slideCount}枚ちょうど作ること。少なく済ませてはいけない。`,
     '- 先頭は必ず type="title" の1枚。全体の主題を出す。',
-    '- 続けて記事ごとに type="bullets" を1枚ずつ。heading は記事の主題、bullets は2〜4個の短い要点。',
+    source.articles.length <= 1
+      ? // 記事1本を1枚で片付けると、3行の箇条書きに要約されて終わる。
+        // 論点で割らせると、台本のほうも1論点ずつ掘る形になる。
+        `- 続く${slideCount - 1}枚は、この記事を**論点で割って**1枚ずつ。` +
+        '「何が起きたか」「なぜそうなったか」「何が変わるか」「引っかかる点・今後」のように、' +
+        '別々の切り口にする。同じ話を言い換えた2枚を作ってはいけない。'
+      : '- 続けて記事ごとに type="bullets" を1枚ずつ。heading は記事の主題。' +
+        '最後の1枚は全体を振り返るまとめにする。',
     '- 特に印象的な一文があれば type="quote" を挟んでよい（多用しない）。',
-    '- 文字は画面で読ませるので短く。bullets は1個あたり30字以内。',
+    '- bullets は3〜4個。1個あたり40字以内。',
+    // 「重要だ」「注目される」だけのスライドは、読んでも何も分からない。
+    '- **具体を書く。** 数字・固有名詞・日付・地名を、記事にあるものは必ず入れる。' +
+      '「大きな影響」「注目が集まる」のような、中身の無い言い回しで枠を埋めないこと。',
     '',
     '## 台本',
     '- lines は発話の並び。各発話に slide（そのとき表示しているスライドの添字、0始まり）を付ける。',
@@ -271,8 +301,25 @@ function buildPrompt(
       ? '- 1発話は40〜120字程度。長い説明は文を切って並べる。相手はいないので問いかけない。'
       : '- 1発話は40〜120字程度。長い説明は相手の相槌や質問を挟んで分ける。',
     '- 「何が新しいのか」「なぜ重要か」を軸にする。記事に書かれていないことは足さない。',
+    // 薄い台本は、たいてい「要点を3つ読み上げて終わり」になっている。
+    // 素材にある具体を必ず口に出させると、聴いて分かる密度になる。
+    '- **記事にある具体を必ず話す。** 数字・固有名詞・日付・場所・関係者の発言は、' +
+      '要約せずにそのまま出す。「大きな影響がありそうです」で済ませない。',
+    '- 要点を並べるだけで終わらせない。それぞれについて、' +
+      '背景（なぜ今そうなったか）と、読み手にとっての意味（何が変わるか）まで踏み込む。',
+    source.articles.length <= 1
+      ? '- 素材は1件なので、掘り下げるほうへ使うこと。同じ内容を言い換えて尺を伸ばさない。'
+      : '',
     '- 冒頭で全体を予告し、最後に一言でまとめる。',
     '- 読み上げられるので、記号や箇条書き、URL、英略語の羅列は避けて話し言葉にする。',
+    // スライドは音声の付随物で、画面を見ずに聴いている時間のほうが長い
+    // （通勤中・家事中）。「スライドを見ていきましょう」と言われても何も起きない。
+    // slide の添字は付けさせる必要があるので、スライドの存在自体は伝えたうえで、
+    // 口に出すことだけを禁じる。
+    '- **スライドの話をしてはいけない。** 聴き手は画面を見ていない前提で書くこと。' +
+      '「スライドを見ていきましょう」「画面に出ているように」「図の通り」のような、' +
+      '画面への言及や、見ることを促す言い方は一切使わない。' +
+      'スライドに書いた内容も、そこに書いてあると言わずに、自分の言葉として話す。',
     extra ? `\n## 追加の指示\n${extra}` : '',
     '',
     `# 素材（${source.articles.length}件）`,
@@ -292,7 +339,7 @@ export async function generateScript(
   language: string = DEFAULT_LANGUAGE,
 ): Promise<ScriptResult> {
   // 上限はプロンプトとスキーマの両方で言う。プロンプトだけだと守られなかった。
-  const slideCount = Math.min(source.articles.length + 1, MAX_SLIDES);
+  const slideCount = slideTarget(source.articles.length);
   const lineCount = maxLines(source.articles.length);
 
   const { data, usage } = await generateJson<{ slides: RawSlide[]; lines: ScriptLine[] }>({
