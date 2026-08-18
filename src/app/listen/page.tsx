@@ -1,5 +1,6 @@
 import { AppShell } from '@/components/AppShell';
 import { PlaybackProvider, PlayButton } from '@/components/Playback';
+import { estimateFinishAt, formatEta } from '@/lib/media/eta';
 import { listMedia } from '@/lib/media/list';
 import Link from 'next/link';
 
@@ -68,6 +69,8 @@ export default async function ListenPage() {
             <ul className="space-y-2">
               {media.map((m) => {
                 const busy = m.status !== 'ready' && m.status !== 'failed';
+                // 何分待てばいいのかが分からないと、待つか出直すかを決められない。
+                const eta = busy ? estimateFinishAt(m) : null;
                 // 途中まででも聴けるので、1つでも合成できていれば鳴らせる。
                 const playable = m.doneSegments > 0;
 
@@ -96,6 +99,12 @@ export default async function ListenPage() {
                           {m.totalSegments > 0 && ` — ${m.doneSegments}/${m.totalSegments}`}
                           {playable && '（できたところまで聴けます）'}
                         </p>
+                        {eta && (
+                          <p className="text-xs text-zinc-500">
+                            できあがりは {formatEta(eta)} ごろ
+                            <span className="ml-1 text-zinc-600">（5分ごとに少しずつ進みます）</span>
+                          </p>
+                        )}
                         {m.totalSegments > 0 && (
                           <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
                             <div

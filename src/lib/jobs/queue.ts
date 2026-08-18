@@ -72,3 +72,17 @@ export async function fail(db: SupabaseClient, jobId: number, err: unknown): Pro
   const { error } = await db.rpc('fail_job', { job_id: jobId, err: message.slice(0, 1000) });
   if (error) throw error;
 }
+
+/**
+ * 引いたまま手を付けなかったジョブをキューへ戻す。
+ *
+ * `claim` は返す前に running にして attempts を +1 するが、ワーカーは時間予算を
+ * 見ながら回るので**引いた数と処理した数は一致しない**。放っておくと 0004 の
+ * 拾い直し（15分）を待つことになり、その間そのジョブは1ミリも進まない。
+ * 時間切れは失敗ではないので attempts も戻す（`0026`）。
+ */
+export async function release(db: SupabaseClient, jobIds: number[]): Promise<void> {
+  if (jobIds.length === 0) return;
+  const { error } = await db.rpc('release_jobs', { job_ids: jobIds });
+  if (error) throw error;
+}
