@@ -18,11 +18,13 @@ export function Player({
   title,
   slides,
   segments,
+  coverUrl,
 }: {
   mediaId: string;
   title: string;
   slides: Slide[];
   segments: PlayableSegment[];
+  coverUrl: string | null;
 }) {
   const [showText, setShowText] = useState(false);
   const { audioRef, audioProps, ...p } = usePlayer({ mediaId, title, segments });
@@ -43,7 +45,12 @@ export function Player({
         「スライドが出ない」ように見えるのを防ぐ。
       */}
       <div className="min-h-32 flex-1 border-b border-zinc-800 bg-zinc-900/40">
-        <SlideView slide={pickSlide(slides, p.segment?.slideIdx)} />
+        <SlideView
+          slide={pickSlide(slides, p.segment?.slideIdx)}
+          index={slideIndex(slides, p.segment?.slideIdx)}
+          total={slides.length}
+          coverUrl={coverUrl}
+        />
       </div>
 
       {/* 字幕。読みながら聴きたいときだけ開く。 */}
@@ -134,6 +141,10 @@ export function Player({
  */
 function pickSlide(slides: Slide[], idx: number | undefined): Slide | undefined {
   if (slides.length === 0) return undefined;
-  const at = Math.min(idx ?? 0, slides.length - 1);
-  return slides[Math.max(0, at)];
+  return slides[slideIndex(slides, idx)];
+}
+
+/** 実際に出す1枚の添字。差し色と「何枚目」の表示も同じものを見る。 */
+function slideIndex(slides: Slide[], idx: number | undefined): number {
+  return Math.max(0, Math.min(idx ?? 0, slides.length - 1));
 }

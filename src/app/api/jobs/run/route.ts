@@ -117,11 +117,13 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
       let text = '';
       let html = '';
       let ok = false;
+      let imageUrl: string | null = null;
       try {
         const result = await extractArticle(article.url);
         text = result.text;
         html = result.html;
         ok = result.ok;
+        imageUrl = result.imageUrl;
       } catch {
         // 403やタイムアウトは珍しくない。ここで再試行しても大抵また失敗するので、
         // RSSの内容で妥協して先へ進める。
@@ -168,6 +170,10 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
           // 使い回しと判定したものはハッシュを残さない。残すと、次の記事が
           // それと一致して連鎖的に落ちる（判定の基準が壊れたページになる）。
           content_hash: ok ? hash : null,
+          // og:image が取れたときだけ上書きする。取れなかったときに null で
+          // 潰すと、取り込みのときに RSS の enclosure から拾った絵まで消える
+          // （本文が 403 のサイトは、フィード側の絵だけが頼りになる）。
+          ...(imageUrl ? { image_url: imageUrl } : {}),
           // 取りに行ったことを残す。これが無いと、失敗したのか順番待ちなのかが
           // 後から区別できない（0014）。
           extracted_at: new Date().toISOString(),

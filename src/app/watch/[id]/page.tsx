@@ -46,6 +46,7 @@ export default async function WatchPage({ params }: PageProps<'/watch/[id]'>) {
         title={media.title}
         slides={media.slides}
         segments={media.segments}
+        coverUrl={media.coverUrl}
       />
     </div>
   );

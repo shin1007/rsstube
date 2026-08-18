@@ -147,3 +147,31 @@ body {
   border: 1px solid #3f3f46;
   padding: 0.4em 0.6em;
 }
+
+/*
+ * スライドの切り替わり。
+ *
+ * 音だけが進んで画面が突然差し替わると、切り替わったのか元からそうだったのかが
+ * 分からない。ごく短く動かして「次に進んだ」ことを見せる。
+ * prefers-reduced-motion を出している人には動かさない。
+ */
+@keyframes slide-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.slide-enter {
+  animation: slide-enter 260ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-enter {
+    animation: none;
+  }
+}
