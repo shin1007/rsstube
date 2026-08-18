@@ -1,5 +1,6 @@
 import { Player } from '@/components/Player';
 import { SourceLinks } from '@/components/SourceLinks';
+import { estimateFinishAt, formatEta } from '@/lib/media/eta';
 import { getPlayable } from '@/lib/media/list';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -18,6 +19,12 @@ export default async function WatchPage({ params }: PageProps<'/watch/[id]'>) {
   const media = await getPlayable(id);
   if (!media) notFound();
 
+  const eta = estimateFinishAt({
+    status: media.status,
+    doneSegments: media.doneSegments,
+    totalSegments: media.totalSegments,
+  });
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-3 border-b border-zinc-800 p-3">
@@ -27,7 +34,11 @@ export default async function WatchPage({ params }: PageProps<'/watch/[id]'>) {
         <h1 className="min-w-0 flex-1 truncate text-sm font-medium">{media.title}</h1>
         {media.status !== 'ready' && (
           // 途中まででも聴ける。全部できるのを待たせない。
-          <span className="shrink-0 text-xs text-amber-500">生成中</span>
+          // 残りがどれくらいかも出す（出さないと、待つか出直すかを決められない）。
+          <span className="shrink-0 text-xs text-amber-500">
+            生成中
+            {eta && <span className="ml-1 text-zinc-500">〜{formatEta(eta)}ごろ</span>}
+          </span>
         )}
         {/*
           サーバー側の音声は30日で消える（Storage の無料枠が1GBで、1本あたり

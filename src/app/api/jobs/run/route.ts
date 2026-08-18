@@ -5,7 +5,7 @@ import { contentHash, usableAsFallback } from '@/lib/feeds/content';
 import { normalizeLanguage } from '@/lib/language';
 import { sanitizeHtml } from '@/lib/feeds/sanitize';
 import { extractArticle, htmlToText } from '@/lib/feeds/extract';
-import { claim, complete, enqueue, fail, type Job } from '@/lib/jobs/queue';
+import { claim, complete, enqueue, fail, release, type Job } from '@/lib/jobs/queue';
 import { runScriptJob, runTtsJob, TTS_PER_RUN } from '@/lib/media/jobs';
 import { authorizeCron, createAdminClient, ownerUserId } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -69,10 +69,12 @@ export const GET = POST;
 async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<number> {
   const jobs = await claim(db, EXTRACT_PER_RUN, 'extract');
   let done = 0;
+  let i = 0;
 
-  for (const job of jobs) {
-    // 引いたぶんを全部やり切る必要はない。残りは次の実行が拾い直す（0004）。
+  for (; i < jobs.length; i++) {
+    // 引いたぶんを全部やり切る必要はない。手を付けなかったぶんは下で戻す。
     if (Date.now() >= deadline) break;
+    const job = jobs[i];
     const articleId = job.payload.article_id as string | undefined;
     if (!articleId) {
       await complete(db, job.id);
@@ -189,6 +191,7 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
     }
   }
 
+  await release(db, jobs.slice(i).map((j) => j.id));
   return done;
 }
 
@@ -316,11 +319,15 @@ async function runTtsJobs(db: SupabaseClient, deadline: number): Promise<number>
   if (Date.now() >= deadline) return 0;
   const jobs = await claim(db, TTS_PER_RUN, 'tts');
   let done = 0;
-  for (const job of jobs) {
+  let i = 0;
+  for (; i < jobs.length; i++) {
     // 1セグメントに数十秒かかることがあるので、毎回残り時間を見る。
     if (Date.now() >= deadline) break;
-    if (await runTtsJob(db, job)) done++;
+    if (await runTtsJob(db, jobs[i])) done++;
   }
+  // **手を付けなかったぶんは必ず戻す。**引いた時点で running になっているので、
+  // 放っておくと15分の拾い直し待ちになり、そのぶん丸ごと止まる（0026）。
+  await release(db, jobs.slice(i).map((j) => j.id));
   return done;
 }
 

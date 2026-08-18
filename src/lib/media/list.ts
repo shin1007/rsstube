@@ -92,6 +92,9 @@ export async function getPlayable(id: string): Promise<{
   coverUrl: string | null;
   /** もとになった記事。記事1本なら1件、ダイジェストなら束ねた件数ぶん。 */
   sources: MediaSource[];
+  /** できあがったセグメント数 / 全体。残り時間の見当に使う。 */
+  doneSegments: number;
+  totalSegments: number;
 } | null> {
   const supabase = await createClient();
 
@@ -108,7 +111,8 @@ export async function getPlayable(id: string): Promise<{
     .eq('media_id', id)
     .order('idx');
 
-  const ready = (rows ?? []).filter((r) => r.audio_path);
+  const all = rows ?? [];
+  const ready = all.filter((r) => r.audio_path);
 
   // 署名は1本ぶんまとめて発行する（セグメントごとに往復すると遅い）。
   const { data: signed } = await supabase.storage
@@ -128,6 +132,8 @@ export async function getPlayable(id: string): Promise<{
     status: media.status,
     coverUrl,
     sources: await loadSources(supabase, media),
+    doneSegments: ready.length,
+    totalSegments: all.length,
     slides: (media.slides ?? []) as Slide[],
     segments: ready
       .map((r) => ({
