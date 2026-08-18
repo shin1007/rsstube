@@ -133,7 +133,15 @@ export function usePlayer({
     const el = audioRef.current;
     if (!el) return;
     el.playbackRate = speed;
-    if (playing) void el.play().catch(() => setPlaying(false));
+    if (!playing) return;
+
+    void el.play().catch((err: unknown) => {
+      // src を差し替えると、まだ解決していない play() が AbortError で転ぶ
+      // （「新しい読み込みで中断された」）。これは次のクリップを読み始めた
+      // 合図でしかないので、ここで止めると連続再生が1本ごとに切れる。
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      setPlaying(false);
+    });
   }, [current, speed, playing]);
 
   /** ロック画面・イヤホンからの操作。これが無いとポケットに入れたまま使えない。 */
@@ -191,7 +199,16 @@ export function usePlayer({
     src: segment?.url,
     preload: 'auto' as const,
     onPlay: () => setPlaying(true),
-    onPause: () => setPlaying(false),
+    /**
+     * **終端でも pause が飛ぶ。**しかも ended より先に来る（仕様の順番が
+     * 「paused を立てる → pause → ended」）。素直に受けると、次のクリップへ
+     * 進んだ時点で playing が false になっていて、再生の effect が動かない。
+     * 1本ぶん鳴らして止まるのはこれ。終端ぶんは無視して、onEnded に任せる。
+     */
+    onPause: (e: React.SyntheticEvent<HTMLAudioElement>) => {
+      if (e.currentTarget.ended) return;
+      setPlaying(false);
+    },
     onLoadedMetadata: (e: React.SyntheticEvent<HTMLAudioElement>) => {
       if (pending.current === null) return;
       e.currentTarget.currentTime = pending.current;
@@ -203,8 +220,14 @@ export function usePlayer({
     },
     onEnded: () => {
       // 最後まで来たら止める。次があるなら続けて鳴らす。
-      if (current < segments.length - 1) go(current + 1);
-      else setPlaying(false);
+      if (current < segments.length - 1) {
+        go(current + 1);
+        // 終端の pause を無視しても、他の経路で落ちている場合に備えて立て直す。
+        // ここが false のままだと、次のクリップは読み込まれるが鳴らない。
+        setPlaying(true);
+      } else {
+        setPlaying(false);
+      }
     },
   };
 
