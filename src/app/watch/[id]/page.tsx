@@ -1,4 +1,5 @@
 import { Player } from '@/components/Player';
+import { SourceLinks } from '@/components/SourceLinks';
 import { getPlayable } from '@/lib/media/list';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -33,6 +34,9 @@ export default async function WatchPage({ params }: PageProps<'/watch/[id]'>) {
           473KB/分あるため）。手元に置きたいものは消える前に落としてもらう。
           a のままにしているのは、ダウンロードは画面遷移が要らないため。
         */}
+        {/* 聴いて気になったら原文へ行けるように。無いと音声が行き止まりになる。 */}
+        <SourceLinks sources={media.sources} />
+
         <a
           href={`/api/media/${id}/download`}
           className="shrink-0 rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"

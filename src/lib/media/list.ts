@@ -24,6 +24,17 @@ export type MediaSummary = {
   /** 出来上がったセグメント数 / 全体。生成中の進み具合を出すため。 */
   doneSegments: number;
   totalSegments: number;
+  /**
+   * 元記事のURL。記事1本ぶんの音声のときだけ入る。
+   * ダイジェストは束ねた記事が複数あるので、1本には決まらない（再生ページで一覧にする）。
+   */
+  sourceUrl: string | null;
+};
+
+/** 音声のもとになった記事。再生ページから元記事へ辿るために出す。 */
+export type MediaSource = {
+  title: string;
+  url: string;
 };
 
 export type PlayableSegment = {
@@ -39,7 +50,10 @@ export async function listMedia(limit = 30): Promise<MediaSummary[]> {
 
   const { data, error } = await supabase
     .from('media')
-    .select('id, kind, title, status, duration_sec, created_at, last_error, media_segments (audio_path)')
+    .select(
+      'id, kind, title, status, duration_sec, created_at, last_error,' +
+        ' media_segments (audio_path), articles (url)',
+    )
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -53,6 +67,8 @@ export async function listMedia(limit = 30): Promise<MediaSummary[]> {
     created_at: string;
     last_error: string | null;
     media_segments: { audio_path: string | null }[];
+    // media.article_id の参照先。ダイジェストは article_id が null なので来ない。
+    articles: { url: string } | null;
   }[]).map((m) => ({
     id: m.id,
     kind: m.kind,
@@ -63,6 +79,7 @@ export async function listMedia(limit = 30): Promise<MediaSummary[]> {
     lastError: m.last_error,
     doneSegments: m.media_segments.filter((s) => s.audio_path).length,
     totalSegments: m.media_segments.length,
+    sourceUrl: m.articles?.url ?? null,
   }));
 }
 
@@ -73,12 +90,14 @@ export async function getPlayable(id: string): Promise<{
   segments: PlayableSegment[];
   /** 表紙画像の署名付きURL。記事に絵が無ければ null（スライドは文字だけになる）。 */
   coverUrl: string | null;
+  /** もとになった記事。記事1本なら1件、ダイジェストなら束ねた件数ぶん。 */
+  sources: MediaSource[];
 } | null> {
   const supabase = await createClient();
 
   const { data: media } = await supabase
     .from('media')
-    .select('id, title, status, slides, cover_path')
+    .select('id, title, status, slides, cover_path, kind, article_id, digest_id')
     .eq('id', id)
     .maybeSingle();
   if (!media) return null;
@@ -108,6 +127,7 @@ export async function getPlayable(id: string): Promise<{
     title: media.title,
     status: media.status,
     coverUrl,
+    sources: await loadSources(supabase, media),
     slides: (media.slides ?? []) as Slide[],
     segments: ready
       .map((r) => ({
@@ -120,4 +140,45 @@ export async function getPlayable(id: string): Promise<{
       // 署名が取れなかったものは再生できないので落とす。
       .filter((s) => s.url),
   };
+}
+
+/**
+ * その音声のもとになった記事を、話した順に返す。
+ *
+ * 聴いていて「元記事を読みたい」と思ったときに辿れないと、音声が行き止まりになる。
+ * ダイジェストは束ねた記事ぶん並べる（digests.article_ids が選抜順）。
+ *
+ * **並べ替えは in() の結果ではなく article_ids の順で行う。** PostgREST は
+ * in() に渡した順では返さないので、DB から来た順に出すと話した順とずれる。
+ */
+async function loadSources(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  media: { kind: string; article_id: string | null; digest_id: string | null },
+): Promise<MediaSource[]> {
+  let ids: string[] = [];
+
+  if (media.kind === 'article' && media.article_id) {
+    ids = [media.article_id];
+  } else if (media.digest_id) {
+    const { data: digest } = await supabase
+      .from('digests')
+      .select('article_ids')
+      .eq('id', media.digest_id)
+      .maybeSingle();
+    ids = (digest?.article_ids ?? []) as string[];
+  }
+
+  if (ids.length === 0) return [];
+
+  const { data } = await supabase.from('articles').select('id, title, url').in('id', ids);
+
+  const byId = new Map(
+    ((data ?? []) as { id: string; title: string; url: string }[]).map((a) => [a.id, a]),
+  );
+
+  // 消えた記事（保持期間の掃除）は飛ばす。
+  return ids.flatMap((id) => {
+    const a = byId.get(id);
+    return a ? [{ title: a.title, url: a.url }] : [];
+  });
 }

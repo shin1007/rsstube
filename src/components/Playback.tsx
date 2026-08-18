@@ -2,7 +2,8 @@
 
 import { loadPlayable } from '@/app/actions/media';
 import { SeekBar } from '@/components/SeekBar';
-import type { PlayableSegment } from '@/lib/media/list';
+import { SourceLinks } from '@/components/SourceLinks';
+import type { MediaSource, PlayableSegment } from '@/lib/media/list';
 import { fmtTime, usePlayer } from '@/lib/media/usePlayer';
 import Link from 'next/link';
 import { createContext, useCallback, useContext, useState, useTransition } from 'react';
@@ -26,16 +27,21 @@ const PlaybackContext = createContext<((t: Target) => void) | null>(null);
 export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [target, setTarget] = useState<Target | null>(null);
   const [segments, setSegments] = useState<PlayableSegment[] | null>(null);
+  const [sources, setSources] = useState<MediaSource[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
 
   const play = useCallback((t: Target) => {
     setTarget(t);
     setSegments(null);
+    setSources([]);
     setError(null);
     startLoading(async () => {
       const r = await loadPlayable(t.id);
-      if (r.ok) setSegments(r.segments);
+      if (r.ok) {
+        setSegments(r.segments);
+        setSources(r.sources);
+      }
       else setError(r.message);
     });
   }, []);
@@ -53,6 +59,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           <div className="mx-auto max-w-2xl space-y-2 p-3 pb-2 md:pb-3">
             <div className="flex items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-xs text-zinc-300">{target.title}</span>
+              <SourceLinks sources={sources} dropUp />
               <Link
                 href={`/watch/${target.id}`}
                 className="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:text-zinc-100"

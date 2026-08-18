@@ -1,7 +1,7 @@
 'use server';
 
 import { requestMedia, type MediaTarget } from '@/lib/media/create';
-import { getPlayable, type PlayableSegment } from '@/lib/media/list';
+import { getPlayable, type MediaSource, type PlayableSegment } from '@/lib/media/list';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
@@ -90,7 +90,7 @@ async function run(
  * その場で取りに行く。
  */
 export type PlayableResult =
-  | { ok: true; title: string; segments: PlayableSegment[] }
+  | { ok: true; title: string; segments: PlayableSegment[]; sources: MediaSource[] }
   | { ok: false; message: string };
 
 export async function loadPlayable(id: string): Promise<PlayableResult> {
@@ -99,5 +99,5 @@ export async function loadPlayable(id: string): Promise<PlayableResult> {
   if (media.segments.length === 0) {
     return { ok: false, message: 'まだ再生できる音声がありません' };
   }
-  return { ok: true, title: media.title, segments: media.segments };
+  return { ok: true, title: media.title, segments: media.segments, sources: media.sources };
 }
