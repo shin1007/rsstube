@@ -4,7 +4,7 @@ import { synthesize } from '@/lib/ai/tts';
 import { RetryableError, SCRIPT_MODEL } from '@/lib/ai/gemini';
 import { TTS_MODEL } from '@/lib/ai/tts';
 import { recordUsage } from '@/lib/ai/usage';
-import { complete, enqueueMany, fail, type Job } from '@/lib/jobs/queue';
+import { complete, enqueueMany, fail, release, type Job } from '@/lib/jobs/queue';
 import { fetchImageUrl } from '@/lib/feeds/image';
 import { storeCover } from '@/lib/media/cover';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -118,7 +118,15 @@ export async function runScriptJob(db: SupabaseClient, job: Job): Promise<boolea
 
 // ---------------------------------------------------------------- tts
 
-export async function runTtsJob(db: SupabaseClient, job: Job): Promise<boolean> {
+/**
+ * @param hardDeadline これを過ぎたら合成を打ち切る時刻（epoch ms）。
+ *   関数ごと落とされるより、打ち切ってジョブを戻すほうがはるかに速く復帰する。
+ */
+export async function runTtsJob(
+  db: SupabaseClient,
+  job: Job,
+  hardDeadline: number,
+): Promise<boolean> {
   const mediaId = job.payload.media_id as string | undefined;
   const idx = job.payload.idx as number | undefined;
   if (!mediaId || idx === undefined) {
@@ -165,6 +173,7 @@ export async function runTtsJob(db: SupabaseClient, job: Job): Promise<boolean> 
     const { mp3, durationSec, usage } = await synthesize(
       group.lines,
       (media.voice_mode ?? 'dialogue') as VoiceMode,
+      AbortSignal.timeout(Math.max(5_000, hardDeadline - Date.now())),
     );
     await recordUsage(db, TTS_MODEL, usage.inputTokens, usage.outputTokens, true);
 
@@ -186,6 +195,14 @@ export async function runTtsJob(db: SupabaseClient, job: Job): Promise<boolean> 
     await finishIfDone(db, mediaId);
     return true;
   } catch (err) {
+    // **打ち切りは失敗ではない。**時間が足りなかっただけなので、
+    // バックオフも attempts も付けずにそのままキューへ戻す。
+    // fail に回すと 3^attempts 分の待ちが入り、次の巡回で拾えなくなる。
+    if (isAborted(err)) {
+      await release(db, [job.id]);
+      return false;
+    }
+
     await recordUsage(db, TTS_MODEL, 0, 0, false);
     // 合成の失敗は1セグメントぶん。media 全体を落とさず、そのジョブだけ再試行する。
     await markFailed(db, mediaId, err, false);
@@ -403,4 +420,13 @@ async function resolveCoverUrl(
   }
 
   return null;
+}
+
+
+/** AbortSignal.timeout() で打ち切られたか。名前でしか見分けられない。 */
+function isAborted(err: unknown): boolean {
+  return (
+    (err instanceof DOMException && err.name === 'TimeoutError') ||
+    (err instanceof Error && /abort|timeout/i.test(err.name))
+  );
 }

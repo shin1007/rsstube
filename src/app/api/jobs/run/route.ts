@@ -39,6 +39,25 @@ const SCRIPT_PER_RUN = 1;
  */
 const TIME_BUDGET_MS = 45_000;
 
+/**
+ * 外部呼び出しを打ち切る線。maxDuration(60秒)より手前に置く。
+ *
+ * 予算を見るのは**仕事と仕事の間だけ**なので、1回の呼び出しが長引くと
+ * そのまま maxDuration を超えて関数ごと落とされる
+ * （FUNCTION_INVOCATION_TIMEOUT。実際に起きた）。落とされると complete も
+ * fail も呼べず、running のジョブが15分の拾い直し待ちになる。
+ * 打ち切って自分で片付けるほうが、はるかに速く次へ進む。
+ */
+const HARD_LIMIT_MS = 52_000;
+
+/**
+ * 合成を1件始めるのに要る残り時間。
+ *
+ * 実測で1件20〜40秒かかる。残りわずかで始めても打ち切られるだけなので、
+ * 足りないなら手を付けずに次の巡回へ回す。
+ */
+const MIN_TTS_SLICE_MS = 20_000;
+
 export async function POST(request: Request) {
   if (!authorizeCron(request)) {
     return new Response('unauthorized', { status: 401 });
@@ -46,12 +65,13 @@ export async function POST(request: Request) {
 
   const db = createAdminClient();
   const deadline = Date.now() + TIME_BUDGET_MS;
+  const hardDeadline = Date.now() + HARD_LIMIT_MS;
 
   const extracted = await runExtractJobs(db, deadline);
   const summarized = await runSummarizeJobs(db, deadline);
   // 音声は要約より後。要約が付いていない記事から台本を作っても薄くなる。
   const scripted = await runScriptJobs(db, deadline);
-  const synthesized = await runTtsJobs(db, deadline);
+  const synthesized = await runTtsJobs(db, deadline, hardDeadline);
 
   return Response.json({
     extracted,
@@ -315,15 +335,20 @@ async function runScriptJobs(db: SupabaseClient, deadline: number): Promise<numb
  * 3回ほどの実行（15分ほど）で1本仕上がる。朝までに間に合えばよいので、
  * 無料枠を一度に食わないほうを取る。
  */
-async function runTtsJobs(db: SupabaseClient, deadline: number): Promise<number> {
+async function runTtsJobs(
+  db: SupabaseClient,
+  deadline: number,
+  hardDeadline: number,
+): Promise<number> {
   if (Date.now() >= deadline) return 0;
   const jobs = await claim(db, TTS_PER_RUN, 'tts');
   let done = 0;
   let i = 0;
   for (; i < jobs.length; i++) {
-    // 1セグメントに数十秒かかることがあるので、毎回残り時間を見る。
-    if (Date.now() >= deadline) break;
-    if (await runTtsJob(db, jobs[i])) done++;
+    // 1セグメントに数十秒かかる。**残りわずかなら始めない。**
+    // 始めても打ち切られるだけで、そのぶん次の巡回が遅れる。
+    if (deadline - Date.now() < MIN_TTS_SLICE_MS) break;
+    if (await runTtsJob(db, jobs[i], hardDeadline)) done++;
   }
   // **手を付けなかったぶんは必ず戻す。**引いた時点で running になっているので、
   // 放っておくと15分の拾い直し待ちになり、そのぶん丸ごと止まる（0026）。
