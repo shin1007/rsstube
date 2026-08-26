@@ -23,6 +23,8 @@ export function FeedHealth({ feeds }: { feeds: SubscribedFeed[] }) {
       createdAt: f.created_at,
       extracted: f.extracted,
       unreadable: f.unreadable,
+      ingested: f.ingested,
+      undated: f.undated,
     })),
   );
 
@@ -35,7 +37,8 @@ export function FeedHealth({ feeds }: { feeds: SubscribedFeed[] }) {
       </h2>
       <p className="mb-2 text-xs text-zinc-500">
         取れなくなったもの、取れてはいるが更新が止まっているもの、
-        フィードは正常なのに<span className="text-zinc-400">記事の本文だけ取れない</span>ものです。
+        フィードは正常なのに<span className="text-zinc-400">記事の本文だけ取れない</span>もの、
+        <span className="text-zinc-400">記事に日付が入っていない</span>ものです。
         どれも実害は小さいので、気になったときに整理すれば十分です。
       </p>
 
@@ -49,7 +52,9 @@ export function FeedHealth({ feeds }: { feeds: SubscribedFeed[] }) {
                     ? 'bg-red-950 text-red-300'
                     : health.level === 'failing'
                       ? 'bg-amber-950 text-amber-300'
-                      : health.level === 'unreadable'
+                      : health.level === 'undated'
+                        ? 'bg-violet-950 text-violet-300'
+                        : health.level === 'unreadable'
                         ? 'bg-sky-950 text-sky-300'
                         : 'bg-zinc-800 text-zinc-400'
                 }`}

@@ -120,3 +120,47 @@ describe('needsAttention', () => {
     expect(needsAttention([{ errorCount: 0, lastArticleAt: daysAgo(1) }], NOW)).toEqual([]);
   });
 });
+
+describe('日付が入らないフィード', () => {
+  it('ほぼ全部に日付が無ければ知らせる', () => {
+    // 千葉県の実データ（100件中100件）。取得も本文も要約も正常なので、
+    // これが出ないと「新着が来ていない」としか見えない。
+    const health = classifyFeed(
+      { errorCount: 0, lastArticleAt: daysAgo(1), ingested: 100, undated: 100 },
+      NOW,
+    );
+    expect(health.level).toBe('undated');
+    expect(health.reason).toContain('100件');
+  });
+
+  it('一部に無いだけなら騒がない', () => {
+    // 日付を打たない項目が混ざるフィードは普通にある（鎌ケ谷市など）。
+    expect(
+      classifyFeed({ errorCount: 0, lastArticleAt: daysAgo(1), ingested: 100, undated: 20 }, NOW)
+        .level,
+    ).toBe('ok');
+  });
+
+  it('件数が少ないうちは割合を見ない', () => {
+    expect(
+      classifyFeed({ errorCount: 0, lastArticleAt: daysAgo(1), ingested: 3, undated: 3 }, NOW).level,
+    ).toBe('ok');
+  });
+
+  it('本文が取れないほうを先に出す', () => {
+    // どちらも当てはまるときは、要約が薄くなるほうが重い。
+    expect(
+      classifyFeed(
+        {
+          errorCount: 0,
+          lastArticleAt: daysAgo(1),
+          extracted: 100,
+          unreadable: 90,
+          ingested: 100,
+          undated: 100,
+        },
+        NOW,
+      ).level,
+    ).toBe('unreadable');
+  });
+});

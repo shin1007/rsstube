@@ -26,6 +26,10 @@ export type SubscribedFeed = {
   extracted: number;
   /** そのうち本文を取れなかった件数。 */
   unreadable: number;
+  /** 直近60日に取り込んだ件数（0030）。日付なしの母数。 */
+  ingested: number;
+  /** そのうち日付が入っていない件数。 */
+  undated: number;
 };
 
 type Row = {
@@ -63,7 +67,7 @@ export async function listSubscribedFeeds(): Promise<SubscribedFeed[]> {
    */
   const { data: stats } = await supabase.rpc('feed_content_stats');
   const byFeed = new Map(
-    ((stats ?? []) as { feed_id: string; extracted: number; unreadable: number }[]).map((s) => [
+    ((stats ?? []) as { feed_id: string; ingested: number; extracted: number; unreadable: number; undated: number }[]).map((s) => [
       s.feed_id,
       s,
     ]),
@@ -84,6 +88,8 @@ export async function listSubscribedFeeds(): Promise<SubscribedFeed[]> {
       created_at: r.feeds.created_at,
       extracted: Number(byFeed.get(r.feeds.id)?.extracted ?? 0),
       unreadable: Number(byFeed.get(r.feeds.id)?.unreadable ?? 0),
+      ingested: Number(byFeed.get(r.feeds.id)?.ingested ?? 0),
+      undated: Number(byFeed.get(r.feeds.id)?.undated ?? 0),
     }))
     // 並べ替えは件数が少ないのでこちらで。埋め込み先の列では order できない。
     .sort((a, b) => a.title.localeCompare(b.title, 'ja'));

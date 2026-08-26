@@ -21,7 +21,7 @@
  */
 
 export type FeedHealth = {
-  level: 'ok' | 'stale' | 'unreadable' | 'failing' | 'dead';
+  level: 'ok' | 'stale' | 'undated' | 'unreadable' | 'failing' | 'dead';
   /** 画面に出す一言。level だけだと何をすればいいか分からない。 */
   reason: string;
 };
@@ -37,6 +37,10 @@ export type FeedHealthInput = {
   extracted?: number;
   /** そのうち本文を取れなかった数。 */
   unreadable?: number;
+  /** 直近60日に取り込んだ記事のうち、日付が入っていない数（`0030`）。 */
+  undated?: number;
+  /** 直近60日に取り込んだ記事の数。undated の母数。 */
+  ingested?: number;
 };
 
 /** これだけ連続で失敗していたら、一時的な不調ではなく壊れているとみなす。 */
@@ -63,6 +67,17 @@ const UNREADABLE_RATIO = 0.5;
  * ほぼ必ず引っかかる。
  */
 const UNREADABLE_MIN_ARTICLES = 10;
+
+/**
+ * 日付なしがこの割合を超えたら知らせる。
+ *
+ * 半分にしないのは、日付を打たない項目が混ざるフィードが普通にあるため
+ * （鎌ケ谷市は8件が同じ 00:00 で入っている）。「ほぼ全部に無い」ときだけ出す。
+ */
+const UNDATED_RATIO = 0.8;
+
+/** 割合を見る前に要る件数。少数の取りこぼしで騒がないため。 */
+const UNDATED_MIN_ARTICLES = 10;
 /** 登録からこの日数は、記事が来なくても様子を見る。 */
 const GRACE_DAYS = 14;
 
@@ -116,6 +131,21 @@ export function classifyFeed(feed: FeedHealthInput, now = Date.now()): FeedHealt
     };
   }
 
+  // 日付が入っていない記事。取得も本文も要約も正常なので、どの数字にも出ない。
+  // 一覧は nulls last で並べるので、その記事は末尾に沈む——見ている側には
+  // 「新着が来ていない」としか映らない（千葉県の103件がそうだった）。
+  const ingested = feed.ingested ?? 0;
+  const undated = feed.undated ?? 0;
+  if (ingested >= UNDATED_MIN_ARTICLES && undated / ingested >= UNDATED_RATIO) {
+    return {
+      level: 'undated',
+      reason:
+        `直近60日の${ingested}件のうち${undated}件に日付が入っていません。` +
+        `一覧の末尾に沈むので新着に気づけません。` +
+        `フィードが規格外のタイムゾーン名を使っている可能性があります（lib/feeds/date.ts）`,
+    };
+  }
+
   return { level: 'ok', reason: '' };
 }
 
@@ -126,7 +156,7 @@ export function needsAttention<T extends FeedHealthInput>(
 ): { feed: T; health: FeedHealth }[] {
   // 重いものが上。読めないフィードは「更新なし」より手当ての価値がある
   // （毎日記事が来るのに、その全部が薄いままなので）。
-  const order = { dead: 0, failing: 1, unreadable: 2, stale: 3, ok: 4 };
+  const order = { dead: 0, failing: 1, unreadable: 2, undated: 3, stale: 4, ok: 5 };
 
   return feeds
     .map((feed) => ({ feed, health: classifyFeed(feed, now) }))
