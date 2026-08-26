@@ -235,7 +235,11 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
        * 取り直しでも駄目だったものまで積むと、同じ RSS 抜粋から同じ要約を
        * もう一度作ることになり、無料枠を1回ぶん捨てる。
        */
-      if (attempts === 1 || ok) {
+      // **中身が1文字も無いなら要約しない。** タイトルしか無い記事に要約を
+      // 頼むと、モデルは「本文や具体的な情報は存在しない」という*入力の説明*を
+      // 返してくる。それが一覧に並ぶうえ、無料枠も1件ぶん使う。
+      // 実データで43件（漫画の各話・審議会の資料ページなど）がこれだった。
+      if (text.trim() && (attempts === 1 || ok)) {
         await enqueue(db, 'summarize', { article_id: articleId });
       }
 
@@ -294,12 +298,28 @@ async function runSummarizeJobs(db: SupabaseClient, deadline: number): Promise<n
       .select('id, title, content_text, content_ok')
       .in('id', [...byArticle.keys()]);
 
-    const inputs: SummaryInput[] = (articles ?? []).map((a) => ({
-      id: a.id,
-      title: a.title,
-      text: a.content_text ?? '',
-      contentOk: a.content_ok,
-    }));
+    /**
+     * 中身が空の記事はモデルに渡さない。
+     *
+     * 積む側でも弾いているが、手で積み直したぶんや、以前のコードで積まれた
+     * ぶんがここに来る。渡すと「本文や具体的な情報は存在しない」という
+     * 入力の説明が返ってきて、それが要約として保存される。
+     * ジョブは完了扱いにする——待たせても中身が増えることはない。
+     */
+    const inputs: SummaryInput[] = [];
+    for (const a of articles ?? []) {
+      const text = (a.content_text ?? '').trim();
+      if (!text) {
+        const job = byArticle.get(a.id);
+        if (job) {
+          await complete(db, job.id);
+          byArticle.delete(a.id);
+        }
+        continue;
+      }
+      inputs.push({ id: a.id, title: a.title, text, contentOk: a.content_ok });
+    }
+    if (inputs.length === 0) continue;
 
     try {
       const { results, model, usage } = await summarizeBatch(inputs, language);
