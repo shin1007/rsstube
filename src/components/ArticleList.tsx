@@ -559,7 +559,14 @@ function Row({
           </ul>
         ) : (
           <p className="mt-1.5 line-clamp-2 text-xs text-zinc-500">
-            {article.excerpt ?? '要約待ち…'}
+            {/*
+              **「要約待ち…」は待てば来るときだけ出す。**
+              本文もRSSの抜粋も無い記事には要約を作らない（モデルに渡しても
+              「本文は存在しない」という入力の説明が返るだけなので）。
+              取りに行った跡（extracted_at）があるのに何も無いなら、
+              待っても何も来ない。そう書かないと永久に待たせることになる。
+            */}
+            {article.excerpt ?? (article.extracted_at ? '本文なし（元記事で読めます）' : '要約待ち…')}
           </p>
         )}
 
