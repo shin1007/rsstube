@@ -2,6 +2,7 @@ import { BATCH_SIZE, summarizeBatch, type SummaryInput } from '@/lib/ai/summariz
 import { SUMMARY_MODEL } from '@/lib/ai/gemini';
 import { recordUsage } from '@/lib/ai/usage';
 import { contentHash, usableAsFallback } from '@/lib/feeds/content';
+import { classifyError, retryAt, shouldRetry, type ExtractFailure } from '@/lib/feeds/retry';
 import { normalizeLanguage } from '@/lib/language';
 import { sanitizeHtml } from '@/lib/feeds/sanitize';
 import { extractArticle, htmlToText } from '@/lib/feeds/extract';
@@ -115,7 +116,7 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
     try {
       const { data: article } = await db
         .from('articles')
-        .select('id, url, feed_id, rss_html, excerpt')
+        .select('id, url, feed_id, rss_html, excerpt, extract_attempts')
         .eq('id', articleId)
         .single();
 
@@ -147,19 +148,26 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
         return null;
       };
 
+      // 何回目か。取り直しの上限に使う（0028）。
+      const attempts = (article.extract_attempts ?? 0) + 1;
+
       let text = '';
       let html = '';
       let ok = false;
       let imageUrl: string | null = null;
+      // 取れなかったときの理由。あとで取り直すかどうかをこれで決める（0028）。
+      let failure: ExtractFailure | null = null;
       try {
         const result = await extractArticle(article.url);
         text = result.text;
         html = result.html;
         ok = result.ok;
         imageUrl = result.imageUrl;
-      } catch {
-        // 403やタイムアウトは珍しくない。ここで再試行しても大抵また失敗するので、
-        // RSSの内容で妥協して先へ進める。
+        if (!ok) failure = 'short';
+      } catch (e) {
+        // 403やタイムアウトは珍しくない。ここで即座に再試行しても大抵また失敗するので、
+        // RSSの内容で妥協して先へ進め、**理由に見込みがあるものだけ後で取り直す**。
+        failure = classifyError(e);
       }
 
       // 同じフィードで本文が丸ごと一致したら、記事ではなく使い回しのページ
@@ -169,6 +177,9 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
         hash = contentHash(text);
         if (hash && (await isRecycledPage(db, article.feed_id, articleId, hash))) {
           ok = false;
+          // 掴んだのがメニューや同意画面なら、相手の作りがそのままである限り
+          // 何度取り直しても同じものが返る。取り直しの対象から外す。
+          failure = 'recycled';
         }
       }
 
@@ -210,12 +221,37 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
           // 取りに行ったことを残す。これが無いと、失敗したのか順番待ちなのかが
           // 後から区別できない（0014）。
           extracted_at: new Date().toISOString(),
+          // なぜ取れなかったか（0028）。成功したら消す——取り直しで取れた記事に
+          // 古い理由が残ると、あとで数えたときに失敗として数えてしまう。
+          extract_fail: failure,
+          extract_attempts: attempts,
         })
         .eq('id', articleId);
       if (updateError) throw updateError;
 
-      await enqueue(db, 'summarize', { article_id: articleId });
+      /**
+       * 要約を積むのは、初回か、取り直して**実際に本文が取れたとき**だけ。
+       *
+       * 取り直しでも駄目だったものまで積むと、同じ RSS 抜粋から同じ要約を
+       * もう一度作ることになり、無料枠を1回ぶん捨てる。
+       */
+      if (attempts === 1 || ok) {
+        await enqueue(db, 'summarize', { article_id: articleId });
+      }
+
       await complete(db, job.id);
+
+      /**
+       * 見込みのあるものだけ、後でもう一度取りに行く（`lib/feeds/retry.ts`）。
+       *
+       * **complete() より後に積むこと。** `jobs_pending_unique_idx` は
+       * ('queued','running') を対象にしているので、このジョブが running の間は
+       * 同じ (extract, article_id) が 23505 で黙って捨てられる。
+       */
+      if (failure && shouldRetry(failure, attempts)) {
+        await enqueue(db, 'extract', { article_id: articleId }, undefined, retryAt());
+      }
+
       done++;
     } catch (err) {
       await fail(db, job.id, err);

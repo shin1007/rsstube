@@ -21,6 +21,8 @@ export function FeedHealth({ feeds }: { feeds: SubscribedFeed[] }) {
       lastError: f.last_error,
       lastArticleAt: f.last_article_at,
       createdAt: f.created_at,
+      extracted: f.extracted,
+      unreadable: f.unreadable,
     })),
   );
 
@@ -32,9 +34,9 @@ export function FeedHealth({ feeds }: { feeds: SubscribedFeed[] }) {
         気になるフィード（{problems.length}）
       </h2>
       <p className="mb-2 text-xs text-zinc-500">
-        取れなくなったものと、取れてはいるが更新が止まっているものです。
-        止まっていても実害は小さい（巡回のたびに条件付きGETが1回走るだけ）ので、
-        気になったときに整理すれば十分です。
+        取れなくなったもの、取れてはいるが更新が止まっているもの、
+        フィードは正常なのに<span className="text-zinc-400">記事の本文だけ取れない</span>ものです。
+        どれも実害は小さいので、気になったときに整理すれば十分です。
       </p>
 
       <ul className="divide-y divide-zinc-900 rounded border border-zinc-800">
@@ -47,15 +49,27 @@ export function FeedHealth({ feeds }: { feeds: SubscribedFeed[] }) {
                     ? 'bg-red-950 text-red-300'
                     : health.level === 'failing'
                       ? 'bg-amber-950 text-amber-300'
-                      : 'bg-zinc-800 text-zinc-400'
+                      : health.level === 'unreadable'
+                        ? 'bg-sky-950 text-sky-300'
+                        : 'bg-zinc-800 text-zinc-400'
                 }`}
               >
-                {health.level === 'dead' ? '壊れている' : health.level === 'failing' ? '不調' : '更新なし'}
+                {health.level === 'dead'
+                  ? '壊れている'
+                  : health.level === 'failing'
+                    ? '不調'
+                    : health.level === 'unreadable'
+                      ? '本文が取れない'
+                      : '更新なし'}
               </span>
               <span className="min-w-0 flex-1 truncate text-sm">{feed.title || feed.url}</span>
               {/* URLが変わっただけのことがある。やめる前にこちらを試す
-                  （id が変わらないのでフォルダも既読もそのまま残る）。 */}
-              {health.level !== 'stale' && <RelocateButton feedId={feed.id} />}
+                  （id が変わらないのでフォルダも既読もそのまま残る）。
+                  「本文が取れない」には出さない——フィードのURLは正常で、
+                  探し直しても同じものが見つかるだけ。 */}
+              {(health.level === 'dead' || health.level === 'failing') && (
+                <RelocateButton feedId={feed.id} />
+              )}
               <UnsubscribeButton
                 feedId={feed.id}
                 title={feed.title || feed.url}
