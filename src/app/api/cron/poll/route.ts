@@ -27,14 +27,18 @@ export async function POST(request: Request) {
 
   const db = createAdminClient();
 
-  // 最後に取得してから古い順。連続失敗しているフィードは間隔を空ける
-  // （error_count 時間ぶん待つ。10回失敗すれば10時間に1回まで落ちる）。
-  const { data: feeds, error } = await db
-    .from('feeds')
-    // site_url は、行方不明になったフィードを探し直すときの手がかりになる。
-    .select('id, url, site_url, title, etag, last_modified, last_fetched_at, error_count')
-    .order('last_fetched_at', { ascending: true, nullsFirst: true })
-    .limit(FEEDS_PER_RUN);
+  /**
+   * 最後に取得してから古い順。連続失敗しているフィードは間隔を空ける
+   * （error_count 時間ぶん待つ。10回失敗すれば10時間に1回まで落ちる）。
+   *
+   * **`feeds` を直に見ないこと（`0029`）。** feeds は全ユーザー共通で購読の有無を
+   * 持たないので、直に見ると**購読をやめたフィードも毎時取りに行き続ける**。
+   * 記事は入り続け、本文抽出と要約（Gemini の無料枠）もそのまま走るのに、
+   * 画面には出ないので表からは分からない。掃除（purge_orphan_feeds）は
+   * スターや書き出し済みの記事が残っているフィードを消さないため、
+   * 印を付けた記事があるフィードは解除後も永久に残り、永久に巡回されていた。
+   */
+  const { data: feeds, error } = await db.rpc('feeds_to_poll', { job_limit: FEEDS_PER_RUN });
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
