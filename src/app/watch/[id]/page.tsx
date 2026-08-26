@@ -1,3 +1,4 @@
+import { MediaRetryButton } from '@/components/MediaRetryButton';
 import { Player } from '@/components/Player';
 import { SourceLinks } from '@/components/SourceLinks';
 import { estimateFinishAt, formatEta } from '@/lib/media/eta';
@@ -32,13 +33,29 @@ export default async function WatchPage({ params }: PageProps<'/watch/[id]'>) {
           ← 一覧
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-sm font-medium">{media.title}</h1>
-        {media.status !== 'ready' && (
-          // 途中まででも聴ける。全部できるのを待たせない。
-          // 残りがどれくらいかも出す（出さないと、待つか出直すかを決められない）。
-          <span className="shrink-0 text-xs text-amber-500">
-            生成中
-            {eta && <span className="ml-1 text-zinc-500">〜{formatEta(eta)}ごろ</span>}
-          </span>
+        {media.status === 'failed' ? (
+          // **失敗を「生成中」と出さないこと。** status を ready かどうかだけで
+          // 見ていたので、諦めた音声もここでは永久に生成中に見えていた。
+          <>
+            <span className="shrink-0 text-xs text-red-400">
+              失敗
+              {media.totalSegments > 0 && (
+                <span className="ml-1 text-zinc-500">
+                  {media.doneSegments}/{media.totalSegments}
+                </span>
+              )}
+            </span>
+            <MediaRetryButton id={id} />
+          </>
+        ) : (
+          media.status !== 'ready' && (
+            // 途中まででも聴ける。全部できるのを待たせない。
+            // 残りがどれくらいかも出す（出さないと、待つか出直すかを決められない）。
+            <span className="shrink-0 text-xs text-amber-500">
+              生成中
+              {eta && <span className="ml-1 text-zinc-500">〜{formatEta(eta)}ごろ</span>}
+            </span>
+          )
         )}
         {/*
           サーバー側の音声は30日で消える（Storage の無料枠が1GBで、1本あたり

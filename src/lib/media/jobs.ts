@@ -211,6 +211,28 @@ export async function runTtsJob(
   }
 }
 
+/**
+ * 生成中のまま、動かす人がいなくなった media を failed に落とす（`0027`）。
+ *
+ * markFailed は 429・503 のような「あとで再試行される類」で status を動かさない。
+ * それ自体は正しい（1セグメント転んだだけで全体を殺さないため）が、**ジョブ側が
+ * max_attempts で諦めたあとに media を落とす人がどこにもいなかった。**
+ * その結果 /listen は ready でも failed でもない行を「合成中」として扱い、
+ * できあがり予定時刻を永久に出し続ける。しかも failed ではないので
+ * 作り直しの導線も出ない（実際に1本が8日間この状態で残った）。
+ *
+ * 判定はジョブ側に任せる。生きたジョブ（queued / running）が1つも無くなった
+ * ときだけ落とす。ここで独自に「何分経ったら」と決めると、fail_job の
+ * バックオフ（最大12時間）と食い違って、まだ生きているものを殺す。
+ *
+ * @returns 落とした本数
+ */
+export async function failAbandonedMedia(db: SupabaseClient): Promise<number> {
+  const { data, error } = await db.rpc('fail_abandoned_media');
+  if (error) throw error;
+  return (data as number) ?? 0;
+}
+
 /** 全セグメントが揃っていれば ready にして、合計の長さを入れる。 */
 async function finishIfDone(db: SupabaseClient, mediaId: string): Promise<void> {
   const { data: segments } = await db

@@ -6,7 +6,7 @@ import { normalizeLanguage } from '@/lib/language';
 import { sanitizeHtml } from '@/lib/feeds/sanitize';
 import { extractArticle, htmlToText } from '@/lib/feeds/extract';
 import { claim, complete, enqueue, fail, release, type Job } from '@/lib/jobs/queue';
-import { runScriptJob, runTtsJob, TTS_PER_RUN } from '@/lib/media/jobs';
+import { failAbandonedMedia, runScriptJob, runTtsJob, TTS_PER_RUN } from '@/lib/media/jobs';
 import { authorizeCron, createAdminClient, ownerUserId } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -73,11 +73,22 @@ export async function POST(request: Request) {
   const scripted = await runScriptJobs(db, deadline);
   const synthesized = await runTtsJobs(db, deadline, hardDeadline);
 
+  /**
+   * 誰も動かさなくなった音声を落とす。
+   *
+   * **時間予算の外で必ず通す。** ここを予算の中に置くと、忙しい日ほど
+   * 飛ばされて、詰まった音声が「合成中」のまま何日も残る（それが元の壊れ方）。
+   * SQL を1回叩くだけなので、予算を気にする重さではない。
+   * 最後に置くのは、この実行で諦めたぶんを次の巡回まで待たずに拾うため。
+   */
+  const abandoned = await failAbandonedMedia(db);
+
   return Response.json({
     extracted,
     summarized,
     scripted,
     synthesized,
+    abandoned,
     // 予算を使い切ったなら、残りは次の実行に持ち越されている。
     outOfTime: Date.now() >= deadline,
   });
