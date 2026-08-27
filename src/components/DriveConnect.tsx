@@ -118,7 +118,17 @@ export function DriveConnect({
         </summary>
 
         <p className="mt-2 text-xs text-zinc-500">
-          Google Cloud Console で「OAuth クライアント（ウェブアプリケーション）」を作り、
+          {/* 値を取りに行く先を、欄のすぐ上に置く。「Console で作ってください」とだけ
+              書いてあっても、そこへ行く手段が無ければ探すところから始まる。 */}
+          <a
+            href={CONSOLE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-zinc-300"
+          >
+            Google Cloud Console
+          </a>
+          {' '}で「OAuth クライアント（ウェブアプリケーション）」を作り、
           その ID とシークレットを入れてください。アプリ全体で1つあれば足ります
           （使う人ごとに作る必要はありません。各ユーザーは上のボタンを押すだけです）。
         </p>
@@ -186,6 +196,9 @@ export function DriveConnect({
     </div>
   );
 }
+
+/** 認証情報を作る・直す場所。欄のすぐ上から飛べるようにしてある。 */
+const CONSOLE_URL = 'https://console.cloud.google.com/apis/credentials';
 
 const NOTICES: Record<string, string> = {
   connected: '接続しました。書き出しから Drive に置けます。',
