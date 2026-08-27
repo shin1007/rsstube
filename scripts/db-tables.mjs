@@ -11,6 +11,12 @@
  * 入っていないもの:
  *   jobs              巡回のたびに作られる一時的なキュー。戻すと古い仕事が動き出す
  *   schema_migrations db:migrate が管理する
+ *   google_accounts   リフレッシュトークン。**平文のJSONに書き出したくない**
+ *   app_config        Google のクライアントシークレット。同上（0033）
+ *
+ * 後ろ2つは秘密そのものなので、意図して外してある。失うと繋ぎ直し（app_config は
+ * Google Cloud Console から取り直して設定画面へ入れ直す）になるが、
+ * backups/ に平文で置くほうが割に合わない。**この判断ごと消さないこと。**
  *
  * 音声の実体（Supabase Storage の mp3）はここでは取れない。media / media_segments は
  * 行だけ戻るので、ファイルが失われていれば再生できない。作り直せるものなので、

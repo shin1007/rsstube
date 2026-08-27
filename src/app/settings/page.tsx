@@ -29,7 +29,7 @@ import {
   DEFAULT_RETENTION_DAYS,
   DEFAULT_VOICE_MODE,
 } from '@/lib/settings/defaults';
-import { getDriveStatus } from '@/app/actions/drive';
+import { getDriveStatus, saveGoogleCredentials } from '@/app/actions/drive';
 import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
@@ -57,21 +57,17 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
   ]);
 
   /**
-   * Drive の戻り先が、いま開いている URL と揃っているか。
+   * 同意のあとに戻ってくる先。**環境変数ではなく、いま開いている URL から作る**
+   * （lib/export/drive.ts の redirectUriFor と同じ組み立て）。
    *
-   * 手元と本番で別々に要る値なので、本番へ `.env.local` の localhost を
-   * そのまま写すと、同意画面まで行ってから Google 側で
-   * redirect_uri_mismatch になる。**こちらのエラーとしては戻ってこない**ので、
-   * 画面に出しておかないと原因が分からない。
+   * 画面に出すのは、この文字列を Google Cloud Console の「承認済みの
+   * リダイレクト URI」へ登録してもらう必要があるため。ここが1文字でも違うと
+   * 同意画面まで行ってから Google 側で弾かれ、**こちらには何も戻ってこない**。
    */
   const h = await headers();
   const host = h.get('host');
   const proto = h.get('x-forwarded-proto') ?? (host?.startsWith('localhost') ? 'http' : 'https');
-  const expectedRedirectUri = host ? `${proto}://${host}/api/auth/google/callback` : undefined;
-  const redirectMismatch =
-    expectedRedirectUri && drive.redirectUri && drive.redirectUri !== expectedRedirectUri
-      ? expectedRedirectUri
-      : undefined;
+  const callbackUrl = host ? `${proto}://${host}/api/auth/google/callback` : undefined;
 
   /**
    * 設定の保存。
@@ -382,8 +378,10 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             email={drive.email}
             notice={notice}
             configured={drive.configured}
-            redirectUri={drive.redirectUri}
-            expectedRedirectUri={redirectMismatch}
+            clientId={drive.clientId}
+            fromEnv={drive.fromEnv}
+            callbackUrl={callbackUrl}
+            saveCredentials={saveGoogleCredentials}
           />
         </section>
 

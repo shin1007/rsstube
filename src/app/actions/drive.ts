@@ -2,7 +2,7 @@
 
 import { attempt } from '@/lib/actions/result';
 
-import { driveStatus, uploadToDrive } from '@/lib/export/drive';
+import { driveStatus, saveGoogleOAuth, uploadToDrive } from '@/lib/export/drive';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -19,6 +19,35 @@ async function me() {
 export async function getDriveStatus() {
   const { userId } = await me();
   return driveStatus(userId);
+}
+
+/**
+ * Google の OAuth クライアントを保存する。
+ *
+ * **アプリ全体で1つの設定**なので、ユーザーごとの設定（settings）ではなく
+ * app_config に入る（0033）。ここを環境変数から移したのは、環境変数だと
+ * デプロイし直さないと変えられず、Vercel の画面を触れる人しか設定できないため。
+ *
+ * 書き込みは Secret キーのクライアントから。app_config には RLS ポリシーが
+ * 1つも無いので、ログイン中のセッションでは触れない（意図してそうしてある）。
+ */
+export async function saveGoogleCredentials(formData: FormData) {
+  return attempt(() => saveGoogleCredentialsImpl(formData));
+}
+
+async function saveGoogleCredentialsImpl(formData: FormData) {
+  await me();
+
+  const clientId = String(formData.get('google_client_id') ?? '');
+  // 空欄は「変えない」。画面へ返していない値なので、それ以外の意味を持てない。
+  const clientSecret = String(formData.get('google_client_secret') ?? '');
+
+  if (!clientId.trim() && !clientSecret.trim()) {
+    throw new Error('クライアントIDを入れてください');
+  }
+
+  await saveGoogleOAuth(clientId, clientSecret);
+  revalidatePath('/settings');
 }
 
 export async function disconnectDrive() {
