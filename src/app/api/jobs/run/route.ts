@@ -2,11 +2,12 @@ import { BATCH_SIZE, summarizeBatch, type SummaryInput } from '@/lib/ai/summariz
 import { SUMMARY_MODEL } from '@/lib/ai/gemini';
 import { recordUsage } from '@/lib/ai/usage';
 import { contentHash, usableAsFallback } from '@/lib/feeds/content';
+import { classifyError, retryAt, shouldRetry, type ExtractFailure } from '@/lib/feeds/retry';
 import { normalizeLanguage } from '@/lib/language';
 import { sanitizeHtml } from '@/lib/feeds/sanitize';
 import { extractArticle, htmlToText } from '@/lib/feeds/extract';
 import { claim, complete, enqueue, fail, release, type Job } from '@/lib/jobs/queue';
-import { runScriptJob, runTtsJob, TTS_PER_RUN } from '@/lib/media/jobs';
+import { failAbandonedMedia, runScriptJob, runTtsJob, TTS_PER_RUN } from '@/lib/media/jobs';
 import { authorizeCron, createAdminClient, ownerUserId } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -73,11 +74,22 @@ export async function POST(request: Request) {
   const scripted = await runScriptJobs(db, deadline);
   const synthesized = await runTtsJobs(db, deadline, hardDeadline);
 
+  /**
+   * 誰も動かさなくなった音声を落とす。
+   *
+   * **時間予算の外で必ず通す。** ここを予算の中に置くと、忙しい日ほど
+   * 飛ばされて、詰まった音声が「合成中」のまま何日も残る（それが元の壊れ方）。
+   * SQL を1回叩くだけなので、予算を気にする重さではない。
+   * 最後に置くのは、この実行で諦めたぶんを次の巡回まで待たずに拾うため。
+   */
+  const abandoned = await failAbandonedMedia(db);
+
   return Response.json({
     extracted,
     summarized,
     scripted,
     synthesized,
+    abandoned,
     // 予算を使い切ったなら、残りは次の実行に持ち越されている。
     outOfTime: Date.now() >= deadline,
   });
@@ -104,7 +116,7 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
     try {
       const { data: article } = await db
         .from('articles')
-        .select('id, url, feed_id, rss_html, excerpt')
+        .select('id, url, feed_id, rss_html, excerpt, extract_attempts')
         .eq('id', articleId)
         .single();
 
@@ -136,19 +148,26 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
         return null;
       };
 
+      // 何回目か。取り直しの上限に使う（0028）。
+      const attempts = (article.extract_attempts ?? 0) + 1;
+
       let text = '';
       let html = '';
       let ok = false;
       let imageUrl: string | null = null;
+      // 取れなかったときの理由。あとで取り直すかどうかをこれで決める（0028）。
+      let failure: ExtractFailure | null = null;
       try {
         const result = await extractArticle(article.url);
         text = result.text;
         html = result.html;
         ok = result.ok;
         imageUrl = result.imageUrl;
-      } catch {
-        // 403やタイムアウトは珍しくない。ここで再試行しても大抵また失敗するので、
-        // RSSの内容で妥協して先へ進める。
+        if (!ok) failure = 'short';
+      } catch (e) {
+        // 403やタイムアウトは珍しくない。ここで即座に再試行しても大抵また失敗するので、
+        // RSSの内容で妥協して先へ進め、**理由に見込みがあるものだけ後で取り直す**。
+        failure = classifyError(e);
       }
 
       // 同じフィードで本文が丸ごと一致したら、記事ではなく使い回しのページ
@@ -158,6 +177,9 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
         hash = contentHash(text);
         if (hash && (await isRecycledPage(db, article.feed_id, articleId, hash))) {
           ok = false;
+          // 掴んだのがメニューや同意画面なら、相手の作りがそのままである限り
+          // 何度取り直しても同じものが返る。取り直しの対象から外す。
+          failure = 'recycled';
         }
       }
 
@@ -199,12 +221,41 @@ async function runExtractJobs(db: SupabaseClient, deadline: number): Promise<num
           // 取りに行ったことを残す。これが無いと、失敗したのか順番待ちなのかが
           // 後から区別できない（0014）。
           extracted_at: new Date().toISOString(),
+          // なぜ取れなかったか（0028）。成功したら消す——取り直しで取れた記事に
+          // 古い理由が残ると、あとで数えたときに失敗として数えてしまう。
+          extract_fail: failure,
+          extract_attempts: attempts,
         })
         .eq('id', articleId);
       if (updateError) throw updateError;
 
-      await enqueue(db, 'summarize', { article_id: articleId });
+      /**
+       * 要約を積むのは、初回か、取り直して**実際に本文が取れたとき**だけ。
+       *
+       * 取り直しでも駄目だったものまで積むと、同じ RSS 抜粋から同じ要約を
+       * もう一度作ることになり、無料枠を1回ぶん捨てる。
+       */
+      // **中身が1文字も無いなら要約しない。** タイトルしか無い記事に要約を
+      // 頼むと、モデルは「本文や具体的な情報は存在しない」という*入力の説明*を
+      // 返してくる。それが一覧に並ぶうえ、無料枠も1件ぶん使う。
+      // 実データで43件（漫画の各話・審議会の資料ページなど）がこれだった。
+      if (text.trim() && (attempts === 1 || ok)) {
+        await enqueue(db, 'summarize', { article_id: articleId });
+      }
+
       await complete(db, job.id);
+
+      /**
+       * 見込みのあるものだけ、後でもう一度取りに行く（`lib/feeds/retry.ts`）。
+       *
+       * **complete() より後に積むこと。** `jobs_pending_unique_idx` は
+       * ('queued','running') を対象にしているので、このジョブが running の間は
+       * 同じ (extract, article_id) が 23505 で黙って捨てられる。
+       */
+      if (failure && shouldRetry(failure, attempts)) {
+        await enqueue(db, 'extract', { article_id: articleId }, undefined, retryAt());
+      }
+
       done++;
     } catch (err) {
       await fail(db, job.id, err);
@@ -247,12 +298,28 @@ async function runSummarizeJobs(db: SupabaseClient, deadline: number): Promise<n
       .select('id, title, content_text, content_ok')
       .in('id', [...byArticle.keys()]);
 
-    const inputs: SummaryInput[] = (articles ?? []).map((a) => ({
-      id: a.id,
-      title: a.title,
-      text: a.content_text ?? '',
-      contentOk: a.content_ok,
-    }));
+    /**
+     * 中身が空の記事はモデルに渡さない。
+     *
+     * 積む側でも弾いているが、手で積み直したぶんや、以前のコードで積まれた
+     * ぶんがここに来る。渡すと「本文や具体的な情報は存在しない」という
+     * 入力の説明が返ってきて、それが要約として保存される。
+     * ジョブは完了扱いにする——待たせても中身が増えることはない。
+     */
+    const inputs: SummaryInput[] = [];
+    for (const a of articles ?? []) {
+      const text = (a.content_text ?? '').trim();
+      if (!text) {
+        const job = byArticle.get(a.id);
+        if (job) {
+          await complete(db, job.id);
+          byArticle.delete(a.id);
+        }
+        continue;
+      }
+      inputs.push({ id: a.id, title: a.title, text, contentOk: a.content_ok });
+    }
+    if (inputs.length === 0) continue;
 
     try {
       const { results, model, usage } = await summarizeBatch(inputs, language);

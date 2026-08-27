@@ -31,9 +31,24 @@ export async function enqueue(
   type: JobType,
   payload: Record<string, unknown>,
   userId?: string,
+  /**
+   * この時刻まで実行しない。本文の取り直し（`0028`）のように、いま積んでも
+   * 結果が変わらないものを後ろに送る。
+   *
+   * **積む相手が running の間は入らない。** `jobs_pending_unique_idx` は
+   * ('queued','running') を対象にしているので、いま処理中のジョブと同じ
+   * (type, article_id) を積むと 23505 で黙って捨てられる。取り直しを積むのは
+   * `complete()` のあとにすること。
+   */
+  runAt?: Date,
 ): Promise<void> {
   // 同じ対象の未処理ジョブがあれば一意索引で弾かれる。重複は無視してよい。
-  const { error } = await db.from('jobs').insert({ user_id: userId ?? null, type, payload });
+  const { error } = await db.from('jobs').insert({
+    user_id: userId ?? null,
+    type,
+    payload,
+    ...(runAt ? { next_run_at: runAt.toISOString() } : {}),
+  });
   if (error && error.code !== '23505') throw error;
 }
 

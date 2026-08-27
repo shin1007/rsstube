@@ -92,3 +92,34 @@ describe('消毒（敵対的な入力）', () => {
     expect(out).toContain('referrerpolicy="no-referrer"');
   });
 });
+
+describe('知らないタグの中身', () => {
+  /*
+   * 走査は node.children の写しを回すので、知らないタグを外して中身を親へ
+   * 昇格させると、その中身はその回では一度も訪れない。もう一度見直さないと
+   * 属性が絞られないまま出力に残る。実データでは相対URLの画像として現れたが、
+   * 危ないのは属性のほう。
+   */
+  it('知らないタグの中の on* が落ちる', () => {
+    const out = sanitizeHtml('<foo><img src="https://e.example/a.png" onerror="alert(1)"></foo>');
+    expect(isClean(out)).toBe(true);
+    expect(out).not.toContain('onerror');
+  });
+
+  it('入れ子で積まれても落ちる', () => {
+    const out = sanitizeHtml('<foo><bar><baz><a href="javascript:alert(1)">x</a></baz></bar></foo>');
+    expect(isClean(out)).toBe(true);
+  });
+
+  it('知らないタグの中の相対URLも絶対URLに直る', () => {
+    // 厚生労働省の記事で実際に起きていた形。直らないとこちらのドメインを指す。
+    const out = sanitizeHtml('<foo><img src="/content/1.png"></foo>', 'https://www.mhlw.go.jp/stf/x.html');
+    expect(out).toContain('https://www.mhlw.go.jp/content/1.png');
+    expect(out).not.toContain('src="/content');
+  });
+
+  it('中身の文章は消えない', () => {
+    const out = sanitizeHtml('<foo><p>本文</p></foo>');
+    expect(out).toContain('本文');
+  });
+});

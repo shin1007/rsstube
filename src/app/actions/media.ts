@@ -1,6 +1,6 @@
 'use server';
 
-import { requestMedia, type MediaTarget } from '@/lib/media/create';
+import { requestMedia, retryMedia, type MediaTarget, type RetryFrom } from '@/lib/media/create';
 import { getPlayable, type MediaSource, type PlayableSegment } from '@/lib/media/list';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -60,8 +60,9 @@ async function run(
 ): Promise<MediaRequestResult> {
   let id: string;
   let created: boolean;
+  let retried: boolean;
   try {
-    ({ id, created } = await requestMedia(supabase, userId, target, title));
+    ({ id, created, retried } = await requestMedia(supabase, userId, target, title));
   } catch (e) {
     // 中身はサーバーのログに残す。表に出すのは短い一文だけ。
     console.error('requestMedia failed', e);
@@ -78,7 +79,55 @@ async function run(
     created,
     message: created
       ? '音声化をキューに入れました。数分後に「聴く」に出ます。'
-      : '既に作ってあります。「聴く」から開けます。',
+      : retried
+        ? '前回は途中で止まっていたので、続きから作り直します。'
+        : '既に作ってあります。「聴く」から開けます。',
+  };
+}
+
+/**
+ * 諦めた音声を作り直す。
+ *
+ * 「聴く」の一覧から押す。**できているところは捨てない**ので、10 セグメント中
+ * 8 つまで合成できていたなら残り2つだけをやり直す（lib/media/create.ts）。
+ *
+ * 持ち主かどうかはユーザーのクライアントで確かめる。media には RLS があるので、
+ * 他人の id を渡すと単に見つからない扱いになる。
+ */
+export async function retryMediaAction(mediaId: string): Promise<MediaRequestResult> {
+  const supabase = await createClient();
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return { ok: false, message: '未ログインです' };
+
+  const { data: media } = await supabase
+    .from('media')
+    .select('id')
+    .eq('id', mediaId)
+    .maybeSingle();
+  if (!media) return { ok: false, message: '音声が見つかりません' };
+
+  let from: RetryFrom;
+  try {
+    from = await retryMedia(mediaId);
+  } catch (e) {
+    console.error('retryMedia failed', e);
+    const detail = e instanceof Error ? e.message : String(e);
+    return { ok: false, message: `作り直しを受け付けられませんでした: ${detail}` };
+  }
+
+  revalidatePath('/listen');
+  revalidatePath(`/watch/${mediaId}`);
+
+  return {
+    ok: true,
+    id: mediaId,
+    created: false,
+    message:
+      from === 'ready'
+        ? '合成は全部できていました。そのまま聴けます。'
+        : from === 'script'
+          ? '台本から作り直します。数分後に「聴く」に出ます。'
+          : '合成できていないところだけ作り直します。数分後に出ます。',
   };
 }
 

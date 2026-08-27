@@ -1,3 +1,4 @@
+import { parseFeedDate } from '@/lib/feeds/date';
 import Parser from 'rss-parser';
 import { pickImageFromRss } from '@/lib/feeds/image';
 import { decodeBody } from '@/lib/feeds/charset';
@@ -107,7 +108,14 @@ export async function fetchFeed(
       url: link,
       title: (item.title ?? '').trim() || link,
       author: item.creator ?? undefined,
-      publishedAt: item.isoDate ?? undefined,
+      // **isoDate だけを見てはいけない。** rss-parser は `new Date()` に任せるので、
+      // `JST` のように JS が解釈できない名前のタイムゾーンだと付かない
+      // （千葉県のフィードがこれで、103件が日付なしで入っていた）。
+      // 生の pubDate / dc:date を自前で読み直す（lib/feeds/date.ts）。
+      publishedAt:
+        parseFeedDate(item.isoDate) ??
+        parseFeedDate(item.pubDate) ??
+        parseFeedDate((item as { 'dc:date'?: string })['dc:date']),
       excerpt: item.contentSnippet?.slice(0, 500) ?? undefined,
       contentHtml,
       imageUrl: pickImageFromRss({ enclosure: item.enclosure, contentHtml }, link) ?? undefined,

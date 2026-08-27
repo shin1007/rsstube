@@ -56,8 +56,26 @@ body {
   word-break: break-word;
 }
 
-.prose-rich > * + * {
-  margin-top: 1em;
+/*
+ * 段落と段落のあいだ。
+ *
+ * ここは `.prose-rich > * + *`（直下の隣接）で書いてあったが、**一度も
+ * 当たっていなかった。** 抽出したHTMLは
+ * `<div><div><p>…</p><p>…</p></div></div>` のように包まれていて、
+ * .prose-rich の直下の子は div ひとつだけ。実データ12件で数えたところ、
+ * 当たった要素は全部で0個。段落が7〜46個ある記事でも間隔は一切付いておらず
+ * （Tailwind の preflight が p の既定マージンも消すため）、
+ * **行間1.9だけで文が続くので、改行と段落の切れ目を見分けられなかった。**
+ *
+ * 深さを問わず要素名で当てること。**下マージンだけにするのは**、上マージンだと
+ * 先頭の段落のぶんが包みの div をすり抜けて本文の上に隙間を作るため
+ * （マージンの相殺）。
+ *
+ * 1字下げ（text-indent）は入れない。日本語では字下げと段落間の空きは
+ * どちらか片方にするもので、画面で読むなら空きのほうが切れ目が分かりやすい。
+ */
+.prose-rich :is(p, ul, ol, dl, blockquote, pre, table) {
+  margin-bottom: 1.5em;
 }
 
 .prose-rich h1,
@@ -68,6 +86,9 @@ body {
   line-height: 1.5;
   color: var(--color-zinc-100, #f4f4f5);
   margin-top: 1.6em;
+  /* 見出しと本文がくっつかないように。上と同じ理由で、これが無いと
+     見出しの直後の段落には隙間が1つも入らない。 */
+  margin-bottom: 0.6em;
 }
 
 .prose-rich h1 { font-size: 1.3rem; }

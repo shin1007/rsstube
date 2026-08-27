@@ -1,4 +1,5 @@
 import { AppShell } from '@/components/AppShell';
+import { MediaRetryButton } from '@/components/MediaRetryButton';
 import { PlayButton } from '@/components/Playback';
 import { estimateFinishAt, formatEta } from '@/lib/media/eta';
 import { listMedia } from '@/lib/media/list';
@@ -115,7 +116,15 @@ export default async function ListenPage() {
                     )}
 
                     {m.status === 'failed' && (
-                      <p className="mt-1 line-clamp-2 text-xs text-red-400">{m.lastError}</p>
+                      <>
+                        <p className="mt-1 line-clamp-2 text-xs text-red-400">{m.lastError}</p>
+                        {m.doneSegments > 0 && (
+                          <p className="mt-0.5 text-xs text-zinc-500">
+                            {m.doneSegments}/{m.totalSegments} まで合成できています。
+                            作り直しても、できているところはそのまま使います
+                          </p>
+                        )}
+                      </>
                     )}
                   </>
                 );
@@ -156,6 +165,13 @@ export default async function ListenPage() {
                           ↗ 記事
                         </a>
                       )}
+
+                      {/*
+                        諦めたものに手を出せる唯一の導線。これが無いと、
+                        「音声にする」を押し直しても一意索引に当たって
+                        「既に作ってあります」しか返らず、二度と作れない。
+                      */}
+                      {m.status === 'failed' && <MediaRetryButton id={m.id} />}
 
                       {/* 全部できてから出す。途中のものを落としても尻切れになる。 */}
                       {m.status === 'ready' && (

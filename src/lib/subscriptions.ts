@@ -22,6 +22,14 @@ export type SubscribedFeed = {
   /** 最後に新しい記事が入った時刻（0013）。更新が止まったフィードを見つけるため。 */
   last_article_at: string | null;
   created_at: string | null;
+  /** 直近60日で本文を取りに行った件数（0028）。健康診断で使う。 */
+  extracted: number;
+  /** そのうち本文を取れなかった件数。 */
+  unreadable: number;
+  /** 直近60日に取り込んだ件数（0030）。日付なしの母数。 */
+  ingested: number;
+  /** そのうち日付が入っていない件数。 */
+  undated: number;
 };
 
 type Row = {
@@ -51,6 +59,20 @@ export async function listSubscribedFeeds(): Promise<SubscribedFeed[]> {
     );
   if (error) throw error;
 
+  /**
+   * 本文の取れ具合はフィードの列ではないので、別に数えて足す。
+   *
+   * **記事を運んできて JS で数えない**（0020 で未読件数を SQL に移したのと同じ）。
+   * 欲しいのはフィード18本ぶんの数字2つで、記事は4600件ある。
+   */
+  const { data: stats } = await supabase.rpc('feed_content_stats');
+  const byFeed = new Map(
+    ((stats ?? []) as { feed_id: string; ingested: number; extracted: number; unreadable: number; undated: number }[]).map((s) => [
+      s.feed_id,
+      s,
+    ]),
+  );
+
   return ((data ?? []) as unknown as Row[])
     .filter((r): r is Row & { feeds: NonNullable<Row['feeds']> } => r.feeds !== null)
     .map((r) => ({
@@ -64,6 +86,10 @@ export async function listSubscribedFeeds(): Promise<SubscribedFeed[]> {
       last_fetched_at: r.feeds.last_fetched_at,
       last_article_at: r.feeds.last_article_at,
       created_at: r.feeds.created_at,
+      extracted: Number(byFeed.get(r.feeds.id)?.extracted ?? 0),
+      unreadable: Number(byFeed.get(r.feeds.id)?.unreadable ?? 0),
+      ingested: Number(byFeed.get(r.feeds.id)?.ingested ?? 0),
+      undated: Number(byFeed.get(r.feeds.id)?.undated ?? 0),
     }))
     // 並べ替えは件数が少ないのでこちらで。埋め込み先の列では order できない。
     .sort((a, b) => a.title.localeCompare(b.title, 'ja'));

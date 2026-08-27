@@ -3,6 +3,9 @@ name: CI
 # PR に積むたびに回す。main への直接 push も一応見る。
 on:
   pull_request:
+  # 手で回せる口。PR の実行が GitHub 側の都合で起動しないことがあり
+  # （2026-08-27 に startup_failure が続いた）、そのとき原因の切り分けに要る。
+  workflow_dispatch:
   push:
     branches: [main]
 

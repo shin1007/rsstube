@@ -90,12 +90,25 @@ function allowedIframe(src: string | null): boolean {
  * @param html   Readability が整えたあとのHTML
  * @param baseUrl 記事のURL。相対パスの画像・リンクを解決するのに使う
  */
+/**
+ * 枠外しをやり直す回数の上限。
+ *
+ * 知らないタグが入れ子になっていると、1回の走査では一番外側しか外れない。
+ * 素の記事なら数回で尽きるが、壊れた（あるいは狙って積まれた）入力で
+ * 止まらなくならないように上限を置く。
+ */
+const MAX_UNWRAP_PASSES = 20;
+
+/**
+ * @param html   Readability が整えたあとのHTML
+ * @param baseUrl 記事のURL。相対パスの画像・リンクを解決するのに使う
+ */
 export function sanitizeHtml(html: string, baseUrl?: string): string {
   const { document } = parseHTML(`<!DOCTYPE html><html><body>${html}</body></html>`);
   const body = document.body;
   if (!body) return '';
 
-  const walk = (node: Element) => {
+  const walk = (node: Element, pass = 0) => {
     /*
       コメントを落とす。
       `node.children` は要素しか返さないので、コメントは走査から漏れて
@@ -112,6 +125,27 @@ export function sanitizeHtml(html: string, baseUrl?: string): string {
       }
     }
 
+    /**
+     * 枠を外した子は、**もう一度見直さないと素通しになる。**
+     *
+     * 走査は `Array.from(node.children)` の写しを回す。知らないタグを
+     * `replaceWith(...childNodes)` で外すと、その中身は写しを取ったあとで
+     * 親に昇格するので、**この回では一度も訪れない**。結果、昇格した要素の
+     * 属性が絞られず、相対URLも直されないまま出力に残る。
+     *
+     * 実データで見つかった: 厚生労働省・PLOS などで `<img src="/content/…">` が
+     * 相対のまま保存され、こちらのドメインを指して404になっていた（39記事）。
+     * 同じ記事の中で、直接の子だった img は絶対URLに直っている。
+     *
+     * **見えていたのは画像だが、危ないのは属性のほう。**知らないタグの中に
+     * `<img onerror=…>` を置かれると、その on* が落ちずに残る。
+     * 実データに混入は無かったが、それは入力の運であって作りの強さではない。
+     *
+     * 外したぶんがあれば同じ節をもう一度見る。1回の走査で必ず1つ以上の
+     * 知らないタグが消えるので止まる（上限も置いてある）。
+     */
+    let unwrapped = false;
+
     // 後ろから見る。取り除いても添字がずれない。
     for (const child of Array.from(node.children).reverse()) {
       const tag = child.tagName?.toUpperCase() ?? '';
@@ -124,6 +158,7 @@ export function sanitizeHtml(html: string, baseUrl?: string): string {
       if (!ALLOWED_TAGS.has(tag)) {
         // 枠だけ外して中身は残す。知らないタグで文章が消えないように。
         child.replaceWith(...Array.from(child.childNodes));
+        unwrapped = true;
         continue;
       }
 
@@ -179,6 +214,11 @@ export function sanitizeHtml(html: string, baseUrl?: string): string {
 
       walk(child);
     }
+
+    // 枠を外して昇格した子は、この回では一度も見ていない。もう一度見る。
+    // 1回ごとに知らないタグが必ず1つ以上消えるので止まるが、
+    // 壊れた入力で深く積まれても止まるように上限を置く。
+    if (unwrapped && pass < MAX_UNWRAP_PASSES) walk(node, pass + 1);
   };
 
   walk(body);
