@@ -3,6 +3,7 @@ import { MediaRetryButton } from '@/components/MediaRetryButton';
 import { PlayButton } from '@/components/Playback';
 import { estimateFinishAt, formatEta } from '@/lib/media/eta';
 import { listMedia } from '@/lib/media/list';
+import { DEFAULT_MEDIA_RETENTION_DAYS } from '@/lib/settings/defaults';
 import Link from 'next/link';
 
 /**
@@ -54,7 +55,7 @@ export default async function ListenPage() {
               話し方（2人の対話 / 1人の語り）は設定で選べます。
             </p>
             <p className="text-xs text-zinc-600">
-              サーバー上の音声は<span className="text-zinc-400">30日で消えます</span>
+              サーバー上の音声は<span className="text-zinc-400">{DEFAULT_MEDIA_RETENTION_DAYS}日で消えます</span>
               （保存容量の都合。設定の「音声の保持」で変えられます）。
               残しておきたいものは「⤓ MP3」から落としてください。
             </p>

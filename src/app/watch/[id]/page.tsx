@@ -58,7 +58,7 @@ export default async function WatchPage({ params }: PageProps<'/watch/[id]'>) {
           )
         )}
         {/*
-          サーバー側の音声は30日で消える（Storage の無料枠が1GBで、1本あたり
+          サーバー側の音声は既定14日で消える（Storage の無料枠が1GBで、1本あたり
           473KB/分あるため）。手元に置きたいものは消える前に落としてもらう。
           a のままにしているのは、ダウンロードは画面遷移が要らないため。
         */}

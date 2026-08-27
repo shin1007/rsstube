@@ -1,5 +1,6 @@
 import { AppShell } from '@/components/AppShell';
 import { VOICE_MODE_LABELS, type VoiceMode } from '@/lib/ai/script';
+import { DEFAULT_VOICE_A, DEFAULT_VOICE_B, TTS_VOICES, normalizeVoice } from '@/lib/ai/tts';
 import { LANGUAGES, normalizeLanguage, type LanguageCode } from '@/lib/language';
 import { listSubscribedFeeds } from '@/lib/subscriptions';
 import {
@@ -21,6 +22,13 @@ import { SettingsForm, type SaveState } from '@/components/SettingsForm';
 import { UsageTable } from '@/components/UsageTable';
 import { recentUsage } from '@/lib/ai/usage';
 import { pipelineStatus } from '@/lib/pipeline';
+import {
+  DEFAULT_DIGEST_COUNT,
+  DEFAULT_DIGEST_HOUR,
+  DEFAULT_MEDIA_RETENTION_DAYS,
+  DEFAULT_RETENTION_DAYS,
+  DEFAULT_VOICE_MODE,
+} from '@/lib/settings/defaults';
 import { getDriveStatus } from '@/app/actions/drive';
 import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
 import { createClient } from '@/lib/supabase/server';
@@ -82,11 +90,16 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
       {
         user_id: data.user.id,
         notebooklm_prompt: String(formData.get('notebooklm_prompt') ?? ''),
-        digest_count: Number(formData.get('digest_count') ?? 8),
-        digest_hour: Number(formData.get('digest_hour') ?? 6),
-        retention_days: Number(formData.get('retention_days') ?? 90),
-        media_retention_days: Number(formData.get('media_retention_days') ?? 30),
-        voice_mode: formData.get('voice_mode') === 'solo' ? 'solo' : 'dialogue',
+        digest_count: Number(formData.get('digest_count') ?? DEFAULT_DIGEST_COUNT),
+        digest_hour: Number(formData.get('digest_hour') ?? DEFAULT_DIGEST_HOUR),
+        retention_days: Number(formData.get('retention_days') ?? DEFAULT_RETENTION_DAYS),
+        media_retention_days: Number(
+          formData.get('media_retention_days') ?? DEFAULT_MEDIA_RETENTION_DAYS,
+        ),
+        voice_mode: formData.get('voice_mode') === 'dialogue' ? 'dialogue' : 'solo',
+        // 表に無い名前を保存すると、合成のときに API が 400 を返す。
+        tts_voice_a: normalizeVoice(formData.get('tts_voice_a'), DEFAULT_VOICE_A),
+        tts_voice_b: normalizeVoice(formData.get('tts_voice_b'), DEFAULT_VOICE_B),
         // 知らない値が入ると要約の言語が黙って壊れるので、必ず通す。
         summary_language: normalizeLanguage(formData.get('summary_language')),
         updated_at: new Date().toISOString(),
@@ -183,7 +196,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
                   name="digest_hour"
                   min={0}
                   max={23}
-                  defaultValue={settings?.digest_hour ?? 6}
+                  defaultValue={settings?.digest_hour ?? DEFAULT_DIGEST_HOUR}
                   className="ml-2 w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
                 />
                 時
@@ -195,7 +208,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
                   name="media_retention_days"
                   min={0}
                   max={3650}
-                  defaultValue={settings?.media_retention_days ?? 30}
+                  defaultValue={settings?.media_retention_days ?? DEFAULT_MEDIA_RETENTION_DAYS}
                   className="ml-2 w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
                 />
                 日
@@ -207,14 +220,14 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
                   name="retention_days"
                   min={0}
                   max={3650}
-                  defaultValue={settings?.retention_days ?? 90}
+                  defaultValue={settings?.retention_days ?? DEFAULT_RETENTION_DAYS}
                   className="ml-2 w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
                 />
                 日
               </label>
             </div>
             <p className="text-xs text-zinc-500">
-              音声はサーバー容量の都合で既定30日。消える前に「聴く」から MP3 で保存できます。
+              音声はサーバー容量の都合で既定{DEFAULT_MEDIA_RETENTION_DAYS}日。消える前に「聴く」から MP3 で保存できます。
               保持期間を過ぎた既読記事は本文だけを消します（スター・あとで・書き出し済みは対象外）。
               記事の行自体は残るので、既読の記事が未読で戻ってくることはありません。0 で無効。
             </p>
@@ -252,7 +265,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
               <select
                 id="voice_mode"
                 name="voice_mode"
-                defaultValue={settings?.voice_mode ?? 'dialogue'}
+                defaultValue={settings?.voice_mode ?? DEFAULT_VOICE_MODE}
                 className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
               >
                 {(Object.keys(VOICE_MODE_LABELS) as VoiceMode[]).map((m) => (
@@ -266,6 +279,60 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
                 （台本が話者の数に縛られているので、後から声だけ替えることはできません）。
               </p>
             </div>
+
+            {/*
+              声。それまでは環境変数（GEMINI_TTS_VOICE_A / _B）で、
+              **オーナーがデプロイし直さないと変えられなかった。**好みの話なので
+              ユーザーごとに持たせる（0032）。
+            */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs text-zinc-400" htmlFor="tts_voice_a">
+                  声（1人語り／対話の進行役）
+                </label>
+                <select
+                  id="tts_voice_a"
+                  name="tts_voice_a"
+                  defaultValue={normalizeVoice(settings?.tts_voice_a, DEFAULT_VOICE_A)}
+                  className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
+                >
+                  {Object.entries(TTS_VOICES).map(([name, label]) => (
+                    <option key={name} value={name}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400" htmlFor="tts_voice_b">
+                  声（対話の聞き手）
+                </label>
+                <select
+                  id="tts_voice_b"
+                  name="tts_voice_b"
+                  defaultValue={normalizeVoice(settings?.tts_voice_b, DEFAULT_VOICE_B)}
+                  className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
+                >
+                  {Object.entries(TTS_VOICES).map(([name, label]) => (
+                    <option key={name} value={name}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-zinc-500">
+                  1人語りでは使いません。
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-zinc-500">
+              名前だけでは選びようがないので、同じ原稿を6種類の声で読ませたものを
+              <code className="mx-1 rounded bg-zinc-800 px-1">samples/voices/</code>
+              に置いてあります（<code className="rounded bg-zinc-800 px-1">npm run voices</code>
+              で作り直せます）。声も<strong className="text-zinc-400">作り始めた時点のものが焼かれる</strong>ので、
+              途中で変えても、作成中の音声の前半と後半で声が変わることはありません。
+            </p>
           </SettingsForm>
         </section>
 
