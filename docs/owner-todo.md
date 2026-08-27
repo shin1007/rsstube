@@ -19,9 +19,12 @@
 - [ ] **本番の設定画面 → Google Drive →「Google の認証情報」**に、`.env.local` と同じ
       **クライアント ID とシークレット**を入れて保存（手元の値をそのまま使えます。
       Google Cloud Console から取り直す必要はありません）
-- [ ] **Google Cloud Console → 認証情報 → OAuth クライアント →「承認済みのリダイレクト URI」**に
+- [ ] **[Google Cloud Console](https://console.cloud.google.com/apis/library) → 認証情報 →
+      OAuth クライアント →「承認済みのリダイレクト URI」**に
       `https://rsstube.vercel.app/api/auth/google/callback` を追加（localhost のぶんは残したまま。
       **登録すべき文字列は設定画面にそのまま出しています**）
+      - 認証情報の画面には
+        <https://console.cloud.google.com/apis/credentials> で直接飛べます
 - [ ] **「Google Drive に接続」を押す**
 
 押していただければ、実際にファイルが置けるところまで私が確認します。
@@ -101,5 +104,5 @@
 **Google Cloud TTS への移行。** Gemini TTS は preview なので、いつ無料枠が変わっても
 おかしくありません。移り先は Google Cloud TTS（無料枠400万文字/月）ですが、
 **APIキーでは叩けません**（`GEMINI_API_KEY` で試すと 401 で
-「API keys are not supported by this API」）。GCPプロジェクトで Cloud Text-to-Speech API を
+「API keys are not supported by this API」）。GCPプロジェクトで [Cloud Text-to-Speech API](https://console.cloud.google.com/apis/library) を
 有効にし、サービスアカウントの鍵を発行して入れる必要があります。**いま急ぐ必要はありません。**
