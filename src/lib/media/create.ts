@@ -1,4 +1,6 @@
 import { enqueue } from '@/lib/jobs/queue';
+import { DEFAULT_VOICE_MODE } from '@/lib/settings/defaults';
+import { DEFAULT_VOICE_A, DEFAULT_VOICE_B, normalizeVoice } from '@/lib/ai/tts';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -33,7 +35,7 @@ export async function requestMedia(
   // 食い違いを防ぐ）。行が無いときの既定は対話。
   const { data: settings } = await db
     .from('settings')
-    .select('voice_mode')
+    .select('voice_mode, tts_voice_a, tts_voice_b')
     .eq('user_id', userId)
     .maybeSingle();
 
@@ -44,7 +46,11 @@ export async function requestMedia(
     digest_id: target.kind === 'digest' ? target.digestId : null,
     title,
     status: 'queued' as const,
-    voice_mode: settings?.voice_mode === 'solo' ? 'solo' : 'dialogue',
+    voice_mode: settings?.voice_mode === 'dialogue' ? 'dialogue' : DEFAULT_VOICE_MODE,
+    // 声も同じ理由で写す。1本を何回にも分けて合成するので、途中で設定を
+    // 変えられると前半と後半で声が変わる（0032）。
+    voice_a: normalizeVoice(settings?.tts_voice_a, DEFAULT_VOICE_A),
+    voice_b: normalizeVoice(settings?.tts_voice_b, DEFAULT_VOICE_B),
   };
 
   // 同じ対象を二重に音声化しない（0010 の一意制約）。既にあるならそれを返す。

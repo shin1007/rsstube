@@ -1,5 +1,6 @@
 import { generateScript, type ScriptLine, type Slide, type VoiceMode } from '@/lib/ai/script';
 import { normalizeLanguage } from '@/lib/language';
+import { DEFAULT_VOICE_MODE } from '@/lib/settings/defaults';
 import { synthesize } from '@/lib/ai/tts';
 import { RetryableError, SCRIPT_MODEL } from '@/lib/ai/gemini';
 import { TTS_MODEL } from '@/lib/ai/tts';
@@ -54,7 +55,7 @@ export async function runScriptJob(db: SupabaseClient, job: Job): Promise<boolea
     const source = await loadSource(db, media);
     // モードは media に焼いてある（create.ts が設定から写す）。ここで設定を
     // 見に行かないのは、生成中に設定を変えられると台本と声が食い違うため。
-    const mode = (media.voice_mode ?? 'dialogue') as VoiceMode;
+    const mode = (media.voice_mode ?? DEFAULT_VOICE_MODE) as VoiceMode;
     const { extra, language } = await scriptSettings(db, media.user_id);
     const { lines, slides, usage } = await generateScript(source, extra, mode, language);
     await recordUsage(db, SCRIPT_MODEL, usage.inputTokens, usage.outputTokens, true);
@@ -137,7 +138,7 @@ export async function runTtsJob(
   try {
     const { data: media } = await db
       .from('media')
-      .select('id, user_id, script, slides, voice_mode')
+      .select('id, user_id, script, slides, voice_mode, voice_a, voice_b')
       .eq('id', mediaId)
       .single();
     const { data: segment } = await db
@@ -172,7 +173,8 @@ export async function runTtsJob(
 
     const { mp3, durationSec, usage } = await synthesize(
       group.lines,
-      (media.voice_mode ?? 'dialogue') as VoiceMode,
+      (media.voice_mode ?? DEFAULT_VOICE_MODE) as VoiceMode,
+      { a: media.voice_a, b: media.voice_b },
       AbortSignal.timeout(Math.max(5_000, hardDeadline - Date.now())),
     );
     await recordUsage(db, TTS_MODEL, usage.inputTokens, usage.outputTokens, true);

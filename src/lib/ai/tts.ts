@@ -26,11 +26,33 @@ const BYTES_PER_SAMPLE = 2;
 const MP3_KBPS = 64;
 
 /**
- * 話者の声。名前だけ差し替えられるようにしておく
- * （日本語の声は好みが割れるので、実際に鳴らしてから選び直せるように）。
+ * 選べる声。Gemini TTS の prebuilt voice 名で、`samples/voices/` に
+ * 同じ原稿を読ませた聴き比べがある（`npm run voices` で作り直せる）。
+ *
+ * 説明を付けているのは、名前だけでは選びようがないため。日本語の
+ * 聞こえ方は好みが割れるので、最後は聴いて決めてもらう。
  */
-const VOICE_A = process.env.GEMINI_TTS_VOICE_A ?? 'Kore';
-const VOICE_B = process.env.GEMINI_TTS_VOICE_B ?? 'Puck';
+export const TTS_VOICES: Record<string, string> = {
+  Kore: 'Kore（落ち着いた女性寄り。既定）',
+  Puck: 'Puck（軽快な男性寄り。既定の聞き手）',
+  Aoede: 'Aoede（やわらかい女性寄り）',
+  Charon: 'Charon（低めの男性寄り）',
+  Leda: 'Leda（明るい女性寄り）',
+  Orus: 'Orus（落ち着いた男性寄り）',
+};
+
+/**
+ * 声の既定。環境変数を残してあるのは、設定の行が無いユーザーと、
+ * 声を持たない古い media（0032 より前）のため。
+ * 好みはユーザーごとなので、通常は settings 側の値が渡ってくる。
+ */
+export const DEFAULT_VOICE_A = process.env.GEMINI_TTS_VOICE_A ?? 'Kore';
+export const DEFAULT_VOICE_B = process.env.GEMINI_TTS_VOICE_B ?? 'Puck';
+
+/** 知らない名前を渡すと API が 400 を返すので、表に無いものは既定へ落とす。 */
+export function normalizeVoice(name: unknown, fallback: string): string {
+  return typeof name === 'string' && name in TTS_VOICES ? name : fallback;
+}
 
 let client: GoogleGenAI | null = null;
 
@@ -61,6 +83,13 @@ export async function synthesize(
   lines: ScriptLine[],
   mode: VoiceMode = 'dialogue',
   /**
+   * 使う声。media に焼いた値を渡すこと（0032）。
+   *
+   * **1本の音声はセグメントごとに何度も合成する。**途中で設定を見に行くと、
+   * 設定を変えた瞬間から後半だけ声が変わる。
+   */
+  voices: { a?: string | null; b?: string | null } = {},
+  /**
    * 打ち切りの合図。**必ず渡すこと。**
    *
    * 合成は1回に数十秒かかる。上限が無いと Vercel の maxDuration(60秒)を
@@ -90,13 +119,18 @@ export async function synthesize(
    * 話者の切り替わりを探しに行く。名前を前置きしない素の文章を渡すぶん、
    * 単一話者の設定のほうが素直に読む。
    */
+  // 知らない名前をそのまま渡すと API が 400 を返す。古い media は声を
+  // 持たない（null）ので、そのときも既定へ落ちる。
+  const voiceA = normalizeVoice(voices.a, DEFAULT_VOICE_A);
+  const voiceB = normalizeVoice(voices.b, DEFAULT_VOICE_B);
+
   const speechConfig = solo
-    ? { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_A } } }
+    ? { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceA } } }
     : {
         multiSpeakerVoiceConfig: {
           speakerVoiceConfigs: [
-            { speaker: SPEAKERS.A.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_A } } },
-            { speaker: SPEAKERS.B.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_B } } },
+            { speaker: SPEAKERS.A.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceA } } },
+            { speaker: SPEAKERS.B.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceB } } },
           ],
         },
       };

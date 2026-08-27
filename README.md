@@ -239,7 +239,7 @@ tts    → スライド1枚ぶんずつ合成 → MP3 → Storage
 モードは `media` にも焼く。設定を変えても作成済みの音声の素性は変わらない
 （台本が生成時の話者数に縛られているので、後から声だけ替えることはできない）。
 
-サーバー上の音声は**30日で消える**（`settings.media_retention_days`）。残したいものは
+サーバー上の音声は**14日で消える**（`settings.media_retention_days`、設定画面から変えられる）。残したいものは
 「聴く」か再生画面の「保存」から MP3 で落とせる（`/api/media/[id]/download`）。
 セグメントは独立した MP3 なので連結するだけでよく、再エンコードは要らない。
 
@@ -263,7 +263,7 @@ npm run voices   # samples/voices/*.wav に6声ぶん出す
 
 容量: TTS が返すのは生PCM（24kHz モノラル）で1秒48KB。64kbps の MP3 にすると
 約6分の1で、実測 473KB/分（10分で4.6MB）。Storage の無料枠1GB に約220本入る。
-それでも溜まるので、`settings.media_retention_days`（既定30日）を過ぎたものは
+それでも溜まるので、`settings.media_retention_days`（既定14日）を過ぎたものは
 `/api/cron/purge` が消す。**行だけでなく Storage のファイルも消す必要がある**ので、
 これだけ SQL ではなくルートにある。
 

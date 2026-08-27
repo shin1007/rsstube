@@ -5,7 +5,7 @@ import { type NextRequest } from 'next/server';
 /**
  * 音声を1本の MP3 にまとめて渡す。
  *
- * サーバー側の音声は30日で消える（settings.media_retention_days、
+ * サーバー側の音声は14日で消える（settings.media_retention_days、
  * /api/cron/purge が Storage のファイルごと落とす）。Storage の無料枠が1GBで、
  * 1本あたり実測473KB/分あるため、溜め続けると他が入らなくなる。
  * 手元に置いておきたいものは、消える前に落としてもらう前提にした。

@@ -1,4 +1,5 @@
 import { authorizeCron, createAdminClient } from '@/lib/supabase/admin';
+import { DEFAULT_MEDIA_RETENTION_DAYS } from '@/lib/settings/defaults';
 
 /**
  * 古い音声を消す。
@@ -18,8 +19,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-/** 既定の保持日数。settings.media_retention_days が無いときに使う。 */
-const DEFAULT_RETENTION_DAYS = 30;
+/**
+ * 既定の保持日数。settings.media_retention_days が無いときに使う。
+ * 数字そのものは lib/settings/defaults.ts が持っている（散らさない）。
+ */
+const DEFAULT_RETENTION_DAYS = DEFAULT_MEDIA_RETENTION_DAYS;
 
 /** 1回で消す本数の上限。消し忘れは翌日また拾える。 */
 const PER_RUN = 50;
