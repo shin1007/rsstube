@@ -290,10 +290,25 @@ npm run voices   # samples/voices/*.wav に6声ぶん出す
 **このアプリが作ったファイルにしか触れない**（既存のドライブの中身は読まない）。
 置き先は Drive 上の `RSSTube` フォルダで、無ければ自分で作る。
 
-必要な環境変数は `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI`。
-Google Cloud Console で OAuth クライアント（ウェブアプリケーション）を作り、
-リダイレクトURIに `http://localhost:3000/api/auth/google/callback` と
-本番のURLの両方を登録しておくこと。
+OAuth クライアントは**設定画面から入れる**（`0033`）。Google Cloud Console で
+OAuth クライアント（ウェブアプリケーション）を作り、その ID とシークレットを
+設定画面の「Google の認証情報」に入れる。**アプリ全体で1つあれば足りる**——
+ユーザーごとに作るものではなく、各ユーザーは「接続」を押すだけ。
+
+環境変数（`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`）も読むが、設定画面の値が
+優先される。**環境変数はデプロイし直さないと変えられない**ので、そちらを主にはしない。
+
+**戻り先（redirect_uri）は設定しない。**いま開いている URL から組み立てる
+（`redirectUriFor`）。以前は `GOOGLE_REDIRECT_URI` という環境変数だったが、手元と本番で
+別々に要る値なので、`.env.local` の localhost をそのまま本番へ写すと、同意画面まで
+行ってから Google 側で redirect_uri_mismatch になる（**こちらには何も戻ってこない**）。
+Google Cloud Console の「承認済みのリダイレクト URI」には
+`http://localhost:3000/api/auth/google/callback` と本番のURLの両方を登録しておくこと
+（登録すべき文字列は設定画面にそのまま出している）。
+
+シークレットは `app_config` に置く。**このテーブルにも RLS ポリシーは無い**ので、
+Secret キー以外からは読めない。画面へも返さない（設定済みかどうかだけ出す）。
+バックアップにも入れていない（`scripts/db-tables.mjs` の注記）。
 
 リフレッシュトークンは `google_accounts` に置く。**このテーブルには RLS の
 ポリシーを1つも作っていない**ので、Secret キー以外からは読めも書けもしない

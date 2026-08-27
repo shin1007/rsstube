@@ -1,4 +1,4 @@
-import { driveConfigured } from '@/lib/export/drive';
+import { googleOAuth, redirectUriFor } from '@/lib/export/drive';
 import { createClient } from '@/lib/supabase/server';
 import { randomBytes } from 'node:crypto';
 
@@ -24,21 +24,20 @@ export async function GET(request: Request) {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return Response.redirect(new URL('/login', request.url));
 
-  if (!driveConfigured()) {
+  const oauth = await googleOAuth();
+  if (!oauth) {
     return Response.redirect(new URL('/settings?drive=unconfigured', request.url));
   }
 
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-  if (!redirectUri) {
-    return Response.redirect(new URL('/settings?drive=unconfigured', request.url));
-  }
+  // 戻り先は環境変数ではなく、いま開いている URL から作る（食い違いようが無い）。
+  const redirectUri = redirectUriFor(request);
 
   // 戻ってきたときに「こちらが送り出したもの」だと確かめるための値。
   // Cookie と突き合わせるので、URL だけ見て偽装できない。
   const state = randomBytes(16).toString('hex');
 
   const url = new URL(AUTH_URL);
-  url.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID ?? '');
+  url.searchParams.set('client_id', oauth.clientId);
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('scope', 'https://www.googleapis.com/auth/drive.file email');

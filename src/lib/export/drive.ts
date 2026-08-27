@@ -24,8 +24,47 @@ const FOLDER_NAME = 'RSSTube';
 /** 期限のこれだけ手前で取り直す。ネットワークの往復ぶんの余裕。 */
 const REFRESH_MARGIN_MS = 60_000;
 
-export function driveConfigured(): boolean {
-  return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+export type GoogleOAuth = { clientId: string; clientSecret: string };
+
+/**
+ * OAuth クライアント。**アプリに1つ**で、ユーザーごとではない
+ * （ユーザーごとに持つのは同意の結果＝google_accounts の refresh_token）。
+ *
+ * app_config（設定画面から入れる）を先に見て、無ければ環境変数へ落ちる。
+ * この順なのは、**環境変数はデプロイし直さないと変えられない**ため。
+ * 画面から入れた値のほうが新しいはずで、そちらを優先しないと
+ * 「入れ直したのに変わらない」ことになる。環境変数を残してあるのは、
+ * 既に入れてある手元の `.env.local` をそのまま使えるようにするため。
+ *
+ * **client_secret を呼び出し側の画面へ返さないこと。** ここは Secret キーの
+ * クライアントで読んでいて、app_config には RLS ポリシーが1つも無い（0033）。
+ */
+export async function googleOAuth(): Promise<GoogleOAuth | null> {
+  const db = createAdminClient();
+  const { data } = await db
+    .from('app_config')
+    .select('google_client_id, google_client_secret')
+    .maybeSingle();
+
+  const clientId = data?.google_client_id || process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = data?.google_client_secret || process.env.GOOGLE_CLIENT_SECRET;
+
+  return clientId && clientSecret ? { clientId, clientSecret } : null;
+}
+
+/**
+ * 同意のあとに戻ってくる先。**いま開いている URL から組み立てる。**
+ *
+ * 以前は `GOOGLE_REDIRECT_URI` という環境変数だった。手元と本番で別々に要る値なので、
+ * `.env.local`（localhost 向き）を本番へ写すと、同意画面まで行ってから Google 側で
+ * redirect_uri_mismatch になる。**こちらのエラーとしては何も戻ってこない**種類の
+ * 失敗で、原因が分からない。リクエストから作れば、どこで動かしても必ず揃う。
+ *
+ * Google Cloud Console の「承認済みのリダイレクト URI」には、この文字列を
+ * そのまま登録してもらう（設定画面に出している）。
+ */
+export function redirectUriFor(request: Request): string {
+  return new URL('/api/auth/google/callback', request.url).toString();
 }
 
 export type DriveFile = { id: string; url: string; name: string };
@@ -52,12 +91,15 @@ async function accessToken(db: SupabaseClient, account: Account): Promise<string
 
   if (stillValid) return account.access_token as string;
 
+  const oauth = await googleOAuth();
+  if (!oauth) throw new Error('Google の認証情報が設定されていません');
+
   const res = await fetch(OAUTH_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+      client_id: oauth.clientId,
+      client_secret: oauth.clientSecret,
       refresh_token: account.refresh_token,
       grant_type: 'refresh_token',
     }),
@@ -120,7 +162,9 @@ export async function uploadToDrive(
   name: string,
   markdown: string,
 ): Promise<DriveFile> {
-  if (!driveConfigured()) throw new Error('Google の認証情報が設定されていません');
+  if (!(await googleOAuth())) {
+    throw new Error('Google の認証情報が設定されていません。設定画面から入れてください');
+  }
 
   const db = createAdminClient();
   const { data: account } = await db
@@ -175,17 +219,24 @@ export async function uploadToDrive(
  * どちらも「接続する」ボタンが出るだけで、押すと同意画面にも行かずに
  * 設定画面へ戻ってくる。押す前に理由を出せるように、状態を分けて返す。
  *
- * `redirectUri` は秘密ではない（同意画面のURLに載る公開値）。手元と本番で
- * 向き先が違うまま押すと Google 側で redirect_uri_mismatch になるので、
- * 画面側で今いる URL と突き合わせられるように返す。
+ * `clientId` は秘密ではない（同意画面のURLに載る公開値）ので画面に出す。
+ * **`clientSecret` は返さない。**入っているかどうかだけを `configured` で伝える。
  */
-export async function driveStatus(
-  userId: string,
-): Promise<{ connected: boolean; email?: string; configured: boolean; redirectUri?: string }> {
-  const configured = driveConfigured() && Boolean(process.env.GOOGLE_REDIRECT_URI);
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? undefined;
+export async function driveStatus(userId: string): Promise<{
+  connected: boolean;
+  email?: string;
+  configured: boolean;
+  clientId?: string;
+  /** 環境変数から来ているか。画面では「設定画面の値が優先される」と書き分ける。 */
+  fromEnv: boolean;
+}> {
+  const oauth = await googleOAuth();
+  const configured = Boolean(oauth);
+  const fromEnv = Boolean(
+    oauth && oauth.clientId === process.env.GOOGLE_CLIENT_ID && !(await storedClientId()),
+  );
 
-  if (!configured) return { connected: false, configured, redirectUri };
+  if (!configured) return { connected: false, configured, fromEnv };
 
   const db = createAdminClient();
   const { data } = await db
@@ -195,6 +246,33 @@ export async function driveStatus(
     .maybeSingle();
 
   return data
-    ? { connected: true, email: data.email ?? undefined, configured, redirectUri }
-    : { connected: false, configured, redirectUri };
+    ? { connected: true, email: data.email ?? undefined, configured, clientId: oauth?.clientId, fromEnv }
+    : { connected: false, configured, clientId: oauth?.clientId, fromEnv };
+}
+
+/** app_config に入っている client_id（無ければ null）。 */
+async function storedClientId(): Promise<string | null> {
+  const db = createAdminClient();
+  const { data } = await db.from('app_config').select('google_client_id').maybeSingle();
+  return data?.google_client_id ?? null;
+}
+
+/**
+ * 認証情報を保存する。設定画面から呼ばれる。
+ *
+ * **シークレットは空なら触らない。**画面には返していないので、空欄は
+ * 「変えない」の意味にしかなり得ない。ここで空文字を書き込むと、
+ * 保存ボタンを押しただけで接続が壊れる。
+ */
+export async function saveGoogleOAuth(clientId: string, clientSecret: string): Promise<void> {
+  const db = createAdminClient();
+  const patch: Record<string, unknown> = {
+    id: true,
+    google_client_id: clientId.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+  if (clientSecret.trim()) patch.google_client_secret = clientSecret.trim();
+
+  const { error } = await db.from('app_config').upsert(patch, { onConflict: 'id' });
+  if (error) throw error;
 }

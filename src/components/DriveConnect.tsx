@@ -1,6 +1,7 @@
 'use client';
 
-import { UNEXPECTED_ERROR } from '@/lib/actions/result';
+import { ActionForm } from '@/components/ActionForm';
+import { UNEXPECTED_ERROR, type ActionResult } from '@/lib/actions/result';
 import { disconnectDrive } from '@/app/actions/drive';
 import { useState, useTransition } from 'react';
 
@@ -20,18 +21,23 @@ export function DriveConnect({
   email,
   notice,
   configured = true,
-  redirectUri,
-  expectedRedirectUri,
+  clientId,
+  fromEnv = false,
+  callbackUrl,
+  saveCredentials,
 }: {
   connected: boolean;
   email?: string;
   notice?: string;
-  /** GOOGLE_CLIENT_ID / SECRET / REDIRECT_URI がこの環境に入っているか。 */
+  /** OAuth クライアントが（設定か環境変数に）入っているか。 */
   configured?: boolean;
-  /** いま設定されている戻り先。秘密ではない（同意画面のURLに載る）。 */
-  redirectUri?: string;
-  /** いま開いている URL から見た、あるべき戻り先。食い違うときだけ渡ってくる。 */
-  expectedRedirectUri?: string;
+  /** クライアントID。秘密ではない（同意画面のURLに載る）ので出してよい。 */
+  clientId?: string;
+  /** いまの値が環境変数から来ているか。 */
+  fromEnv?: boolean;
+  /** Google Cloud Console に登録してもらう戻り先。 */
+  callbackUrl?: string;
+  saveCredentials: (formData: FormData) => Promise<ActionResult<unknown>>;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -48,36 +54,10 @@ export function DriveConnect({
         </p>
       )}
 
-      {/*
-        未設定のまま押すと、同意画面にも行かずにここへ戻ってくる。
-        何をどこに入れればいいかまで書く（本番と手元で別々に要る）。
-      */}
-      {!connected && !configured && (
+      {/* 未設定のまま押すと、同意画面にも行かずにここへ戻ってくる。 */}
+      {!configured && (
         <p className="text-xs text-amber-500">
-          この環境に Google の認証情報が入っていません。
-          <code className="mx-1 rounded bg-zinc-800 px-1">GOOGLE_CLIENT_ID</code>
-          <code className="mr-1 rounded bg-zinc-800 px-1">GOOGLE_CLIENT_SECRET</code>
-          <code className="mr-1 rounded bg-zinc-800 px-1">GOOGLE_REDIRECT_URI</code>
-          を入れて、デプロイし直してください（本番の Vercel と手元の
-          <code className="mx-1 rounded bg-zinc-800 px-1">.env.local</code>
-          は別々に要ります）。
-        </p>
-      )}
-
-      {/*
-        向き先が違うと、同意画面まで行ってから Google 側で
-        redirect_uri_mismatch になる。こちらのエラーとして戻ってこないので、
-        押す前に出しておかないと原因が分からない。
-      */}
-      {!connected && configured && expectedRedirectUri && (
-        <p className="text-xs text-amber-500">
-          戻り先の設定が、いま開いている URL と違います。
-          <code className="mx-1 rounded bg-zinc-800 px-1">GOOGLE_REDIRECT_URI</code>
-          を
-          <code className="mx-1 rounded bg-zinc-800 px-1">{expectedRedirectUri}</code>
-          にして（いまは <code className="rounded bg-zinc-800 px-1">{redirectUri}</code>）、
-          同じ URL を Google Cloud Console の「承認済みのリダイレクト URI」にも
-          登録してください。
+          まだ Google の認証情報が入っていません。下の欄に入れると接続できるようになります。
         </p>
       )}
 
@@ -123,6 +103,86 @@ export function DriveConnect({
       )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}
+
+      {/*
+        認証情報。**環境変数から画面へ移した**（0033）。環境変数はデプロイし直さないと
+        変えられず、Vercel の画面を触れる人しか設定できなかった。接続そのものは
+        各ユーザーが押すだけの操作なのに、その手前が運用作業になっていた。
+
+        **OAuth クライアントはアプリに1つ。**ユーザーごとに作るものではないので、
+        ここを1回入れれば、他の人は上の「接続」を押すだけで済む。
+      */}
+      <details className="rounded border border-zinc-800 p-2" open={!configured}>
+        <summary className="cursor-pointer text-xs text-zinc-400">
+          Google の認証情報{configured ? '（設定済み）' : '（未設定）'}
+        </summary>
+
+        <p className="mt-2 text-xs text-zinc-500">
+          Google Cloud Console で「OAuth クライアント（ウェブアプリケーション）」を作り、
+          その ID とシークレットを入れてください。アプリ全体で1つあれば足ります
+          （使う人ごとに作る必要はありません。各ユーザーは上のボタンを押すだけです）。
+        </p>
+
+        {callbackUrl && (
+          <p className="mt-2 text-xs text-zinc-500">
+            「承認済みのリダイレクト URI」には
+            <code className="mx-1 rounded bg-zinc-800 px-1 break-all">{callbackUrl}</code>
+            を登録してください。ここが1文字でも違うと、同意画面まで進んでから
+            Google 側で弾かれます（こちらには何も戻ってこないので、原因が見えません）。
+            手元と本番のように URL が複数あるなら、両方登録してかまいません。
+          </p>
+        )}
+
+        {fromEnv && (
+          <p className="mt-2 text-xs text-zinc-500">
+            いまは環境変数（<code className="rounded bg-zinc-800 px-1">GOOGLE_CLIENT_ID</code>）の
+            値を使っています。ここに入れると、そちらが優先されます。
+          </p>
+        )}
+
+        <ActionForm action={saveCredentials} className="mt-2 space-y-2" success="保存しました">
+          <div>
+            <label className="block text-xs text-zinc-400" htmlFor="google_client_id">
+              クライアント ID
+            </label>
+            <input
+              id="google_client_id"
+              name="google_client_id"
+              type="text"
+              defaultValue={clientId ?? ''}
+              autoComplete="off"
+              placeholder="0000000000-xxxxxxxx.apps.googleusercontent.com"
+              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-zinc-400" htmlFor="google_client_secret">
+              クライアントシークレット
+            </label>
+            <input
+              id="google_client_secret"
+              name="google_client_secret"
+              type="password"
+              autoComplete="off"
+              placeholder={configured ? '設定済み（変えるときだけ入力）' : ''}
+              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
+            />
+            {/* 画面へ返していない値なので、空欄は「変えない」の意味にしかならない。
+                ここで空文字を保存すると、押しただけで接続が壊れる。 */}
+            <p className="mt-1 text-xs text-zinc-600">
+              シークレットは画面には出しません。空のまま保存すると、いまの値のままです。
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:text-zinc-100"
+          >
+            認証情報を保存
+          </button>
+        </ActionForm>
+      </details>
     </div>
   );
 }
@@ -133,5 +193,5 @@ const NOTICES: Record<string, string> = {
   state: '接続の途中で情報が食い違いました。もう一度お試しください。',
   'no-refresh': '再接続のための許可が得られませんでした。もう一度お試しください。',
   failed: '接続できませんでした。',
-  unconfigured: 'Google の認証情報（GOOGLE_CLIENT_ID など）が設定されていません。',
+  unconfigured: 'Google の認証情報が入っていません。下の欄から入れてください。',
 };

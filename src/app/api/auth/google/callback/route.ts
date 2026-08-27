@@ -1,3 +1,4 @@
+import { googleOAuth, redirectUriFor } from '@/lib/export/drive';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
@@ -39,14 +40,18 @@ export async function GET(request: Request) {
   const expected = /rsstube_google_state=([a-f0-9]+)/.exec(cookie)?.[1];
   if (!expected || expected !== state) return back(request, 'state');
 
+  const oauth = await googleOAuth();
+  if (!oauth) return back(request, 'unconfigured');
+
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      redirect_uri: process.env.GOOGLE_REDIRECT_URI ?? '',
+      client_id: oauth.clientId,
+      client_secret: oauth.clientSecret,
+      // 送り出したときと同じ文字列でなければ Google が弾く。同じ関数で作る。
+      redirect_uri: redirectUriFor(request),
       grant_type: 'authorization_code',
     }),
   });
