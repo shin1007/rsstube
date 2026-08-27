@@ -3,16 +3,18 @@
 import { ActionFlash } from '@/components/ArticleActions';
 import { HelpTip } from '@/components/HelpTip';
 import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
+import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import {
+  loadMoreArticles,
   markRead,
   requestSummaries,
   setReadLater,
   setReadMany,
   setStarred,
 } from '@/app/actions/articles';
-import { VIEW_LABELS, type ArticleRow, type View } from '@/lib/types';
+import { PAGE_SIZE, VIEW_LABELS, type ArticleRow, type View } from '@/lib/types';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 /**
  * 記事リスト。ここが「大量の記事を高速に捌く」中心。
@@ -20,9 +22,12 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
  * - 行にAIの要点と重要度を出し、開かずに判断できるようにする
  * - PC: j/k で移動、m 既読、s スター、l あとで、v 元記事、Shift+A 全既読、? でヘルプ
  * - スマホ: 左スワイプで既読、右スワイプであとで
+ * - 下まで来たら続きを継ぎ足す（無限スクロール）
  */
 
-/** ヘルプに出す一覧。実際の処理は onKey 側にあるので、増やしたら両方直すこと。 */
+/**
+ * ヘルプに出す一覧。実際の処理は onKey 側にあるので、増やしたら両方直すこと。
+ */
 const SHORTCUTS: [string, string][] = [
   ['j / ↓', '次の記事'],
   ['k / ↑', '前の記事'],
@@ -36,6 +41,40 @@ const SHORTCUTS: [string, string][] = [
   ['/', '検索'],
   ['?', 'このヘルプ'],
 ];
+
+/**
+ * 一覧の下端に常設するぶん。
+ *
+ * **ヘルプ（?）は、あることを知らないと開かれない。**元の作りではショートカットが
+ * 全部その中に畳まれていて、`?` を押す動機がそもそも生まれなかった。よく使う数個
+ * だけを常に見えるところへ置き、残りは `?` に畳む。全部を下端に出すと、毎日見る
+ * 画面の下端が読みものになる。
+ */
+const BAR: [string, string][] = [
+  ['j/k', '移動'],
+  ['o', '開く'],
+  ['m', '既読'],
+  ['s', '★'],
+  ['l', 'あとで'],
+];
+
+const EMPTY_STATE = {
+  is_read: false,
+  is_starred: false,
+  read_later: false,
+  exported_at: null as string | null,
+};
+
+type StatePatch = Partial<typeof EMPTY_STATE>;
+
+/** キーの見た目。文字だけだと本文に紛れて、押せる文字だと分からない。 */
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-px text-[10px] leading-none text-zinc-300">
+      {children}
+    </kbd>
+  );
+}
 
 export function ArticleList({
   articles,
@@ -54,11 +93,84 @@ export function ArticleList({
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
 
+  const folderId = searchParams.get('folder') ?? undefined;
+  const feedId = searchParams.get('feed') ?? undefined;
+
+  /**
+   * 継ぎ足したぶん。1ページ目はサーバー（page.tsx）が持っている。
+   *
+   * 記事を開くと URL が変わってサーバーから1ページ目が描き直されるが、
+   * この state は残るので、**開いて戻っても読み込んだ位置が消えない**。
+   * ここを props だけで組み立てると、1件開くたびに先頭60件へ巻き戻る。
+   */
+  const [extra, setExtra] = useState<ArticleRow[]>([]);
+  /**
+   * 次に取る位置は「読み込んだページ数 × PAGE_SIZE」で出す。表示中の行数から
+   * 出してはいけない——未読ビューでは読んだ記事が1ページ目から抜けて行数が減るので、
+   * 同じ位置を取り直しては重複除去で0件になり、**画面が動かないまま取得が
+   * 止まらなくなる**（下端に居続けるので観測が何度でも発火する）。
+   */
+  const [pages, setPages] = useState(1);
+  const [done, setDone] = useState(articles.length < PAGE_SIZE);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadingRef = useRef(false);
+
+  /**
+   * 継ぎ足したぶんの状態の上書き。
+   *
+   * 1ページ目はサーバーが描き直すので既読やスターの変化がそのまま出るが、
+   * 継ぎ足したぶんはこちらが state で持っているので**押しても見た目が変わらない**。
+   * 押した内容をここに覚えて、描くときに重ねる。
+   */
+  const [patches, setPatches] = useState<Record<string, StatePatch>>({});
+
+  const patch = useCallback((id: string, p: StatePatch) => {
+    setPatches((prev) => ({ ...prev, [id]: { ...prev[id], ...p } }));
+    // setPatches まで並べているのは React Compiler の求めるまま。
+    // 省くと『Existing memoization could not be preserved』でこの部品ごと
+    // 最適化が止まる（lint が error にする）。中身は使わないが並べておく。
+  }, [setPatches]);
+
+  // 絞り込みが変わったら継ぎ足しは全部捨てる。「未読の続き」を
+  // 「スター」の一覧に混ぜてはいけない。
+  const queryKey = JSON.stringify([view, sort, folderId, feedId, search]);
+  const [syncedKey, setSyncedKey] = useState(queryKey);
+  if (queryKey !== syncedKey) {
+    setSyncedKey(queryKey);
+    setExtra([]);
+    setPages(1);
+    setDone(articles.length < PAGE_SIZE);
+    setPatches({});
+    setLoadError(null);
+  }
+
+  /**
+   * 1ページ目 + 継ぎ足し。id で重複を落とす（未読を読むと位置がずれるので、
+   * 同じ記事が両方に入ることがある）。
+   *
+   * useMemo なのは、これを毎レンダー作り直すと下のキー操作の登録も
+   * 作り直しになるため（1文字打つたびに listener を張り替えることになる）。
+   */
+  const rows: ArticleRow[] = useMemo(() => {
+    const out = [...articles];
+    const seen = new Set(articles.map((a) => a.id));
+    for (const a of extra) {
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      const p = patches[a.id];
+      out.push(p ? { ...a, state: { ...EMPTY_STATE, ...a.state, ...p } } : a);
+    }
+    return out;
+  }, [articles, extra, patches]);
+
   // キーボード操作のカーソル。
-  const selectedIndex = articles.findIndex((a) => a.id === selectedId);
+  const selectedIndex = rows.findIndex((a) => a.id === selectedId);
   const [cursor, setCursor] = useState(() => Math.max(0, selectedIndex));
   const rowRefs = useRef<(HTMLElement | null)[]>([]);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const [helpOpen, setHelpOpen] = useState(false);
   // 全既読の取り消し用に、直前まで未読だった記事を覚えておく。
@@ -89,18 +201,75 @@ export function ArticleList({
     (id: string) => {
       pushParams((sp) => sp.set('article', id));
       // 開いた時点で既読にする（Inoreader と同じ挙動）。
+      patch(id, { is_read: true });
       startTransition(() => void markRead(id, true));
     },
-    [pushParams],
+    [pushParams, patch],
   );
+
+  /** 続きを取る。下端の観測と、カーソルが末尾に近づいたときから呼ばれる。 */
+  const loadMore = useCallback(async () => {
+    if (loadingRef.current || done) return;
+    loadingRef.current = true;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const r = await loadMoreArticles({
+        view,
+        sort,
+        folderId,
+        feedId,
+        search,
+        offset: pages * PAGE_SIZE,
+      });
+      if (r.ok) {
+        setExtra((prev) => [...prev, ...r.value.articles]);
+        setPages((p) => p + 1);
+        if (r.value.done) setDone(true);
+      } else {
+        // 黙って止めない。止まったのか終わったのかが見分けられなくなる。
+        setLoadError(r.message);
+      }
+    } catch {
+      setLoadError(UNEXPECTED_ERROR);
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
+    // set… も並べる理由は patch と同じ。
+  }, [done, pages, view, sort, folderId, feedId, search, setExtra, setPages, setDone, setLoading, setLoadError]);
+
+  /**
+   * 下端が見えたら続きを取る。
+   *
+   * root は一覧の枠。ページ全体はスクロールしない（三ペインで枠ごとに
+   * overflow-y-auto している）ので、既定の viewport 基準だと一度も交差しない。
+   * 失敗したときは観測を張らない——同じ失敗を延々と繰り返すことになる。
+   */
+  useEffect(() => {
+    if (done || loadError) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) void loadMore();
+      },
+      // 下端に着いてから取りに行くと必ず待つことになる。1画面ぶん手前で始める。
+      { root: scrollRef.current, rootMargin: '600px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [done, loadError, loadMore]);
 
   const markAll = useCallback(() => {
     // 既に既読だったものは戻す対象にしない。
-    const wasUnread = articles.filter((a) => !a.state?.is_read).map((a) => a.id);
+    const wasUnread = rows.filter((a) => !a.state?.is_read).map((a) => a.id);
     if (wasUnread.length === 0) return;
     setUndoIds(wasUnread);
-    startTransition(() => void setReadMany(articles.map((a) => a.id), true));
-  }, [articles]);
+    for (const id of wasUnread) patch(id, { is_read: true });
+    startTransition(() => void setReadMany(rows.map((a) => a.id), true));
+  }, [rows, patch]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -122,7 +291,7 @@ export function ArticleList({
         return;
       }
 
-      const current = articles[cursor];
+      const current = rows[cursor];
 
       switch (e.key) {
         case '?':
@@ -142,9 +311,12 @@ export function ArticleList({
         case 'j':
         case 'ArrowDown': {
           e.preventDefault();
-          const next = Math.min(cursor + 1, articles.length - 1);
+          const next = Math.min(cursor + 1, rows.length - 1);
           setCursor(next);
           rowRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+          // 末尾が近づいたら続きを呼ぶ。キーだけで読み進める人は、下端が
+          // 見えるところまでスクロールしないので観測が発火しない。
+          if (next >= rows.length - 5) void loadMore();
           break;
         }
         case 'k':
@@ -167,6 +339,7 @@ export function ArticleList({
             e.preventDefault();
             const next = !current.state?.is_read;
             setFlash(next ? '既読にしました' : '未読に戻しました');
+            patch(current.id, { is_read: next });
             startTransition(() => void markRead(current.id, next));
           }
           break;
@@ -175,6 +348,7 @@ export function ArticleList({
             e.preventDefault();
             const next = !current.state?.is_starred;
             setFlash(next ? 'スターを付けました' : 'スターを外しました');
+            patch(current.id, { is_starred: next });
             startTransition(() => void setStarred(current.id, next));
           }
           break;
@@ -183,6 +357,7 @@ export function ArticleList({
             e.preventDefault();
             const next = !current.state?.read_later;
             setFlash(next ? '「あとで読む」に入れました' : '「あとで読む」から外しました');
+            patch(current.id, { read_later: next });
             startTransition(() => void setReadLater(current.id, next));
           }
           break;
@@ -203,9 +378,9 @@ export function ArticleList({
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [articles, cursor, open, helpOpen, selectedId, pushParams, markAll]);
+  }, [rows, cursor, open, helpOpen, selectedId, pushParams, markAll, patch, loadMore]);
 
-  const unreadCount = articles.filter((a) => !a.state?.is_read).length;
+  const unreadCount = rows.filter((a) => !a.state?.is_read).length;
 
   return (
     <div className="relative flex flex-col h-full min-h-0">
@@ -214,18 +389,21 @@ export function ArticleList({
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">{VIEW_LABELS[view]}</h2>
           <span className="text-xs text-zinc-500">
-            {articles.length}件{unreadCount > 0 && ` / 未読 ${unreadCount}`}
+            {/* まだ続きがあるなら「+」を付ける。確定した数字として出すと、
+                スクロールのたびに増えるのが数え間違いに見える。 */}
+            {rows.length}件{!done && '+'}
+            {unreadCount > 0 && ` / 未読 ${unreadCount}`}
           </span>
 
           {view === 'unsummarized' ? (
             <button
               type="button"
-              disabled={articles.length === 0}
+              disabled={rows.length === 0}
               onClick={() =>
                 startTransition(async () => {
                   // 結果を捨てない。捨てると、無料枠切れも未ログインも
                   // 「押しても何も起きない」として同じに見える。
-                  const r = await requestSummaries(articles.map((a) => a.id));
+                  const r = await requestSummaries(rows.map((a) => a.id));
                   setFlash(r.ok ? '再要約を受け付けました。順に処理されます。' : r.message);
                 })
               }
@@ -238,9 +416,14 @@ export function ArticleList({
               type="button"
               disabled={unreadCount === 0}
               onClick={markAll}
-              className="ml-auto rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100 disabled:opacity-40"
+              title="表示中をすべて既読（Shift + A）"
+              className="ml-auto flex items-center gap-1.5 rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100 disabled:opacity-40"
             >
               全既読
+              {/* ボタンの隣にキーを出す。ヘルプを開かなくても、押しながら覚えられる。 */}
+              <span className="hidden md:inline">
+                <Kbd>⇧A</Kbd>
+              </span>
             </button>
           )}
         </div>
@@ -285,21 +468,11 @@ export function ArticleList({
           {/* 重要度で並べているときだけ、その点数が何なのかを引ける「?」を出す。
               キーボードヘルプの ? と紛れないよう、説明する対象の隣に置く。 */}
           {sort === 'important' && <HelpTip label="重要度とは" text={IMPORTANCE_HELP} />}
-
-          <button
-            type="button"
-            onClick={() => setHelpOpen(true)}
-            aria-label="キーボードショートカット"
-            title="キーボードショートカット（?）"
-            className="hidden md:block rounded border border-zinc-800 px-2 py-1 text-xs text-zinc-500 hover:text-zinc-200"
-          >
-            ?
-          </button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto thin-scroll pb-16 md:pb-0">
-        {articles.length === 0 && (
+      <div ref={scrollRef} className="flex-1 overflow-y-auto thin-scroll pb-16 md:pb-0">
+        {rows.length === 0 && (
           <p className="p-6 text-center text-sm text-zinc-500">
             {search
               ? `「${search}」に一致する記事はありません`
@@ -311,7 +484,7 @@ export function ArticleList({
           </p>
         )}
 
-        {articles.map((article, i) => (
+        {rows.map((article, i) => (
           <Row
             key={article.id}
             ref={(el) => {
@@ -326,16 +499,59 @@ export function ArticleList({
               open(article.id);
             }}
             onFlash={setFlash}
+            onPatch={patch}
           />
         ))}
 
-        {/* 上限に当たっているなら黙って切らない。 */}
-        {articles.length >= 60 && (
-          <p className="px-3 py-4 text-center text-xs text-zinc-600">
-            先頭60件まで表示しています。絞り込むか検索してください。
-          </p>
+        {/* 下端。ここが見えたら続きを取る。高さゼロだと交差しないことがあるので、
+            必ず何か描いておく（読み込み中は文言、終わりは終わりと書く）。 */}
+        {rows.length > 0 && (
+          <div ref={sentinelRef} className="px-3 py-4 text-center text-xs text-zinc-600">
+            {loadError ? (
+              <span className="flex flex-col items-center gap-2">
+                <span className="text-amber-400">{loadError}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoadError(null);
+                    void loadMore();
+                  }}
+                  className="rounded border border-zinc-700 px-2 py-1 text-zinc-300 hover:text-zinc-100"
+                >
+                  もう一度読み込む
+                </button>
+              </span>
+            ) : loading ? (
+              '読み込み中…'
+            ) : done ? (
+              'これで全部です'
+            ) : (
+              '続きを読み込みます…'
+            )}
+          </div>
         )}
       </div>
+
+      {/* ショートカットの常設バー。スマホには物理キーが無いので出さない
+          （そのぶんはスワイプが担う）。 */}
+      <footer className="hidden md:flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-800 px-3 py-1.5 text-[11px] text-zinc-500">
+        {BAR.map(([keys, label]) => (
+          <span key={keys} className="flex items-center gap-1">
+            <Kbd>{keys}</Kbd>
+            {label}
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={() => setHelpOpen(true)}
+          aria-label="キーボードショートカット"
+          title="キーボードショートカット（?）"
+          className="ml-auto flex items-center gap-1 rounded px-1 hover:text-zinc-200"
+        >
+          <Kbd>?</Kbd>
+          すべて
+        </button>
+      </footer>
 
       {undoIds && (
         <UndoBar
@@ -343,6 +559,7 @@ export function ArticleList({
           onUndo={() => {
             const ids = undoIds;
             setUndoIds(null);
+            for (const id of ids) patch(id, { is_read: false });
             startTransition(() => void setReadMany(ids, false));
           }}
           onDismiss={() => setUndoIds(null)}
@@ -357,7 +574,15 @@ export function ArticleList({
   );
 }
 
-/** 全既読の取り消し。数秒で自分から消える。 */
+/**
+ * 全既読の取り消し。自分から消える。
+ *
+ * 無限スクロールを入れてから、この対象は「読み込んだぶん全部」になった。
+ * 60件で頭打ちだった頃より押し間違いの被害が大きいので、消えるまでを
+ * 10秒に伸ばしてある（8秒だと、件数を読んでから指を動かすには短い）。
+ */
+const UNDO_MS = 10000;
+
 function UndoBar({
   count,
   onUndo,
@@ -368,14 +593,16 @@ function UndoBar({
   onDismiss: () => void;
 }) {
   useEffect(() => {
-    const timer = setTimeout(onDismiss, 8000);
+    const timer = setTimeout(onDismiss, UNDO_MS);
     return () => clearTimeout(timer);
   }, [onDismiss]);
 
   return (
     <div
       role="status"
-      className="absolute inset-x-3 bottom-20 z-20 flex items-center gap-3 rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs shadow-lg md:bottom-4"
+      // PC ではショートカットのバーぶん（約28px）上に置く。重ねると
+      // 「取り消す」がバーの上に乗って、どちらも読めなくなる。
+      className="absolute inset-x-3 bottom-20 z-20 flex items-center gap-3 rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs shadow-lg md:bottom-12"
     >
       <span className="flex-1">{count}件を既読にしました</span>
       <button type="button" onClick={onUndo} className="font-semibold text-sky-400 hover:text-sky-300">
@@ -417,6 +644,9 @@ function HelpOverlay({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </dl>
+        <p className="mt-3 border-t border-zinc-800 pt-3 text-[11px] text-zinc-500">
+          一覧は下までスクロールすると続きを読み込みます。
+        </p>
       </div>
     </div>
   );
@@ -430,6 +660,7 @@ function Row({
   onOpen,
   onFocus,
   onFlash,
+  onPatch,
 }: {
   ref: (el: HTMLElement | null) => void;
   article: ArticleRow;
@@ -439,6 +670,8 @@ function Row({
   onFocus: () => void;
   /** スワイプで何をしたかを親に伝え、帯で出してもらう。 */
   onFlash: (text: string) => void;
+  /** 継ぎ足したぶんの行は親が state で持っている。押した結果を親へ返す。 */
+  onPatch: (id: string, patch: StatePatch) => void;
 }) {
   const [, startTransition] = useTransition();
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -503,10 +736,12 @@ function Row({
           touchStart.current = null;
           if (dx < -THRESHOLD) {
             onFlash(read ? '未読に戻しました' : '既読にしました');
+            onPatch(article.id, { is_read: !read });
             startTransition(() => void markRead(article.id, !read));
           } else if (dx > THRESHOLD) {
             const next = !article.state?.read_later;
             onFlash(next ? '「あとで読む」に入れました' : '「あとで読む」から外しました');
+            onPatch(article.id, { read_later: next });
             startTransition(() => void setReadLater(article.id, next));
           }
         }}

@@ -25,6 +25,7 @@ import { getDriveStatus } from '@/app/actions/drive';
 import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import type { FeedRow, FolderRow } from '@/lib/types';
 
@@ -46,6 +47,23 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
     pipelineStatus(),
     getDriveStatus(),
   ]);
+
+  /**
+   * Drive の戻り先が、いま開いている URL と揃っているか。
+   *
+   * 手元と本番で別々に要る値なので、本番へ `.env.local` の localhost を
+   * そのまま写すと、同意画面まで行ってから Google 側で
+   * redirect_uri_mismatch になる。**こちらのエラーとしては戻ってこない**ので、
+   * 画面に出しておかないと原因が分からない。
+   */
+  const h = await headers();
+  const host = h.get('host');
+  const proto = h.get('x-forwarded-proto') ?? (host?.startsWith('localhost') ? 'http' : 'https');
+  const expectedRedirectUri = host ? `${proto}://${host}/api/auth/google/callback` : undefined;
+  const redirectMismatch =
+    expectedRedirectUri && drive.redirectUri && drive.redirectUri !== expectedRedirectUri
+      ? expectedRedirectUri
+      : undefined;
 
   /**
    * 設定の保存。
@@ -292,7 +310,14 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             権限は<strong className="text-zinc-400">このアプリが作ったファイルだけ</strong>
             （drive.file）。既存のドライブの中身は読みません。
           </p>
-          <DriveConnect connected={drive.connected} email={drive.email} notice={notice} />
+          <DriveConnect
+            connected={drive.connected}
+            email={drive.email}
+            notice={notice}
+            configured={drive.configured}
+            redirectUri={drive.redirectUri}
+            expectedRedirectUri={redirectMismatch}
+          />
         </section>
 
         {/* ---------------- 通知 ---------------- */}

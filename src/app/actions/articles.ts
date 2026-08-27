@@ -1,6 +1,8 @@
 'use server';
 
 import { attempt } from '@/lib/actions/result';
+import { listArticles } from '@/lib/articles';
+import { PAGE_SIZE, type ArticleRow, type View } from '@/lib/types';
 
 import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
@@ -142,6 +144,58 @@ async function requestSummariesImpl(articleIds: string[]) {
   );
   if (error) throw error;
   revalidatePath('/');
+}
+
+const VIEWS: View[] = ['unread', 'starred', 'later', 'all', 'unsummarized'];
+
+/** これ以上は遡らせない。無限スクロールに終わりが無いと、古い記事を延々と
+ *  取りに行けてしまう（1回60件・往復ぶんの負荷がそのままかかる）。
+ *  掘り返す用途は /library の検索が持っているので、一覧はここで打ち止めにする。 */
+const MAX_OFFSET = 3000;
+
+/**
+ * 一覧の続きを取る（無限スクロール）。
+ *
+ * 絞り込みはクライアントから渡ってくるが、Server Function は UI を経由せず
+ * 直接叩けるので view はここで通す値を決め直す。データそのものは RLS と
+ * article_states!inner が絞るので、他人の記事は出ない。
+ */
+export async function loadMoreArticles(input: {
+  view: string;
+  sort: string;
+  folderId?: string;
+  feedId?: string;
+  search?: string;
+  offset: number;
+}) {
+  return attempt(() => loadMoreArticlesImpl(input));
+}
+
+async function loadMoreArticlesImpl(input: {
+  view: string;
+  sort: string;
+  folderId?: string;
+  feedId?: string;
+  search?: string;
+  offset: number;
+}): Promise<{ articles: ArticleRow[]; done: boolean }> {
+  await client();
+
+  const offset = Math.max(0, Math.trunc(Number(input.offset) || 0));
+  if (offset >= MAX_OFFSET) return { articles: [], done: true };
+
+  const articles = await listArticles({
+    view: (VIEWS as string[]).includes(input.view) ? (input.view as View) : 'unread',
+    sort: input.sort === 'important' ? 'important' : 'new',
+    folderId: input.folderId || undefined,
+    feedId: input.feedId || undefined,
+    search: input.search?.trim() || undefined,
+    offset,
+  });
+
+  // 返ってきた数が1ページに満たなければ、そこが終わり。
+  // 件数の総数を数えないのは、未読ビューだと読むそばから変わるため。
+  return { articles, done: articles.length < PAGE_SIZE || offset + articles.length >= MAX_OFFSET };
 }
 
 /** 要約が無い記事、または要約をやり直したい記事をキューに積む。 */
