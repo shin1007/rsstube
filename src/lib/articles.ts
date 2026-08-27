@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { sanitizeSearch } from '@/lib/search';
-import type { ArticleRow, View } from '@/lib/types';
+import { PAGE_SIZE, type ArticleRow, type View } from '@/lib/types';
 
 /**
  * 一覧用の記事取得。
@@ -13,14 +13,21 @@ import type { ArticleRow, View } from '@/lib/types';
  * これが購読フィルタを兼ねる。フォルダは購読ごとの持ち物なので subscriptions を見る。
  */
 
-export const PAGE_SIZE = 60;
-
 export type ArticleQuery = {
   view: View;
   folderId?: string;
   feedId?: string;
   sort: 'new' | 'important';
   search?: string;
+  /**
+   * 何件目から返すか。無限スクロールの継ぎ足しで使う。
+   *
+   * 未読ビューでは読んだ記事が一覧から抜けるので、**続きを取っている間に
+   * 位置がずれる**（既読にしたぶんだけ後ろが繰り上がる）。ここでは直さない。
+   * 受け取る側が id で重複を落とすこと。DB 側で位置を凍らせようとすると
+   * カーソル用の一意な列が要るが、重要度順は同点が並ぶので一意にならない。
+   */
+  offset?: number;
 };
 
 type RawRow = {
@@ -42,18 +49,37 @@ type RawRow = {
   } | null;
 };
 
-export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
+/** 一覧に出すぶん。 */
+const LIST_SELECT = `id, title, url, author, published_at, excerpt, content_ok, extracted_at,
+   feeds!inner (id, title, subscriptions!inner (folder_id)),
+   summaries (bullets, tags, importance, title_ja),
+   article_states!inner (is_read, is_starred, read_later, exported_at)`;
+
+/**
+ * 前後の記事を出すためだけの、id しか要らないぶん。
+ *
+ * 埋め込みを落とせないのは、絞り込み（未読・スター・フォルダ）が
+ * 埋め込んだ表の列を見るため。!inner が無いと条件そのものが書けない。
+ * 運ぶ列は id だけなので、本文も要約も付いてこない。
+ */
+const ID_SELECT = `id,
+   feeds!inner (id, subscriptions!inner (folder_id)),
+   article_states!inner (is_read, is_starred, read_later)`;
+
+/**
+ * 絞り込みと並び順は1か所にまとめる。一覧と id 取得で条件がずれると、
+ * 「前後の記事」だけ別の並びを指すことになり、押すたびに飛ぶ先が変わる。
+ *
+ * select を変数で渡しているので supabase-js の型推論は効かない。
+ * 呼び出し側が形を知っているので、そちらで受け直すこと。
+ */
+async function run(select: string, query: ArticleQuery, limit: number) {
   const supabase = await createClient();
 
   let q = supabase
     .from('articles')
-    .select(
-      `id, title, url, author, published_at, excerpt, content_ok, extracted_at,
-       feeds!inner (id, title, subscriptions!inner (folder_id)),
-       summaries (bullets, tags, importance, title_ja),
-       article_states!inner (is_read, is_starred, read_later, exported_at)`,
-    )
-    .limit(PAGE_SIZE);
+    .select(select)
+    .range(query.offset ?? 0, (query.offset ?? 0) + limit - 1);
 
   if (query.feedId) q = q.eq('feed_id', query.feedId);
   if (query.folderId) q = q.eq('feeds.subscriptions.folder_id', query.folderId);
@@ -106,8 +132,13 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
 
   const { data, error } = await q;
   if (error) throw error;
+  return data ?? [];
+}
 
-  return ((data ?? []) as unknown as RawRow[]).map((r) => ({
+export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
+  const data = await run(LIST_SELECT, query, PAGE_SIZE);
+
+  return (data as unknown as RawRow[]).map((r) => ({
     id: r.id,
     title: r.title,
     url: r.url,
@@ -120,6 +151,23 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
     summary: r.summaries ?? null,
     state: r.article_states ?? null,
   }));
+}
+
+/**
+ * 前後の記事を出すための id 一覧。
+ *
+ * 無限スクロールで先へ進んでから開いた記事は1ページ目に入っていないので、
+ * 一覧の配列からは位置が出せない。かといって記事を60件ずつ何度も取り直すのは
+ * 高い（本文も要約も付いてくる）。ここは id しか運ばない。
+ *
+ * 上限を切ってあるのは、一覧の無限スクロールと同じ理由。ここより深いところの
+ * 前後は出ない（出せないぶんはリンクを出さない。押せないボタンは出さない）。
+ */
+const NEIGHBOUR_SCAN = 600;
+
+export async function listArticleIds(query: ArticleQuery): Promise<string[]> {
+  const data = await run(ID_SELECT, { ...query, offset: 0 }, NEIGHBOUR_SCAN);
+  return (data as unknown as { id: string }[]).map((r) => r.id);
 }
 
 export async function getArticle(id: string) {

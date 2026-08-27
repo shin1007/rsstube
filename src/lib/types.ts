@@ -1,3 +1,12 @@
+/**
+ * 一覧を1回に取る件数。無限スクロールはこの単位で継ぎ足す。
+ *
+ * types に置いてあるのは、クライアント側（ArticleList）にも同じ数が要るため。
+ * lib/articles.ts に置いたままにすると、そこから next/headers を引いているので
+ * クライアントコンポーネントにサーバ専用のコードが混ざる。
+ */
+export const PAGE_SIZE = 60;
+
 export type ArticleRow = {
   id: string;
   title: string;

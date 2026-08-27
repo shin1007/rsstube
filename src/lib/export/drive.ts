@@ -168,9 +168,24 @@ export async function uploadToDrive(
   };
 }
 
-/** 接続しているか（画面に出すぶんだけ）。トークンそのものは返さない。 */
-export async function driveStatus(userId: string): Promise<{ connected: boolean; email?: string }> {
-  if (!driveConfigured()) return { connected: false };
+/**
+ * 接続しているか（画面に出すぶんだけ）。トークンそのものは返さない。
+ *
+ * `configured` を返すのは、**未設定と未接続が画面で同じに見えていた**ため。
+ * どちらも「接続する」ボタンが出るだけで、押すと同意画面にも行かずに
+ * 設定画面へ戻ってくる。押す前に理由を出せるように、状態を分けて返す。
+ *
+ * `redirectUri` は秘密ではない（同意画面のURLに載る公開値）。手元と本番で
+ * 向き先が違うまま押すと Google 側で redirect_uri_mismatch になるので、
+ * 画面側で今いる URL と突き合わせられるように返す。
+ */
+export async function driveStatus(
+  userId: string,
+): Promise<{ connected: boolean; email?: string; configured: boolean; redirectUri?: string }> {
+  const configured = driveConfigured() && Boolean(process.env.GOOGLE_REDIRECT_URI);
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? undefined;
+
+  if (!configured) return { connected: false, configured, redirectUri };
 
   const db = createAdminClient();
   const { data } = await db
@@ -179,5 +194,7 @@ export async function driveStatus(userId: string): Promise<{ connected: boolean;
     .eq('user_id', userId)
     .maybeSingle();
 
-  return data ? { connected: true, email: data.email ?? undefined } : { connected: false };
+  return data
+    ? { connected: true, email: data.email ?? undefined, configured, redirectUri }
+    : { connected: false, configured, redirectUri };
 }

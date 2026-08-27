@@ -3,9 +3,9 @@ import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
-import { getArticle, listArticles, unreadCounts } from '@/lib/articles';
+import { getArticle, listArticleIds, listArticles, unreadCounts } from '@/lib/articles';
 import { createClient } from '@/lib/supabase/server';
-import type { FeedRow, FolderRow, View } from '@/lib/types';
+import { PAGE_SIZE, type FeedRow, type FolderRow, type View } from '@/lib/types';
 
 /**
  * リーダー本体。
@@ -82,8 +82,28 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   // 前後の記事は「いま出しているもの」を基準にする。先頭を自動で出したときも
   // 「次へ」で読み進められるように。
   const index = previewId ? articles.findIndex((a) => a.id === previewId) : -1;
-  const prev = index > 0 ? articles[index - 1] : undefined;
-  const next = index >= 0 && index < articles.length - 1 ? articles[index + 1] : undefined;
+  let prevId = index > 0 ? articles[index - 1].id : undefined;
+  let nextId = index >= 0 && index < articles.length - 1 ? articles[index + 1].id : undefined;
+
+  /**
+   * 無限スクロールで先へ進んでから開いた記事は、1ページ目には入っていない。
+   * そのまま index = -1 のまま描くと**「次の記事」がどこにも出ない**——スマホには
+   * 一覧へ戻る以外の導線が無いので、61件目から先は毎回戻ることになる。
+   * そのときだけ id だけを広く引いて位置を出す。
+   *
+   * 未読ビューでは引かない。**開いた記事はその場で既読になる**ので、
+   * 未読の一覧には最初から居ない（1ページ目に無いのは深いからではない）。
+   * 引いても必ず空振りで、記事を開くたびに1往復ぶん無駄になる。
+   * 1ページ目が埋まっていないときも引かない——続きが無いので深いはずがない。
+   */
+  if (previewId && index === -1 && view !== 'unread' && articles.length >= PAGE_SIZE) {
+    const ids = await listArticleIds({ view, folderId, feedId, sort, search });
+    const at = ids.indexOf(previewId);
+    if (at >= 0) {
+      prevId = at > 0 ? ids[at - 1] : undefined;
+      nextId = at < ids.length - 1 ? ids[at + 1] : undefined;
+    }
+  }
 
   return (
     // 高さの確定は layout.tsx の body（h-dvh）が持つ。ここに h-dvh を足しても
@@ -119,8 +139,8 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
         <ArticleView
           article={selected}
           backHref={linkTo()}
-          prevHref={prev ? linkTo(prev.id) : undefined}
-          nextHref={next ? linkTo(next.id) : undefined}
+          prevHref={prevId ? linkTo(prevId) : undefined}
+          nextHref={nextId ? linkTo(nextId) : undefined}
         />
       </div>
 
