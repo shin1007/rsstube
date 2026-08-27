@@ -52,26 +52,23 @@ export function Sidebar({
     );
 
   /**
-   * 未読ビューでは、未読ゼロのフォルダとフィードを出さない。
+   * 購読しているフィードが1本も無いフォルダは出さない。
    *
-   * 毎朝ここで見たいのは「今日どこに何が来たか」で、空の行はその邪魔にしかならない。
-   * **他のビューでは畳まない。**「すべて」「スター」「あとで」で未読の数を根拠に
-   * 隠すと、読み終わったフィードが一覧から消えて**開く手段が無くなる**
-   * （検索したい・過去を見たいときに辿れない）。
+   * フォルダは購読より先に作れるし、最後の1本を解除しても残る。空のまま出すと
+   * 見出しだけの行になり、押しても記事がゼロの一覧が開く（押す意味が無い）。
    *
-   * いま選んでいるフォルダ／フィードは、ゼロでも残す。開いている最中に
-   * 最後の1件を読むと、自分がいる行だけが消えることになる。
+   * **未読の数では隠さない。** 読み終わったことを根拠に消すと、あとで検索したい・
+   * 過去を見たいときにそのフィードへ辿り着けなくなる（「すべて」で開く手段が
+   * サイドバーしか無い）。ここで見ているのは「登録があるか」だけ。
+   *
+   * いま選んでいるフォルダは、空でも残す。最後の1本を解除した直後に
+   * 自分が居る行だけが消えることになるので。
+   *
+   * **設定画面のフォルダ一覧は別。**あちらは管理する場所なので、空のフォルダも
+   * 出す（出さないと消せない）。
    */
-  const hideEmpty = active && view === 'unread';
-
-  const visibleFeeds = (folderKey: string) => {
-    const list = feedsByFolder.get(folderKey) ?? [];
-    if (!hideEmpty) return list;
-    return list.filter((f) => (unread.get(f.id) ?? 0) > 0 || f.id === feedId);
-  };
-
   const visibleFolders = folders.filter(
-    (f) => !hideEmpty || folderUnread(f.id) > 0 || f.id === folderId,
+    (f) => (feedsByFolder.get(f.id) ?? []).length > 0 || f.id === folderId,
   );
 
   const link = (params: Record<string, string | undefined>) => {
@@ -131,7 +128,7 @@ export function Sidebar({
                 </Link>
 
                 <div className="mt-0.5">
-                  {visibleFeeds(folder.id).map((feed) => (
+                  {(feedsByFolder.get(folder.id) ?? []).map((feed) => (
                     <FeedLink
                       key={feed.id}
                       feed={feed}
@@ -146,12 +143,12 @@ export function Sidebar({
           })}
 
           {/* フォルダに入っていないフィード。 */}
-          {visibleFeeds("").length > 0 && (
+          {(feedsByFolder.get("") ?? []).length > 0 && (
             <div>
               <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 未分類
               </p>
-              {visibleFeeds("").map((feed) => (
+              {(feedsByFolder.get("") ?? []).map((feed) => (
                 <FeedLink
                   key={feed.id}
                   feed={feed}
@@ -163,11 +160,15 @@ export function Sidebar({
             </div>
           )}
 
-          {/* 全部畳まれたときに、何も無い枠だけを見せない。
-              フィードを消してしまったのかと読めるので、そうではないと書く。 */}
-          {hideEmpty && visibleFolders.length === 0 && visibleFeeds("").length === 0 && (
+          {/* 1本も購読していないときに、枠だけを見せない。
+              フォルダを隠したせいで空に見えるのか、本当に何も無いのかを分ける。 */}
+          {feeds.length === 0 && (
             <p className="px-2 py-1 text-xs text-zinc-600">
-              未読のあるフィードはありません
+              購読中のフィードがありません（
+              <Link href="/settings" className="underline hover:text-zinc-400">
+                設定
+              </Link>
+              から追加できます）
             </p>
           )}
         </div>
