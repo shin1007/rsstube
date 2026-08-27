@@ -16,7 +16,8 @@
 ご指摘のとおり Vercel の環境変数は触れる人が限られるので、**設定画面から入れられるように
 変えました**（`0033`）。Vercel を触る必要はもうありません。
 
-- [ ] **本番の設定画面 → Google Drive →「Google の認証情報」**に、`.env.local` と同じ
+- [ ] **[本番の設定画面](https://rsstube.vercel.app/settings?drive=unconfigured) →
+      Google Drive →「Google の認証情報」**に、`.env.local` と同じ
       **クライアント ID とシークレット**を入れて保存（手元の値をそのまま使えます。
       Google Cloud Console から取り直す必要はありません）
 - [ ] **[Google Cloud Console](https://console.cloud.google.com/apis/library) → 認証情報 →
