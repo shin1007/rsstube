@@ -18,12 +18,12 @@ export function MediaButton({
   articleId,
   digestId,
   label = '音声にする',
-  short = '音声',
+  short = '♪',
 }: {
   articleId?: string;
   digestId?: string;
   label?: string;
-  /** 狭い画面で出す短い形。上の帯を1行に収めるため（ArticleView）。 */
+  /** 狭い画面で出す短い形。上の帯を狭く保つため（ArticleView）。意味は aria-label が持つ。 */
   short?: string;
 }) {
   const [pending, startTransition] = useTransition();

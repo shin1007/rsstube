@@ -67,15 +67,17 @@ export function ArticleView({
         1文字ずつ縦に折り返る（画面の1/4を帯が占めていた）。
         文字の目盛りを2段階上げたときに、それまでぎりぎり収まっていた
         6つのボタンが入らなくなって起きた。
-        狭い画面では短い形（★ / ◷ / 書き出し / 音声 / ↗）に切り替え、
-        どのボタンにも whitespace-nowrap と shrink-0 を付けてある。
+        狭い画面では記号だけ（← / ★ / ◷ / ▤ / ♪ / ↗）にし、どのボタンにも
+        whitespace-nowrap と shrink-0 を付けてある。**意味は aria-label が持つ**ので、
+        読み上げには記号ではなく、いつもと同じ言葉が渡る。
+        記号にして空いたぶんは上下の余白ではなく**指の当たり判定（px-3）**に回す。
       */}
-      <header className="flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-zinc-800 px-3 py-1.5">
+      <header className="flex flex-nowrap items-center gap-0.5 overflow-x-auto border-b border-zinc-800 px-2 py-1 md:gap-1 md:px-3">
         {/* スマホでリストへ戻る導線。PCではリストが常に見えているので不要。 */}
         <Link
           href={backHref}
           aria-label="一覧へ戻る"
-          className="md:hidden shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs text-zinc-400"
+          className="md:hidden shrink-0 whitespace-nowrap rounded px-3 py-1 text-xs text-zinc-400"
         >
           ←
         </Link>
@@ -95,7 +97,7 @@ export function ArticleView({
           target="_blank"
           rel="noopener noreferrer"
           aria-label="元記事を開く"
-          className="ml-auto shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs text-zinc-500 hover:text-zinc-100 md:text-sm"
+          className="ml-auto shrink-0 whitespace-nowrap rounded px-3 py-1 text-xs text-zinc-500 hover:text-zinc-100 md:px-2 md:text-sm"
         >
           <span className="md:hidden">↗</span>
           <span className="hidden md:inline">元記事 ↗</span>
@@ -104,7 +106,10 @@ export function ArticleView({
 
       {/* 指で横に払うと前後の記事へ移る。スマホには一覧へ戻る以外の道が無かった。 */}
       <ArticleSwipe prevHref={prevHref} nextHref={nextHref}>
-        <div className="flex-1 overflow-y-auto thin-scroll px-4 py-5 md:px-8 pb-24 md:pb-8">
+        {/* 下の余白は 24（96px）あったが、あれは下部タブを避けるためのもので、
+            記事を開いている間はそのタブが消えている。下に前後の帯が付いた今は
+            本文の終わりに画面半分の空白ができるだけなので詰める。 */}
+        <div className="flex-1 overflow-y-auto thin-scroll px-4 py-5 md:px-8 pb-10 md:pb-8">
           <div className="mx-auto max-w-2xl">
             <p className="text-xs text-zinc-500">
               {a.feeds?.title}
@@ -207,36 +212,52 @@ export function ArticleView({
                 {a.content_text ?? ''}
               </div>
             )}
-
-            {/* 読み終わったところに次への導線を置く。PCは j/k があるが、
-                スマホには一覧へ戻る以外の手段が無かった。 */}
-            {(prevHref || nextHref) && (
-              <nav className="mt-8 flex gap-2 border-t border-zinc-800 pt-4 text-sm">
-                {prevHref ? (
-                  <Link
-                    href={prevHref}
-                    className="flex-1 rounded border border-zinc-800 px-3 py-2 text-zinc-400 hover:text-zinc-100"
-                  >
-                    ← 前の記事
-                  </Link>
-                ) : (
-                  <span className="flex-1" />
-                )}
-                {nextHref ? (
-                  <Link
-                    href={nextHref}
-                    className="flex-1 rounded border border-zinc-800 px-3 py-2 text-right text-zinc-400 hover:text-zinc-100"
-                  >
-                    次の記事 →
-                  </Link>
-                ) : (
-                  <span className="flex-1" />
-                )}
-              </nav>
-            )}
           </div>
         </div>
       </ArticleSwipe>
+
+      {/*
+        前後への導線。**本文の末尾ではなく、画面の下に据える。**
+        末尾に置いていたときは、長い記事だとそこへ辿り着くのが仕事になっていた
+        （読み終える前に次へ行きたいときには、無いのと同じだった）。
+
+        `fixed` にはしない。プレイヤーが出ているときは body の padding が
+        全体を持ち上げてくれるので（Playback.tsx）、流れの中に置くだけで
+        プレイヤーの上に乗る。fixed にすると自分で避ける必要が出る。
+
+        行き先が無い側は押せない見た目にして、場所は空けたままにする。
+        端に来たときにボタンの位置がずれると、隣を押してしまう。
+      */}
+      {(prevHref || nextHref) && (
+        <nav
+          className="flex shrink-0 items-stretch border-t border-zinc-800 text-xs"
+          // iPhone のホームバーに隠れないように。プレイヤーが出ている間は
+          // そちらが先に場所を空けるので、この指定は効かない（0 になる）。
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          {prevHref ? (
+            <Link
+              href={prevHref}
+              className="flex-1 py-2 text-center text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+            >
+              ← 前の記事
+            </Link>
+          ) : (
+            <span className="flex-1 py-2 text-center text-zinc-700">← 前の記事</span>
+          )}
+          <span aria-hidden className="w-px bg-zinc-800" />
+          {nextHref ? (
+            <Link
+              href={nextHref}
+              className="flex-1 py-2 text-center text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+            >
+              次の記事 →
+            </Link>
+          ) : (
+            <span className="flex-1 py-2 text-center text-zinc-700">次の記事 →</span>
+          )}
+        </nav>
+      )}
     </div>
   );
 }
