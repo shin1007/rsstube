@@ -7,6 +7,18 @@ import type { ExportResult } from '@/lib/export/create';
 import { useState, useTransition } from 'react';
 
 /**
+ * 狭い画面で出す記号（U+25A4「横線の入った四角」＝書き出した文書）。
+ *
+ * はじめは上向きの矢印（U+2934）にしていたが、**16px だと隣の ♪ と見分けが付かない**
+ * （44px まで大きくすれば別物だと分かる、という程度の差しかない）。
+ * 小さく並べる記号は、線の向きではなく形そのものが違うものを選ぶこと。
+ * 矢印は ↗（元記事）でも使っていて、そちらとも紛れる。
+ *
+ * ソースで読めるように、記号そのものではなくエスケープで書いてある。
+ */
+const EXPORT_ICON = '\u25A4';
+
+/**
  * 「NotebookLM へ」ボタン。
  *
  * 押すと Markdown を組み立て、受け渡し方法を選べるダイアログを出す。
@@ -51,9 +63,9 @@ export function ExportButton({
           '作成中…'
         ) : (
           <>
-            {/* 狭い画面では短い形にする。「NotebookLM へ」は12文字あり、
-                これ1つで上の帯が2行になっていた。 */}
-            <span className="md:hidden">書き出し</span>
+            {/* 狭い画面では記号だけにする。「NotebookLM へ」は12文字あり、
+                これ1つで上の帯が2行になっていた。意味は aria-label が持つ。 */}
+            <span className="md:hidden">{EXPORT_ICON}</span>
             <span className="hidden md:inline">NotebookLM へ</span>
           </>
         )}
