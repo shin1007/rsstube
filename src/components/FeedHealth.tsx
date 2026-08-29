@@ -47,7 +47,7 @@ export function FeedHealth({ feeds }: { feeds: SubscribedFeed[] }) {
           <li key={feed.id} className="px-3 py-2.5">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span
-                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[13px] ${
                   health.level === 'dead'
                     ? 'bg-red-950 text-red-300'
                     : health.level === 'failing'

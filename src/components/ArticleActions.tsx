@@ -35,6 +35,7 @@ export function ArticleActions({
         articleId={articleId}
         active={starred}
         label="★ スター"
+        short="★"
         activeClass="text-amber-400"
         onLabel="スターを付けました"
         offLabel="スターを外しました"
@@ -45,6 +46,7 @@ export function ArticleActions({
         articleId={articleId}
         active={readLater}
         label="◷ あとで"
+        short="◷"
         activeClass="text-sky-400"
         onLabel="「あとで読む」に入れました"
         offLabel="「あとで読む」から外しました"
@@ -60,6 +62,7 @@ function Toggle({
   articleId,
   active,
   label,
+  short,
   activeClass,
   onLabel,
   offLabel,
@@ -69,6 +72,8 @@ function Toggle({
   articleId: string;
   active: boolean;
   label: string;
+  /** 狭い画面で出す短い形。記号だけにして、上の帯を1行に収める。 */
+  short: string;
   activeClass: string;
   onLabel: string;
   offLabel: string;
@@ -115,11 +120,14 @@ function Toggle({
       aria-pressed={shown}
       disabled={pending}
       onClick={() => run(!shown, true)}
-      className={`rounded px-2 py-1 text-sm transition-opacity ${
+      // 読み上げには短い形ではなく、いつも同じ言葉を渡す。
+      aria-label={label}
+      className={`shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs transition-opacity md:text-sm ${
         shown ? activeClass : 'text-zinc-500 hover:text-zinc-300'
       } ${pending ? 'opacity-50' : ''}`}
     >
-      {label}
+      <span className="md:hidden">{short}</span>
+      <span className="hidden md:inline">{label}</span>
     </button>
   );
 }

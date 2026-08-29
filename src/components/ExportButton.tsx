@@ -42,11 +42,21 @@ export function ExportButton({
         type="button"
         onClick={run}
         disabled={pending || articleIds.length === 0}
-        className={`rounded px-2 py-1 text-sm disabled:opacity-50 ${
+        aria-label="NotebookLM へ書き出す"
+        className={`shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs disabled:opacity-50 md:text-sm ${
           exported ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-100'
         }`}
       >
-        {pending ? '作成中…' : 'NotebookLM へ'}
+        {pending ? (
+          '作成中…'
+        ) : (
+          <>
+            {/* 狭い画面では短い形にする。「NotebookLM へ」は12文字あり、
+                これ1つで上の帯が2行になっていた。 */}
+            <span className="md:hidden">書き出し</span>
+            <span className="hidden md:inline">NotebookLM へ</span>
+          </>
+        )}
       </button>
 
       {error && <span className="text-xs text-red-400">{error}</span>}
