@@ -1,6 +1,38 @@
 @import "tailwindcss";
 
 /*
+ * 文字の大きさを、Tailwind の既定より**2段階ぶん上へずらす**（2026-08-29）。
+ *
+ * 画面のあちこちで `text-xs` / `text-sm` を使っているので、クラスを1つずつ
+ * 書き替えると必ず塗り残しが出る（text-xs が165か所、text-sm が91か所ある）。
+ * 目盛りのほうを動かせば、既存のクラスはそのままで全部が上がる。
+ *
+ * 対応は xs→base、sm→lg、base→xl……と既定の目盛りを2つ送ったもの。
+ * ただし 2xl から上は既定の刻みが急に粗くなる（1.5→1.875→2.25rem）ので、
+ * そのまま2段階送ると見出しだけが不釣り合いに伸びて、狭い画面で折り返す。
+ * 上のほうは小さいほうと同じ比率（およそ1.25倍）に留めてある。
+ *
+ * **body にも実寸を入れること。** rem は :root 基準なので、クラスを付けていない
+ * 文字は 16px のまま取り残される（text-base の 20px と並ぶと段差になる）。
+ */
+@theme {
+  --text-xs: 1rem;
+  --text-xs--line-height: 1.5rem;
+  --text-sm: 1.125rem;
+  --text-sm--line-height: 1.75rem;
+  --text-base: 1.25rem;
+  --text-base--line-height: 1.875rem;
+  --text-lg: 1.5rem;
+  --text-lg--line-height: 2rem;
+  --text-xl: 1.625rem;
+  --text-xl--line-height: 2.125rem;
+  --text-2xl: 1.875rem;
+  --text-2xl--line-height: 2.375rem;
+  --text-3xl: 2.25rem;
+  --text-3xl--line-height: 2.5rem;
+}
+
+/*
  * 常時ダークで固定する。朝晩に長時間スクロールする用途なので、
  * ライト/ダークを切り替えられるより、目に優しい一貫した見た目を優先する。
  */
@@ -12,6 +44,8 @@ body {
     "Noto Sans JP",
     Meiryo,
     sans-serif;
+  /* クラスを付けていない文字も text-base と同じ大きさで出す（上の @theme）。 */
+  font-size: var(--text-base);
   /* スマホでスワイプ操作したときに、行き過ぎのバウンスが出ないように。 */
   overscroll-behavior-y: none;
 }
@@ -26,13 +60,18 @@ body {
 /*
  * iOS は 16px 未満の入力欄をタップすると勝手にズームする。
  * viewport で maximumScale を縛れば止まるが、それだとピンチズームまで
- * 効かなくなる（WCAG 1.4.4 違反）。狭い画面のときだけ実寸を上げて防ぐ。
+ * 効かなくなる（WCAG 1.4.4 違反）。狭い画面のときだけ下限を敷いて防ぐ。
+ *
+ * **16px 固定にしないこと。** 目盛りを2段階上げたあとにここへ実寸が書いてあると、
+ * text-base（20px）の入力欄がスマホでだけ 16px に縮む——大きくするための変更が、
+ * いちばん打ちにくい画面でだけ効かないことになる。
+ * いまの目盛りは最小の text-xs でも 16px あるので、下限として置いておく。
  */
 @media (max-width: 767px) {
   input,
   select,
   textarea {
-    font-size: 16px;
+    font-size: max(16px, 1em);
   }
 }
 
@@ -91,9 +130,11 @@ body {
   margin-bottom: 0.6em;
 }
 
-.prose-rich h1 { font-size: 1.3rem; }
-.prose-rich h2 { font-size: 1.15rem; }
-.prose-rich h3 { font-size: 1.05rem; }
+/* 本文の目盛りに合わせて上げる。ここは rem の直書きなので @theme が届かず、
+   放っておくと見出しだけが本文より小さくなる。 */
+.prose-rich h1 { font-size: 1.625rem; }
+.prose-rich h2 { font-size: 1.45rem; }
+.prose-rich h3 { font-size: 1.3rem; }
 
 .prose-rich a {
   color: #93c5fd;
@@ -113,7 +154,7 @@ body {
 
 .prose-rich figcaption {
   margin-top: 0.5em;
-  font-size: 0.8125rem;
+  font-size: 1rem;
   color: #a1a1aa;
 }
 

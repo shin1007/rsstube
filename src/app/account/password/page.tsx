@@ -1,3 +1,4 @@
+import { PasswordField } from '@/components/PasswordField';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -78,23 +79,22 @@ export default async function PasswordPage({ searchParams }: PageProps<'/account
           </div>
         ) : (
           <form action={save} className="space-y-3">
-            <input
-              type="password"
+            {/* 決めるほうは既定で見せる。ここで打ち間違えると次から入れなくなるので、
+                伏せておく利点より、確かめられる利点のほうが大きい。 */}
+            <PasswordField
               name="password"
               required
               minLength={MIN_PASSWORD}
               autoComplete="new-password"
               placeholder={`新しいパスワード（${MIN_PASSWORD}文字以上）`}
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-base"
+              defaultVisible
             />
-            <input
-              type="password"
+            <PasswordField
               name="confirm"
               required
               minLength={MIN_PASSWORD}
               autoComplete="new-password"
               placeholder="確認のためもう一度"
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-base"
             />
             <button
               type="submit"
