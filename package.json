@@ -24,6 +24,8 @@
     "@breezystack/lamejs": "^1.2.7",
     "@google/genai": "^2.16.0",
     "@mozilla/readability": "^0.6.0",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.3",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "linkedom": "^0.18.13",

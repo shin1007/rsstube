@@ -17,6 +17,7 @@ import { DriveConnect } from '@/components/DriveConnect';
 import { FeedHealth } from '@/components/FeedHealth';
 import { UnsubscribeButton } from '@/components/UnsubscribeButton';
 import { FolderSelect } from '@/components/FolderSelect';
+import { PasskeyManager, type PasskeyRow } from '@/components/PasskeyManager';
 import { PushToggle } from '@/components/PushToggle';
 import { SettingsForm, type SaveState } from '@/components/SettingsForm';
 import { UsageTable } from '@/components/UsageTable';
@@ -46,15 +47,21 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
     ? ((await searchParams).drive as string)
     : undefined;
 
-  const [feeds, { data: folders }, { data: settings }, usage, pipeline, drive] = await Promise.all([
-    listSubscribedFeeds(),
-    // 並び順はサイドバーと揃える（sort_order → 名前）。
-    supabase.from('folders').select('id, name').order('sort_order').order('name'),
-    supabase.from('settings').select('*').maybeSingle(),
-    recentUsage(),
-    pipelineStatus(),
-    getDriveStatus(),
-  ]);
+  const [feeds, { data: folders }, { data: settings }, usage, pipeline, drive, { data: passkeys }] =
+    await Promise.all([
+      listSubscribedFeeds(),
+      // 並び順はサイドバーと揃える（sort_order → 名前）。
+      supabase.from('folders').select('id, name').order('sort_order').order('name'),
+      supabase.from('settings').select('*').maybeSingle(),
+      recentUsage(),
+      pipelineStatus(),
+      getDriveStatus(),
+      // 自分のぶんしか返らない（RLS）。公開鍵そのものは画面に要らない。
+      supabase
+        .from('passkeys')
+        .select('id, label, device_type, backed_up, created_at, last_used_at')
+        .order('created_at'),
+    ]);
 
   /**
    * 同意のあとに戻ってくる先。**環境変数ではなく、いま開いている URL から作る**
@@ -157,6 +164,12 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             </form>
           </div>
         </div>
+
+        {/* ---------------- パスキー ---------------- */}
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">パスキー（指紋・顔・PINでログイン）</h2>
+          <PasskeyManager passkeys={(passkeys ?? []) as PasskeyRow[]} />
+        </section>
 
         {/* ---------------- NotebookLM 用の指示文 ---------------- */}
         <section>

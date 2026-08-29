@@ -9,10 +9,11 @@
  * その購読一覧を取っていなかった（復元してもフィードだけあって購読ゼロになる）。
  *
  * 入っていないもの:
- *   jobs              巡回のたびに作られる一時的なキュー。戻すと古い仕事が動き出す
- *   schema_migrations db:migrate が管理する
- *   google_accounts   リフレッシュトークン。**平文のJSONに書き出したくない**
- *   app_config        Google のクライアントシークレット。同上（0033）
+ *   jobs                 巡回のたびに作られる一時的なキュー。戻すと古い仕事が動き出す
+ *   webauthn_challenges  数分で期限切れになる乱数。戻す意味が無い（0034）
+ *   schema_migrations    db:migrate が管理する
+ *   google_accounts      リフレッシュトークン。**平文のJSONに書き出したくない**
+ *   app_config           Google のクライアントシークレット。同上（0033）
  *
  * 後ろ2つは秘密そのものなので、意図して外してある。失うと繋ぎ直し（app_config は
  * Google Cloud Console から取り直して設定画面へ入れ直す）になるが、
@@ -38,6 +39,10 @@ export const TABLES = [
   'settings',
   // 通知の登録先。端末で登録し直せるが、戻せるなら戻したほうが早い。
   'push_subscriptions',
+  // パスキー。中身は**公開**鍵なので、平文で置いても秘密は漏れない
+  // （google_accounts を外している理由はこちらには当てはまらない）。
+  // 失うと端末ごとに登録し直しになる。
+  'passkeys',
   // 使用量の記録。消えると無料枠の消費ペースの履歴が失われる。
   'ai_usage',
 ];

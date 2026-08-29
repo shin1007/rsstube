@@ -1,3 +1,5 @@
+import { PasskeySignIn } from '@/components/PasskeySignIn';
+import { PasswordField } from '@/components/PasswordField';
 import { isAllowedEmail } from '@/lib/auth/allowlist';
 import { createClient } from '@/lib/supabase/server';
 import { headers } from 'next/headers';
@@ -121,14 +123,12 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
               placeholder="メールアドレス"
               className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-base"
             />
-            <input
-              type="password"
+            <PasswordField
               name="password"
               required
               minLength={MIN_PASSWORD}
               autoComplete="current-password"
               placeholder="パスワード"
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-base"
             />
             <button
               type="submit"
@@ -155,6 +155,13 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
             </div>
           </form>
         )}
+
+        {/*
+          パスキーはフォームの外に置く。sent=1（メールを送った直後）の画面でも
+          押せるようにするためと、送り先が Server Action ではなく Route Handler で、
+          同じ <form> に混ぜると Enter キーの行き先が紛らわしくなるため。
+        */}
+        <PasskeySignIn />
 
         {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
       </div>

@@ -69,7 +69,12 @@ export const config = {
      * PWA の3点（manifest / sw.js / offline.html）も外す。ここを認証にかけると、
      * 未ログインだとインストール要件を満たせず、圏外のときは offline.html 自体が
      * /login へのリダイレクトになって何も出せなくなる。
+     *
+     * api/passkeys も外す。**パスキーでのログインはセッションが無い状態で始まる**ので、
+     * ここで弾くと POST が /login への 307 に化けて、ブラウザには JSON の代わりに
+     * HTML が返る（「予期しないトークン '<'」としか出ない）。
+     * 登録側の2本はセッションが要るが、その確認は各ルートが自分でやっている。
      */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline.html|auth|api/cron|api/jobs|api/debug|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline.html|auth|api/cron|api/jobs|api/debug|api/passkeys|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };
