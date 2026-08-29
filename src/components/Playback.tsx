@@ -148,7 +148,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
               <SourceLinks sources={sources} dropUp />
               <Link
                 href={`/watch/${target.id}`}
-                className="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:text-zinc-100"
+                className="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-[14px] text-zinc-400 hover:text-zinc-100"
               >
                 スライド
               </Link>
@@ -268,14 +268,14 @@ function DockPlayer({
           ▶▶
         </button>
 
-        <span className="text-[11px] tabular-nums text-zinc-500">
+        <span className="text-[14px] tabular-nums text-zinc-500">
           {fmtTime(p.position)} / {fmtTime(p.total)}
         </span>
 
         <button
           type="button"
           onClick={p.cycleSpeed}
-          className="ml-auto rounded border border-zinc-700 px-1.5 py-0.5 text-[11px]"
+          className="ml-auto rounded border border-zinc-700 px-1.5 py-0.5 text-[14px]"
         >
           {p.speed}×
         </button>

@@ -174,7 +174,7 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
                 {a.summary && (
                   <span
                     title={importanceTitle(a.summary.importance)}
-                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
+                    className={`shrink-0 rounded px-1.5 py-0.5 text-[13px] ${
                       importanceTier(a.summary.importance).className
                     }`}
                   >
@@ -208,7 +208,7 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
                   <Link
                     key={t}
                     href={link({ tag: t, page: undefined })}
-                    className="rounded-full border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500 hover:text-zinc-200"
+                    className="rounded-full border border-zinc-800 px-2 py-0.5 text-[13px] text-zinc-500 hover:text-zinc-200"
                   >
                     {t}
                   </Link>

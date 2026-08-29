@@ -70,7 +70,7 @@ type StatePatch = Partial<typeof EMPTY_STATE>;
 /** キーの見た目。文字だけだと本文に紛れて、押せる文字だと分からない。 */
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-px text-[10px] leading-none text-zinc-300">
+    <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-px text-[13px] leading-none text-zinc-300">
       {children}
     </kbd>
   );
@@ -534,7 +534,7 @@ export function ArticleList({
 
       {/* ショートカットの常設バー。スマホには物理キーが無いので出さない
           （そのぶんはスワイプが担う）。 */}
-      <footer className="hidden md:flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-800 px-3 py-1.5 text-[11px] text-zinc-500">
+      <footer className="hidden md:flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-800 px-3 py-1.5 text-[14px] text-zinc-500">
         {BAR.map(([keys, label]) => (
           <span key={keys} className="flex items-center gap-1">
             <Kbd>{keys}</Kbd>
@@ -638,13 +638,13 @@ function HelpOverlay({ onClose }: { onClose: () => void }) {
           {SHORTCUTS.map(([keys, label]) => (
             <div key={keys} className="flex items-baseline gap-3">
               <dt className="w-24 shrink-0 text-right">
-                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-300">{keys}</kbd>
+                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 text-[14px] text-zinc-300">{keys}</kbd>
               </dt>
               <dd className="text-xs text-zinc-400">{label}</dd>
             </div>
           ))}
         </dl>
-        <p className="mt-3 border-t border-zinc-800 pt-3 text-[11px] text-zinc-500">
+        <p className="mt-3 border-t border-zinc-800 pt-3 text-[14px] text-zinc-500">
           一覧は下までスクロールすると続きを読み込みます。
         </p>
       </div>
@@ -768,7 +768,7 @@ function Row({
           <h3 className={`flex-1 text-sm leading-snug ${read ? 'text-zinc-500' : 'font-medium'}`}>
             {heading}
             {heading !== article.title && (
-              <span className="mt-0.5 block text-[11px] font-normal text-zinc-600">
+              <span className="mt-0.5 block text-[14px] font-normal text-zinc-600">
                 {article.title}
               </span>
             )}
@@ -776,7 +776,7 @@ function Row({
           {typeof importance === 'number' && importanceTier(importance).badge && (
             <span
               title={importanceTitle(importance)}
-              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${importanceTier(importance).className}`}
+              className={`shrink-0 rounded px-1.5 py-0.5 text-[13px] ${importanceTier(importance).className}`}
             >
               重要度 {importanceTier(importance).label}
             </span>
@@ -805,7 +805,7 @@ function Row({
           </p>
         )}
 
-        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-zinc-600">
+        <div className="mt-1.5 flex items-center gap-2 text-[14px] text-zinc-600">
           <span className="truncate">{article.feed?.title}</span>
           {article.published_at && (
             <time dateTime={article.published_at}>

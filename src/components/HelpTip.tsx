@@ -94,7 +94,7 @@ export function HelpTip({ label, text }: { label: string; text: string }) {
         aria-label={label}
         aria-expanded={open}
         onClick={toggle}
-        className="grid size-4 shrink-0 place-items-center rounded-full border border-zinc-700 text-[10px] leading-none text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+        className="grid size-4 shrink-0 place-items-center rounded-full border border-zinc-700 text-[13px] leading-none text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
       >
         ?
       </button>
@@ -104,7 +104,7 @@ export function HelpTip({ label, text }: { label: string; text: string }) {
           ref={tipRef}
           role="tooltip"
           style={{ left: pos.left, top: pos.top, width: pos.width }}
-          className="fixed z-50 rounded border border-zinc-700 bg-zinc-900 p-2 text-[11px] leading-relaxed font-normal text-zinc-300 shadow-lg"
+          className="fixed z-50 rounded border border-zinc-700 bg-zinc-900 p-2 text-[14px] leading-relaxed font-normal text-zinc-300 shadow-lg"
         >
           {text}
         </span>

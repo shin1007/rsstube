@@ -79,7 +79,7 @@ export default async function ListenPage() {
                     <div className="flex items-start gap-2">
                       <span className="min-w-0 flex-1 text-sm">
                         {m.kind === 'digest' && (
-                          <span className="mr-1.5 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300">
+                          <span className="mr-1.5 rounded bg-zinc-800 px-1.5 py-0.5 text-[13px] text-zinc-300">
                             朝
                           </span>
                         )}

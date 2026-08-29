@@ -70,7 +70,7 @@ export function ExportList({ exports }: { exports: ExportSummary[] }) {
               >
                 <p className="truncate text-sm">
                   {e.kind === 'digest' && (
-                    <span className="mr-1.5 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300">
+                    <span className="mr-1.5 rounded bg-zinc-800 px-1.5 py-0.5 text-[13px] text-zinc-300">
                       朝
                     </span>
                   )}
@@ -89,7 +89,7 @@ export function ExportList({ exports }: { exports: ExportSummary[] }) {
             {/* NotebookLM に渡す代わりに、アプリ内で音声にすることもできる。 */}
             {e.digest_id && (
               <div className="mt-1 flex items-center gap-2">
-                <MediaButton digestId={e.digest_id} label="アプリ内で音声にする" />
+                <MediaButton digestId={e.digest_id} label="アプリ内で音声にする" short="音声にする" />
               </div>
             )}
           </li>

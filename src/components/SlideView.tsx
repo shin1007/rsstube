@@ -88,7 +88,7 @@ export function SlideView({
       {/* 何枚目か。音だけ聴いていて画面を見たとき、どのあたりかが分かる。 */}
       {total > 1 && (
         // 絵の上にも乗るので、字だけだと読めない。薄い下地を敷く。
-        <div className="absolute right-3 top-3 rounded-full bg-zinc-950/70 px-2 py-0.5 text-[11px] tabular-nums text-zinc-300">
+        <div className="absolute right-3 top-3 rounded-full bg-zinc-950/70 px-2 py-0.5 text-[14px] tabular-nums text-zinc-300">
           {index + 1} / {total}
         </div>
       )}

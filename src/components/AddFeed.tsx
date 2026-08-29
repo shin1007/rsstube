@@ -121,7 +121,7 @@ export function AddFeed({ folders }: { folders: FolderRow[] }) {
                     <span className="truncate">{c.title}</span>
                     {/* 購読者数は名前で検索したときだけ付く。まともなフィードかの目安。 */}
                     {c.subscribers !== undefined && (
-                      <span className="shrink-0 text-[10px] font-normal text-zinc-500">
+                      <span className="shrink-0 text-[13px] font-normal text-zinc-500">
                         購読者 {c.subscribers.toLocaleString('ja-JP')}
                       </span>
                     )}

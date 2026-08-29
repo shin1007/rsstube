@@ -18,10 +18,13 @@ export function MediaButton({
   articleId,
   digestId,
   label = '音声にする',
+  short = '音声',
 }: {
   articleId?: string;
   digestId?: string;
   label?: string;
+  /** 狭い画面で出す短い形。上の帯を1行に収めるため（ArticleView）。 */
+  short?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<{ id: string; message: string } | null>(null);
@@ -65,9 +68,17 @@ export function MediaButton({
         type="button"
         onClick={run}
         disabled={pending}
-        className="rounded px-2 py-1 text-sm text-zinc-500 hover:text-zinc-100 disabled:opacity-50"
+        aria-label={label}
+        className="shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs text-zinc-500 hover:text-zinc-100 disabled:opacity-50 md:text-sm"
       >
-        {pending ? '受付中…' : label}
+        {pending ? (
+          '受付中…'
+        ) : (
+          <>
+            <span className="md:hidden">{short}</span>
+            <span className="hidden md:inline">{label}</span>
+          </>
+        )}
       </button>
       {error && <span className="text-xs text-red-400">{error}</span>}
     </>
