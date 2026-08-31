@@ -1,5 +1,6 @@
 'use client';
 
+import { prefetchFull } from '@/lib/prefetch';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -40,6 +41,25 @@ export function ArticleSwipe({
   const box = useRef<HTMLDivElement>(null);
   const [dx, setDx] = useState(0);
   const [releasing, setReleasing] = useState(false);
+  /** 前の記事を1回だけ取りに行くための印（下の onMove から使う）。 */
+  const prevAsked = useRef(false);
+
+  /**
+   * 次の記事を読んでいる間に取っておく。
+   *
+   * `/` は動的なページなので **`<Link>` は既定では prefetch しない**
+   * （Next 16: 動的ルートは loading.js が無ければ飛ばす）。押してから
+   * 往復が始まり、その間ずっと今の記事が出たまま止まって見えていた。
+   * 読んでいる間は回線が空いているので、そこで取っておけば「次へ」は
+   * 押した瞬間に切り替わる。取ったぶんは静的扱いの5分間、手元に残る。
+   *
+   * 先読みしても既読は付かない（既読を書くのは押したあとの ArticleList /
+   * MarkReadOnView なので、取っただけの記事は未読のまま）。
+   */
+  useEffect(() => {
+    prevAsked.current = false;
+    if (nextHref) prefetchFull(router, nextHref);
+  }, [nextHref, router]);
 
   useEffect(() => {
     const el = box.current;
@@ -87,6 +107,15 @@ export function ArticleSwipe({
       // 行き先が無い向きには動かさない。動いてから「何も起きない」より、
       // はじめから動かないほうが「ここが端だ」と分かる。
       if (!(x < 0 ? nextHref : prevHref)) return;
+
+      // 前の記事は、指が右へ向いた時点で取りに行く。次の記事と違って常に
+      // 先読みはしない（読み進む向きではないので、たいてい無駄になる）。
+      // 払い終わるまでの数百ミリ秒を取得に充てられる。
+      // touchmove は指1回で何十回も来るので、1回だけにする。
+      if (x > 0 && prevHref && !prevAsked.current) {
+        prevAsked.current = true;
+        prefetchFull(router, prevHref);
+      }
 
       // ここまで来たら横のスワイプだと確定。ブラウザの戻る／進むに渡さない。
       e.preventDefault();
