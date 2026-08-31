@@ -82,6 +82,31 @@ AI要約つきの個人用RSSリーダー。
 - **当面は個人用のまま**（2026-08-13 決定）。一般公開は「自分が毎日使えている」状態に
   なってから。費用は無料枠に収まる範囲で設計する。
 
+## 出し方（2026-08-31 決定）
+
+**直したら、確認を待たずに本番まで出す。** レビューするのは本人だけなので、
+PR を出したまま止めると、マージのためだけにもう一往復頼むことになる。
+そして**本番に出るまで、オーナーはスマホで確かめられない**——手元で直っていても、
+デプロイされていなければ「直っていない」のと同じに見える。
+
+1. 検査を**先に**通す（`npm run typecheck` / `npx eslint src` / `npx vitest run` / `npm run build`）。
+   auto-merge は CI が通った瞬間に入るので、出したあとに直す隙は無い
+2. ブランチを切ってコミット → `git push` → `gh pr create`
+3. `gh pr merge <番号> --auto --squash` まで**続けて**実行する
+4. マージされたら `gh run list` で main の CI を見て、Vercel のデプロイ（2〜3分）を待つ
+5. **本番で1回動かす。** ログイン不要の確認口は
+   `CHECK_URL_BASE=https://rsstube.vercel.app node --env-file=.env.local scripts/check-url.mjs <URL>`
+   （`CRON_SECRET` で守られた `/api/debug/extract` を通る）。
+   **手元で通ることと Vercel で動くことは別物**——`jsdom` が本番だけ
+   `ERR_REQUIRE_ESM` で落ちた前科がある。依存を足した回は必ずここまでやる
+6. 実機でしか見られないもの（PWA・通知・指の操作）は、**どの画面のどこを見るか**を
+   書いて渡す。「確認してください」だけでは伝わらない
+
+画面の確認は、パスワードを預からなくてもできる。Secret キーで
+`generateLink` → `verifyOtp` してセッションを作り、`sb-<ref>-auth-token` の Cookie に
+して browser-drive の `storageState` に渡す（`lib/auth/passkey-session.ts` と同じ手口）。
+**使い終わったら state ファイルを消すこと**——中身は生きたトークン。
+
 ## 環境
 
 - **このプロジェクトは `C:\dev\rsstube` で開発する。`G:\マイドライブ` 配下には置かない。**
