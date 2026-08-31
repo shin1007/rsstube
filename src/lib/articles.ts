@@ -62,7 +62,7 @@ const LIST_SELECT = `id, title, url, author, published_at, excerpt, content_ok, 
  * 埋め込んだ表の列を見るため。!inner が無いと条件そのものが書けない。
  * 運ぶ列は id だけなので、本文も要約も付いてこない。
  */
-const ID_SELECT = `id,
+const ID_SELECT = `id, published_at,
    feeds!inner (id, subscriptions!inner (folder_id)),
    article_states!inner (is_read, is_starred, read_later)`;
 
@@ -165,9 +165,19 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
  */
 const NEIGHBOUR_SCAN = 600;
 
-export async function listArticleIds(query: ArticleQuery): Promise<string[]> {
+/**
+ * 日付も一緒に返すのは、**一覧に居ない記事の位置を出すため**。
+ * 未読ビューで開いた記事はその場で既読になるので、次に一覧を引いたときには
+ * もう居ない。id では引っかからないが、日付なら「居たはずの場所」が分かる。
+ */
+export type ArticleSlot = { id: string; published_at: string | null };
+
+export async function listArticleIds(query: ArticleQuery): Promise<ArticleSlot[]> {
   const data = await run(ID_SELECT, { ...query, offset: 0 }, NEIGHBOUR_SCAN);
-  return (data as unknown as { id: string }[]).map((r) => r.id);
+  return (data as unknown as ArticleSlot[]).map((r) => ({
+    id: r.id,
+    published_at: r.published_at,
+  }));
 }
 
 export async function getArticle(id: string) {
