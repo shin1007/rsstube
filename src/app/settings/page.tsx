@@ -167,13 +167,13 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
 
         {/* ---------------- パスキー ---------------- */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">パスキー（指紋・顔・PINでログイン）</h2>
+          <h2 className="mb-2 section-title">パスキー（指紋・顔・PINでログイン）</h2>
           <PasskeyManager passkeys={(passkeys ?? []) as PasskeyRow[]} />
         </section>
 
         {/* ---------------- NotebookLM 用の指示文 ---------------- */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">NotebookLM の音声概要の指示文</h2>
+          <h2 className="mb-2 section-title">NotebookLM の音声概要の指示文</h2>
           <p className="mb-2 text-xs text-zinc-500">
             書き出しのたびにここの文面がコピーできるようになります。音声の口調・長さ・
             話の焦点はこの指示文でほぼ決まるので、聴きながら調整してください。
@@ -347,7 +347,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
 
         {/* ---------------- 取り込みの進み具合 ---------------- */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">取り込みの進み具合</h2>
+          <h2 className="mb-2 section-title">取り込みの進み具合</h2>
           <p className="mb-2 text-xs text-zinc-500">
             記事は「本文を取りに行く → 要約する」の順に処理されます。フィードを増やした
             直後はここに溜まりますが、5分ごとに少しずつ減っていきます。
@@ -371,13 +371,13 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
 
         {/* ---------------- 使用量 ---------------- */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">AI の使用量（直近7日）</h2>
+          <h2 className="mb-2 section-title">AI の使用量（直近7日）</h2>
           <UsageTable usage={usage} />
         </section>
 
         {/* ---------------- 通知 ---------------- */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">Google Drive</h2>
+          <h2 className="mb-2 section-title">Google Drive</h2>
           <p className="mb-2 text-xs text-zinc-500">
             書き出した Markdown を Google Docs として Drive に置けます。NotebookLM は
             ドライブ上のファイルを直接ソースに選べるので、ダウンロードして
@@ -400,7 +400,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
 
         {/* ---------------- 通知 ---------------- */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">ダイジェストの通知</h2>
+          <h2 className="mb-2 section-title">ダイジェストの通知</h2>
           <p className="mb-2 text-xs text-zinc-500">
             朝のダイジェストができたときに通知します。アプリを開いていなくても届くので、
             これが「起きたら聴く」の起点になります。端末ごとに登録が要ります。
@@ -420,14 +420,14 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
 
         {/* ---------------- フィード追加 ---------------- */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">フィードを追加</h2>
+          <h2 className="mb-2 section-title">フィードを追加</h2>
           <AddFeed folders={(folders ?? []) as FolderRow[]} />
         </section>
 
         {/* ---------------- OPML ---------------- */}
         <section>
           <div className="mb-2 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold">OPML を取り込む</h2>
+            <h2 className="section-title">OPML を取り込む</h2>
             <a
               href="/api/opml"
               download
@@ -457,7 +457,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
 
         {/* ---------------- フォルダ ---------------- */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">フォルダ（{(folders ?? []).length}）</h2>
+          <h2 className="mb-2 section-title">フォルダ（{(folders ?? []).length}）</h2>
           <p className="mb-2 text-xs text-zinc-500">
             並び順はサイドバーにそのまま反映されます。名前を書き換えて Enter で保存。
             フォルダを削除しても中のフィードは残り、未分類に移ります。
@@ -525,7 +525,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
 
         {/* ---------------- 登録済みフィード ---------------- */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold">
+          <h2 className="mb-2 section-title">
             登録済みフィード（{(feeds ?? []).length}）
           </h2>
           <ul className="divide-y divide-zinc-900 rounded border border-zinc-800">

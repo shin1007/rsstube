@@ -32,7 +32,7 @@ export function FeedHealth({ feeds }: { feeds: SubscribedFeed[] }) {
 
   return (
     <section>
-      <h2 className="mb-2 text-sm font-semibold">
+      <h2 className="mb-2 section-title">
         気になるフィード（{problems.length}）
       </h2>
       <p className="mb-2 text-xs text-zinc-500">

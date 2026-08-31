@@ -75,6 +75,21 @@ body {
   }
 }
 
+/*
+ * 画面の中の小見出し（設定の各カード、ダイアログの表題、一覧の帯）。
+ *
+ * それまでは `text-sm font-semibold`＝18px で、まわりの本文（text-xs＝16px）と
+ * 2px しか違わなかった。**クラスではなくここに置いてある**のは、14か所に
+ * 散っているものを1つずつ直すと必ず塗り残しが出るため（文字の目盛りを
+ * 上げたときに同じことをやって、取り残しが23か所出ている）。
+ */
+.section-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #fafafa;
+}
+
 /* 一覧のスクロールバーを細くして、記事行の幅を稼ぐ。 */
 .thin-scroll::-webkit-scrollbar {
   width: 6px;
@@ -117,24 +132,60 @@ body {
   margin-bottom: 1.5em;
 }
 
+/*
+ * 見出しと本文の差（2026-08-31）。
+ *
+ * それまでは h3 が 1.3rem＝20.8px で、本文の 19px と**ほぼ同じ大きさ**だった。
+ * h4 に至っては font-size が無く、本文と1pxも違わない。太字と色だけが違う
+ * 状態だったので、節の変わり目が本文の流れに埋もれて見えなかった。
+ *
+ * 差の付けかたは3つ重ねる。大きさだけ上げても、余白が均等だと切れ目に見えない:
+ *   1. 大きさ  —— 本文の 1.05〜1.65倍。**rem ではなく em で書く**こと。
+ *      rem は :root（16px）基準なので、本文の text-[19px] を変えたときに
+ *      見出しだけが取り残される（前にそれで見出しが本文より小さくなった）。
+ *      em なら .prose-rich の実寸に追随するので、本文を動かせば一緒に動く。
+ *   2. 余白    —— 上を厚く、下を薄く（4:1）。見出しは「下の文の持ち物」なので、
+ *      上下均等だとどちらに属するのか読めない。
+ *   3. 明るさ  —— 本文は zinc-300、見出しは白。太字だけでは目が拾わない。
+ */
 .prose-rich h1,
 .prose-rich h2,
 .prose-rich h3,
 .prose-rich h4 {
   font-weight: 700;
-  line-height: 1.5;
-  color: var(--color-zinc-100, #f4f4f5);
-  margin-top: 1.6em;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  color: #fafafa;
+  margin-top: 1.8em;
   /* 見出しと本文がくっつかないように。上と同じ理由で、これが無いと
      見出しの直後の段落には隙間が1つも入らない。 */
-  margin-bottom: 0.6em;
+  margin-bottom: 0.45em;
 }
 
-/* 本文の目盛りに合わせて上げる。ここは rem の直書きなので @theme が届かず、
-   放っておくと見出しだけが本文より小さくなる。 */
-.prose-rich h1 { font-size: 1.625rem; }
-.prose-rich h2 { font-size: 1.45rem; }
-.prose-rich h3 { font-size: 1.3rem; }
+/* 本文の先頭がいきなり見出しのとき、上の余白が包みの div をすり抜けて
+   本文の上に隙間を作る（マージンの相殺。段落の間隔を下だけにしたのと同じ理由）。 */
+.prose-rich :is(h1, h2, h3, h4):first-child {
+  margin-top: 0;
+}
+
+.prose-rich h1 { font-size: 1.65em; }
+
+/* h2 は節の切れ目。大きさだけでは足りないので罫線でも切る。
+   実際の記事は h2 だけで組まれていることが多く、ここが一番効く。 */
+.prose-rich h2 {
+  font-size: 1.4em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid #3f3f46;
+}
+
+.prose-rich h3 { font-size: 1.2em; }
+.prose-rich h4 { font-size: 1.05em; color: #e4e4e7; }
+
+/* 文中の強調も本文と同じ色では気づかれない。太さだけでなく明るさも上げる。 */
+.prose-rich :is(strong, b) {
+  font-weight: 700;
+  color: #fafafa;
+}
 
 .prose-rich a {
   color: #93c5fd;
