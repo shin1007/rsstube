@@ -2,6 +2,7 @@ import { HelpTip } from '@/components/HelpTip';
 import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
 import { requestSummary } from '@/app/actions/articles';
 import { ArticleActions } from '@/components/ArticleActions';
+import { ArticleNav } from '@/components/ArticleNav';
 import { ArticleSwipe } from '@/components/ArticleSwipe';
 import { ExportButton } from '@/components/ExportButton';
 import { ActionForm } from '@/components/ActionForm';
@@ -134,7 +135,7 @@ export function ArticleView({
       </header>
 
       {/* 指で横に払うと前後の記事へ移る。スマホには一覧へ戻る以外の道が無かった。 */}
-      <ArticleSwipe prevHref={prevHref} nextHref={nextHref}>
+      <ArticleSwipe articleId={a.id} prevHref={prevHref} nextHref={nextHref}>
         {/* 下の余白は 24（96px）あったが、あれは下部タブを避けるためのもので、
             記事を開いている間はそのタブが消えている。下に前後の帯が付いた今は
             本文の終わりに画面半分の空白ができるだけなので詰める。 */}
@@ -261,48 +262,8 @@ export function ArticleView({
         </div>
       </ArticleSwipe>
 
-      {/*
-        前後への導線。**本文の末尾ではなく、画面の下に据える。**
-        末尾に置いていたときは、長い記事だとそこへ辿り着くのが仕事になっていた
-        （読み終える前に次へ行きたいときには、無いのと同じだった）。
-
-        `fixed` にはしない。プレイヤーが出ているときは body の padding が
-        全体を持ち上げてくれるので（Playback.tsx）、流れの中に置くだけで
-        プレイヤーの上に乗る。fixed にすると自分で避ける必要が出る。
-
-        行き先が無い側は押せない見た目にして、場所は空けたままにする。
-        端に来たときにボタンの位置がずれると、隣を押してしまう。
-      */}
-      {(prevHref || nextHref) && (
-        <nav
-          className="flex shrink-0 items-stretch border-t border-zinc-800 text-xs"
-          // iPhone のホームバーに隠れないように。プレイヤーが出ている間は
-          // そちらが先に場所を空けるので、この指定は効かない（0 になる）。
-          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-        >
-          {prevHref ? (
-            <Link
-              href={prevHref}
-              className="flex-1 py-2 text-center text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
-            >
-              ← 前の記事
-            </Link>
-          ) : (
-            <span className="flex-1 py-2 text-center text-zinc-700">← 前の記事</span>
-          )}
-          <span aria-hidden className="w-px bg-zinc-800" />
-          {nextHref ? (
-            <Link
-              href={nextHref}
-              className="flex-1 py-2 text-center text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
-            >
-              次の記事 →
-            </Link>
-          ) : (
-            <span className="flex-1 py-2 text-center text-zinc-700">次の記事 →</span>
-          )}
-        </nav>
-      )}
+      {/* 前後への導線は、来た道も見るので client 側（ArticleNav）。 */}
+      <ArticleNav articleId={a.id} prevHref={prevHref} nextHref={nextHref} />
     </div>
   );
 }

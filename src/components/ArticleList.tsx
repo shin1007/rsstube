@@ -14,6 +14,7 @@ import {
 } from '@/app/actions/articles';
 import { PAGE_SIZE, VIEW_LABELS, type ArticleRow, type View } from '@/lib/types';
 import { prefetchFull } from '@/lib/prefetch';
+import { useNeighbours } from '@/lib/trail';
 import {
   readMarksServerSnapshot,
   readMarksSnapshot,
@@ -116,8 +117,8 @@ export function ArticleList({
   sort,
   selectedId,
   search,
-  prevHref,
-  nextHref,
+  prevHref: serverPrev,
+  nextHref: serverNext,
 }: {
   articles: ArticleRow[];
   view: View;
@@ -135,6 +136,9 @@ export function ArticleList({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+
+  // 来た道があればそちらへ戻す（lib/trail.ts）。下のボタン・スワイプと同じ行き先。
+  const { prevHref, nextHref } = useNeighbours(selectedId, serverPrev, serverNext);
 
   const folderId = searchParams.get('folder') ?? undefined;
   const feedId = searchParams.get('feed') ?? undefined;

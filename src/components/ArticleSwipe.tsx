@@ -1,6 +1,7 @@
 'use client';
 
 import { prefetchFull } from '@/lib/prefetch';
+import { useNeighbours, useRecordVisit } from '@/lib/trail';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -29,15 +30,21 @@ const THRESHOLD = 70;
 const LOCK = 12;
 
 export function ArticleSwipe({
-  prevHref,
-  nextHref,
+  articleId,
+  prevHref: serverPrev,
+  nextHref: serverNext,
   children,
 }: {
+  articleId: string;
   prevHref?: string;
   nextHref?: string;
   children: React.ReactNode;
 }) {
   const router = useRouter();
+
+  // 読み進めた順を覚えるのはここ1か所だけ。本文が出ている画面は必ずこれを通る。
+  useRecordVisit(articleId);
+  const { prevHref, nextHref } = useNeighbours(articleId, serverPrev, serverNext);
   const box = useRef<HTMLDivElement>(null);
   const [dx, setDx] = useState(0);
   const [releasing, setReleasing] = useState(false);
