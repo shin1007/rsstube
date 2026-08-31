@@ -28,6 +28,11 @@ AI要約つきの個人用RSSリーダー。
   出来上がりは向こうが上なので、書き出しの経路は残し続ける。
   音声・スライドの他サービスの比較は `docs/tts-options.md`。結論は「いまは変えない、
   Gemini TTS の preview が終わったら Google Cloud TTS」。
+  **毎朝のまとめは NotebookLM で聴く**（2026-08-31 決定）。選抜と Markdown までを
+  こちらが自動で作り、音声にするのは人が NotebookLM でやる。**毎朝の自前音声を
+  自動生成する経路は作らない**——出来上がりは向こうが上で、聴かれないものに
+  `gemini-3.5-flash` の1日20回と Storage を毎日使うことになる。自前音声は残すが、
+  位置づけは「押したときだけ作る深掘り用」（記事1本・手で選んだまとめ）に下がる。
 - **AI は Gemini API の無料枠**を使う。要約 `gemini-3.5-flash-lite`、台本 `gemini-3.5-flash`、
   音声（後段）`gemini-3.1-flash-tts-preview`。いずれも無料枠あり。
 - **定期実行は Supabase の `pg_cron`**。Vercel Hobby の cron は1日1回までで
