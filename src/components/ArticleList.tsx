@@ -13,8 +13,23 @@ import {
   setStarred,
 } from '@/app/actions/articles';
 import { PAGE_SIZE, VIEW_LABELS, type ArticleRow, type View } from '@/lib/types';
+import { prefetchFull } from '@/lib/prefetch';
+import {
+  readMarksServerSnapshot,
+  readMarksSnapshot,
+  rememberRead,
+  subscribeReadMarks,
+} from '@/lib/read-marks';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} from 'react';
 
 /**
  * 記事リスト。ここが「大量の記事を高速に捌く」中心。
@@ -151,18 +166,40 @@ export function ArticleList({
    *
    * useMemo なのは、これを毎レンダー作り直すと下のキー操作の登録も
    * 作り直しになるため（1文字打つたびに listener を張り替えることになる）。
+   *
+   * **重ねる先は1ページ目も含める。** 以前は継ぎ足したぶんにしか重ねていなかった。
+   * 1ページ目はサーバーが描き直すから要らない、という理屈だったが、それは
+   * 「開いた既読」が revalidate を連れていたときの話で、その描き直しをやめた今は
+   * 押した結果がどこにも出なくなる（開いた記事が一覧では未読のまま残る）。
+   *
+   * 既読だけ別口（read-marks）なのは、**本文側で付いたぶんも重ねたいから**。
+   * 「次の記事」で読み進めると既読を書くのは MarkReadOnView で、あちらから
+   * この部品の state には触れない。
    */
+  const readMarks = useSyncExternalStore(
+    subscribeReadMarks,
+    readMarksSnapshot,
+    readMarksServerSnapshot,
+  );
+
   const rows: ArticleRow[] = useMemo(() => {
-    const out = [...articles];
+    const merge = (a: ArticleRow) => {
+      const p = patches[a.id];
+      const read = readMarks.has(a.id) ? { is_read: true } : null;
+      if (!p && !read) return a;
+      // 押した操作（m・スワイプ）を後に重ねる。開いて既読になったものを
+      // そのあと「未読に戻す」と押したときに、こちらが勝ってしまわないように。
+      return { ...a, state: { ...EMPTY_STATE, ...a.state, ...read, ...p } };
+    };
+    const out = articles.map(merge);
     const seen = new Set(articles.map((a) => a.id));
     for (const a of extra) {
       if (seen.has(a.id)) continue;
       seen.add(a.id);
-      const p = patches[a.id];
-      out.push(p ? { ...a, state: { ...EMPTY_STATE, ...a.state, ...p } } : a);
+      out.push(merge(a));
     }
     return out;
-  }, [articles, extra, patches]);
+  }, [articles, extra, patches, readMarks]);
 
   // キーボード操作のカーソル。
   const selectedIndex = rows.findIndex((a) => a.id === selectedId);
@@ -187,22 +224,54 @@ export function ArticleList({
     if (selectedIndex >= 0) setCursor(selectedIndex);
   }
 
-  const pushParams = useCallback(
+  const hrefWith = useCallback(
     (mutate: (sp: URLSearchParams) => void) => {
       const sp = new URLSearchParams(searchParams.toString());
       mutate(sp);
       const qs = sp.toString();
-      router.push(qs ? `/?${qs}` : '/');
+      return qs ? `/?${qs}` : '/';
     },
-    [router, searchParams],
+    [searchParams],
+  );
+
+  const pushParams = useCallback(
+    (mutate: (sp: URLSearchParams) => void) => {
+      router.push(hrefWith(mutate));
+    },
+    [router, hrefWith],
+  );
+
+  /** いま開いた記事。先読みが遷移と同じURLへ二重に飛ばないようにするための印。 */
+  const opened = useRef<string | null>(null);
+
+  /**
+   * 記事を先に取っておく。
+   *
+   * 押してから往復が始まると、その1往復（RSC 89KB / 転送26KB。中身はほとんど
+   * 変わっていないサイドバーと一覧60件）を毎回待つことになる。先に取っておけば
+   * 押した瞬間に切り替わる。取ったぶんは静的扱いの5分間、手元に残る。
+   *
+   * 呼ぶのは**行きそうな1件だけ**にすること。60行ぶん先読みすると、
+   * そのたびにサーバーがページを丸ごと組み立てる（Supabase に6往復ずつ）。
+   */
+  const prefetchArticle = useCallback(
+    (id: string) => {
+      prefetchFull(router, hrefWith((sp) => sp.set('article', id)));
+    },
+    [router, hrefWith],
   );
 
   const open = useCallback(
     (id: string) => {
+      // 先読みの effect に「これはもう取りに行っている」と伝える。
+      opened.current = id;
       pushParams((sp) => sp.set('article', id));
       // 開いた時点で既読にする（Inoreader と同じ挙動）。
+      // quiet で書くのは、この既読に `/` の描き直しを抱き合わせないため
+      // （actions/articles.ts の setState）。見た目はここの patch が持つ。
       patch(id, { is_read: true });
-      startTransition(() => void markRead(id, true));
+      rememberRead(id);
+      startTransition(() => void markRead(id, true, true));
     },
     [pushParams, patch],
   );
@@ -261,6 +330,24 @@ export function ArticleList({
     io.observe(el);
     return () => io.disconnect();
   }, [done, loadError, loadMore]);
+
+  /**
+   * カーソルの下の記事だけ先に取っておく。
+   *
+   * j/k で選んでから o で開くので、選んだ時点で取り始めれば押したときには
+   * もう手元にある。**カーソルは1つしか無い**ので、先読みも常に1件で済む
+   * （画面に見えている行を全部先読みすると、その数だけサーバーが
+   * ページを組み立てることになる）。
+   *
+   * **いま開いた記事は除く。** 行を押すとカーソルもそこへ動くので、素直に
+   * 書くと遷移と先読みが同じURLへ同時に飛ぶ。走っている途中の先読みは
+   * 遷移には使われず、サーバーが同じページを2回組み立てるだけになる。
+   */
+  useEffect(() => {
+    const id = rows[cursor]?.id;
+    if (!id || id === selectedId || id === opened.current) return;
+    prefetchArticle(id);
+  }, [cursor, rows, selectedId, prefetchArticle]);
 
   const markAll = useCallback(() => {
     // 既に既読だったものは戻す対象にしない。
@@ -500,6 +587,7 @@ export function ArticleList({
             }}
             onFlash={setFlash}
             onPatch={patch}
+            onIntent={() => prefetchArticle(article.id)}
           />
         ))}
 
@@ -661,6 +749,7 @@ function Row({
   onFocus,
   onFlash,
   onPatch,
+  onIntent,
 }: {
   ref: (el: HTMLElement | null) => void;
   article: ArticleRow;
@@ -672,6 +761,8 @@ function Row({
   onFlash: (text: string) => void;
   /** 継ぎ足したぶんの行は親が state で持っている。押した結果を親へ返す。 */
   onPatch: (id: string, patch: StatePatch) => void;
+  /** 開きそうだと分かった時点（指を置く・上に載せる）で本文を取りに行かせる。 */
+  onIntent: () => void;
 }) {
   const [, startTransition] = useTransition();
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -711,6 +802,17 @@ function Row({
         aria-current={selected ? 'true' : undefined}
         onFocus={onFocus}
         onClick={onOpen}
+        // マウスを載せた時点で先に取りに行く。押してから始めると、その往復
+        // （RSC 89KB）を必ず待つことになる。載せただけで離れたぶんは5分間
+        // 手元に残るので、あとで開いたときに効く。
+        //
+        // **押した瞬間（pointerdown）には取りに行かない。** 押してから click
+        // までは数十ミリ秒しかなく、取得が終わらないうちに遷移が始まる。
+        // 走っている途中の先読みは遷移には使われないので、**同じページを
+        // サーバーが2回組み立てるだけ**になる（実測で2本飛んでいた）。
+        onPointerEnter={(e) => {
+          if (e.pointerType === 'mouse') onIntent();
+        }}
         onKeyDown={(e) => {
           // 行そのものにフォーカスがあるとき用。全体のショートカットとは別。
           if (e.key === ' ') {

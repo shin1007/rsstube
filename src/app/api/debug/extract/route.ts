@@ -51,6 +51,9 @@ export async function GET(request: Request) {
       ok: result.ok,
       // ok=false は「200字未満だったので抽出失敗とみなした」という意味。
       length: result.text.length,
+      // HTMLに本文が無く、PDFや別ページを本体として読んだときはここに出る。
+      // 「取れた」だけだと、どこから取れたのかが分からない。
+      sources: result.sources ?? [],
       preview: result.text.replace(/\s+/g, ' ').slice(0, 300),
     });
   } catch (err) {

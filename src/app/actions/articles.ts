@@ -56,9 +56,26 @@ async function client() {
   return { supabase, userId: data.user.id };
 }
 
+/**
+ * `revalidate` を切れるようにしてあるのは**速さのため**。
+ *
+ * `revalidatePath('/')` を呼ぶと、Next はこの Server Action の応答に
+ * **`/` をまるごと描き直した RSC を積んで返す**（呼ばなければ描き直さない。
+ * `next/dist/server/app-render/action-handler.js` の `skipPageRendering` が
+ * 「revalidate したかどうか」だけを見ている）。`/` の RSC は実測89KB——
+ * ほぼ全部が変わっていないサイドバーと一覧60件で、サーバー側では Supabase に
+ * 6往復する。**記事を1本開くたびに、遷移そのものと同じ重さの描き直しが
+ * もう1回走っていた。**
+ *
+ * なので**押した結果が画面で分かる操作**（スター・あとで・手で付けた既読）は
+ * 今までどおり revalidate し、**開いた拍子に付く既読**だけ黙って書く。
+ * 既読の見た目は ArticleList の楽観更新が持つ。サイドバーの未読数だけは
+ * 次の描画まで1件ぶん古いままになるが、読み終える前に減るほうが嘘に近い。
+ */
 async function setState(
   articleId: string,
   patch: Record<string, unknown>,
+  { revalidate = true }: { revalidate?: boolean } = {},
 ): Promise<void> {
   const { supabase, userId } = await client();
   const { error } = await supabase
@@ -71,11 +88,23 @@ async function setState(
       { onConflict: 'article_id,user_id' },
     );
   if (error) throw error;
-  revalidatePath('/');
+  if (revalidate) revalidatePath('/');
 }
 
-export async function markRead(articleId: string, read = true) {
-  await setState(articleId, { is_read: read, read_at: read ? new Date().toISOString() : null });
+/**
+ * 既読・未読。
+ *
+ * `quiet` は「記事を開いたので既読にする」ときだけ立てる。ページの描き直しを
+ * 抱き合わせないぶん、遷移が1往復まるごと軽くなる（setState のコメント）。
+ * **手で押した既読・未読は quiet にしない**——一覧から消える／戻ることが
+ * 押した結果なので、そこは描き直してよい。
+ */
+export async function markRead(articleId: string, read = true, quiet = false) {
+  await setState(
+    articleId,
+    { is_read: read, read_at: read ? new Date().toISOString() : null },
+    { revalidate: !quiet },
+  );
 }
 
 export async function setStarred(articleId: string, starred: boolean) {

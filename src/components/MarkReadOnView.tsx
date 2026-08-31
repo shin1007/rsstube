@@ -1,6 +1,7 @@
 'use client';
 
 import { markRead } from '@/app/actions/articles';
+import { alreadyMarkedRead, rememberRead } from '@/lib/read-marks';
 import { useEffect, useRef, useTransition } from 'react';
 
 /**
@@ -17,10 +18,16 @@ import { useEffect, useRef, useTransition } from 'react';
  *    黙って既読になる。実際に見えているかどうかは IntersectionObserver に聞く
  *    （`display:none` は交差しないので、これだけで両方を見分けられる）。
  *
- * 2. **最初に見た1件だけを既読にする。** markRead は revalidate するので、
- *    未読ビューでは既読にした記事が一覧から消え、先頭が次の記事にずれる。
- *    ずれた先も既読にすると、**未読が端から連鎖して消えていく**。
- *    あとから開いたぶんは open が面倒を見るので、ここは初回だけでよい。
+ * 2. **同じ記事を二度書かない。**送った id は read-marks が覚えている。
+ *    以前は「最初に見た1件だけ」に絞っていた——revalidate 付きで書いていたので、
+ *    未読ビューでは既読にした記事が一覧から消えて先頭が次へずれ、ずれた先も
+ *    既読にすると**未読が端から連鎖して消えていった**。書き直さなくなった今は
+ *    一覧がずれないので、その錨は要らない。**「次の記事」で読み進めたぶんも
+ *    ここで既読になる**（錨があった頃は、押して進んだ記事が未読のまま残っていた）。
+ *
+ * 書き込みは quiet（`/` を描き直さない）。ここを revalidate にすると、
+ * **先読みしておいた次の記事のぶんまで一緒に捨てられる**ので、「次の記事」で
+ * 読み進めるたびに待ち時間が戻ってくる。一覧の行には read-marks 経由で出る。
  */
 export function MarkReadOnView({
   articleId,
@@ -31,25 +38,25 @@ export function MarkReadOnView({
 }) {
   const ref = useRef<HTMLSpanElement | null>(null);
   const [, startTransition] = useTransition();
-  /** 最初に受け取った記事。ずれた先を追いかけないための錨。 */
-  const anchorId = useRef(articleId);
-  const marked = useRef(false);
 
   useEffect(() => {
-    if (isRead || marked.current) return;
-    if (articleId !== anchorId.current) return;
+    if (isRead) return;
+    // 一覧から開いたものは open が既にこの id を送っている。**サーバーの
+    // 読み取りが書き込みに勝つと isRead はまだ false で返る**ので、これだけでは
+    // 見分けられず、記事を開くたびに2通目が飛んでいた。送った id を覚えて止める。
+    if (alreadyMarkedRead(articleId)) return;
 
     const el = ref.current;
     if (!el) return;
 
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
-      if (marked.current) return;
-      marked.current = true;
+      if (alreadyMarkedRead(articleId)) return;
+      rememberRead(articleId);
       observer.disconnect();
       // 結果は見ない。既読が付かなくても読むことはできるので、
       // ここで失敗を知らせても邪魔になるだけ。
-      startTransition(() => void markRead(articleId, true));
+      startTransition(() => void markRead(articleId, true, true));
     });
 
     observer.observe(el);

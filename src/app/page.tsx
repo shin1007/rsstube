@@ -5,7 +5,7 @@ import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
 import { getArticle, listArticleIds, listArticles, unreadCounts } from '@/lib/articles';
 import { createClient } from '@/lib/supabase/server';
-import { PAGE_SIZE, type FeedRow, type FolderRow, type View } from '@/lib/types';
+import { type FeedRow, type FolderRow, type View } from '@/lib/types';
 
 /**
  * リーダー本体。
@@ -86,22 +86,42 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   let nextId = index >= 0 && index < articles.length - 1 ? articles[index + 1].id : undefined;
 
   /**
-   * 無限スクロールで先へ進んでから開いた記事は、1ページ目には入っていない。
-   * そのまま index = -1 のまま描くと**「次の記事」がどこにも出ない**——スマホには
-   * 一覧へ戻る以外の導線が無いので、61件目から先は毎回戻ることになる。
-   * そのときだけ id だけを広く引いて位置を出す。
+   * 一覧に居ない記事を開いたときは、位置を引き直す。
    *
-   * 未読ビューでは引かない。**開いた記事はその場で既読になる**ので、
-   * 未読の一覧には最初から居ない（1ページ目に無いのは深いからではない）。
-   * 引いても必ず空振りで、記事を開くたびに1往復ぶん無駄になる。
-   * 1ページ目が埋まっていないときも引かない——続きが無いので深いはずがない。
+   * そのまま index = -1 で描くと**前後の帯そのものが出ない**（下の nav は
+   * prevHref も nextHref も無いときは描かれない）。スマホには一覧へ戻る以外の
+   * 導線が無いので、そこで読み進める手が完全に無くなる。
+   *
+   * 一覧に居ない理由は2つあって、**どちらも未読ビューで起きる**:
+   *
+   *   1. 無限スクロールで先へ進んでから開いた（61件目から先は1ページ目に無い）
+   *   2. **開いた拍子に既読になった。** 既読を書くのと本文を描くのは同時に走るので、
+   *      書き込みが先に着くと、この描画の一覧からはもう抜けている
+   *
+   * 以前は「未読ビューでは引いても空振り」として丸ごと飛ばしていた。2 が
+   * 起きているときはそのとおりだが、**その結果が「前後のボタンが消える」だった**
+   * ——一覧の1本目を開いた瞬間から、スマホでは次の記事へ行けなくなっていた。
+   * id で見つからなければ日付で「居たはずの場所」を出す（新着順のときだけ。
+   * 重要度順の位置は importance で決まるので、日付では出せない）。
    */
-  if (previewId && index === -1 && view !== 'unread' && articles.length >= PAGE_SIZE) {
-    const ids = await listArticleIds({ view, folderId, feedId, sort, search });
-    const at = ids.indexOf(previewId);
+  if (previewId && index === -1) {
+    const slots = await listArticleIds({ view, folderId, feedId, sort, search });
+    const at = slots.findIndex((s) => s.id === previewId);
+
     if (at >= 0) {
-      prevId = at > 0 ? ids[at - 1] : undefined;
-      nextId = at < ids.length - 1 ? ids[at + 1] : undefined;
+      prevId = at > 0 ? slots[at - 1].id : undefined;
+      nextId = at < slots.length - 1 ? slots[at + 1].id : undefined;
+    } else if (sort === 'new' && selected?.published_at) {
+      // 並びは新しい順。自分より古い最初の記事が「次」、その1つ手前が「前」。
+      const when = selected.published_at;
+      const older = slots.findIndex((s) => !s.published_at || s.published_at < when);
+      if (older >= 0) {
+        prevId = older > 0 ? slots[older - 1].id : undefined;
+        nextId = slots[older].id;
+      } else if (slots.length > 0) {
+        // 自分がいちばん古い。前だけ出す。
+        prevId = slots[slots.length - 1].id;
+      }
     }
   }
 
