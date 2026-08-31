@@ -79,15 +79,15 @@ export default async function PasswordPage({ searchParams }: PageProps<'/account
           </div>
         ) : (
           <form action={save} className="space-y-3">
-            {/* 決めるほうは既定で見せる。ここで打ち間違えると次から入れなくなるので、
-                伏せておく利点より、確かめられる利点のほうが大きい。 */}
+            {/* ここも伏せた状態で開く。**打ち間違いは確認欄で受け止める。**
+                パスワード欄が最初から読める画面は世の中に無く、見慣れない形は
+                それだけで「安全でない」と読まれる。見たいときは「見る」を押す。 */}
             <PasswordField
               name="password"
               required
               minLength={MIN_PASSWORD}
               autoComplete="new-password"
               placeholder={`新しいパスワード（${MIN_PASSWORD}文字以上）`}
-              defaultVisible
             />
             <PasswordField
               name="confirm"
