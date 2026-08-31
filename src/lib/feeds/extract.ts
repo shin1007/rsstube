@@ -5,6 +5,7 @@ import { decodeBody } from '@/lib/feeds/charset';
 import { sanitizeHtml } from '@/lib/feeds/sanitize';
 import { pickImageFromDocument } from '@/lib/feeds/image';
 import { pickFollowups, type Followup } from '@/lib/feeds/followup';
+import { looksLikeFrame, mainRegionHtml } from '@/lib/feeds/frame';
 import { fetchPdfText, pdfTextToParagraphs, readPdf } from '@/lib/feeds/pdf';
 
 /**
@@ -134,17 +135,21 @@ export async function extractArticle(url: string): Promise<ExtractResult> {
   const html = decodeBody(res.headers.get('content-type'), body);
   // linkedom は外部リソースを取りに行かないので、画像やスクリプトで遅くならない。
   const { document } = parseHTML(html);
+  // main の中身は Readability に渡す前に控えておく（渡した document は書き換えられる）。
+  const mainHtml = mainRegionHtml(document);
   const article = new Readability(document).parse();
   // Readability は meta を落とすので、掴む前の document から取る。
   const imageUrl = pickImageFromDocument(document, url);
+  // 枠を丸ごと掴んでいたら main の中だけでやり直す（lib/feeds/frame.ts）。
+  const content = regrabInMain(article?.content ?? '', mainHtml);
 
   // textContent ではなく、Readability が整えた HTML から段落を組み立てる。
   // textContent はブロックの境目に何も入れないので段落が全部つながり、代わりに
   // 元HTMLの改行だけが残る。結果、見た目が書き手のHTMLの書き方に左右される
   // （改行だらけのサイトと、改行が1つも無いサイトができる）。lib/feeds/text.ts 参照。
-  const text = htmlToText(article?.content ?? '');
+  const text = htmlToText(content);
   // 相対パスの画像やリンクを解決するため、記事のURLを渡す。
-  const safeHtml = sanitizeHtml(article?.content ?? '', url);
+  const safeHtml = sanitizeHtml(content, url);
 
   /**
    * 薄いページは「入口で、本体は別にある」ことを疑う。
@@ -174,6 +179,21 @@ export async function extractArticle(url: string): Promise<ExtractResult> {
     ok: true,
     imageUrl,
   };
+}
+
+/**
+ * 枠を掴んでいたら、`<main>` の中だけでもう一度掴ませる。
+ *
+ * 掴み直しはメモリの中だけで済む（取得は1本も増えない）。やり直しても何も取れなければ
+ * **元のまま返す**——枠でも、空文字にするよりは判断の材料が残る。取れたものが短ければ、
+ * このあとの followToBody と MIN_CONTENT_CHARS がいつもどおり拾う。
+ */
+function regrabInMain(content: string, mainHtml: string | null): string {
+  if (!mainHtml || !looksLikeFrame(content)) return content;
+  // linkedom は完全な文書の形を要求する（body だけ渡すと黙って空で返ってくる）。
+  const { document } = parseHTML(`<!DOCTYPE html><html><body>${mainHtml}</body></html>`);
+  const scoped = new Readability(document).parse()?.content ?? '';
+  return htmlToText(scoped).length > 0 ? scoped : content;
 }
 
 /**
