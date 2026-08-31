@@ -21,6 +21,8 @@ type ArticleDetail = {
   content_ok: boolean;
   /** 本文抽出を試みた時刻。null は未処理（0014）。 */
   extracted_at: string | null;
+  /** 取れなかった理由（0028）。空なら「取れた」か「まだ試していない」。 */
+  extract_fail: string | null;
   feeds: { id: string; title: string } | null;
   summaries: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
   article_states: {
@@ -30,6 +32,31 @@ type ArticleDetail = {
     exported_at: string | null;
   } | null;
 };
+
+/**
+ * 本文が無いときに出す一言。
+ *
+ * 理由が違えば読む人の次の行動も違う（待てばよいのか、元記事へ行くのか、
+ * そもそも本文が存在しないのか）。`extract_fail` が入っていないときだけ
+ * 「保持期間を過ぎた」——それが唯一「あったものが消えた」場合。
+ */
+function missingBodyMessage(reason: string | null): string {
+  switch (reason) {
+    case 'recycled':
+      return 'このページには記事ごとの本文がありません（どの記事を開いても同じ内容が出るページでした）。元記事で読んでください。';
+    case 'notfound':
+      return '元のページが見つかりませんでした。削除されたか、URLが変わっています。';
+    case 'blocked':
+      return 'サイト側から拒否されたため、本文を取得できませんでした。元記事で読んでください。';
+    case 'nonhtml':
+      return 'このページは本文として読める形式ではありませんでした。元記事で読んでください。';
+    case 'network':
+    case 'short':
+      return '本文を取得できませんでした。しばらくすると自動でもう一度取りに行きます。';
+    default:
+      return '保持期間を過ぎたため本文は削除されています。元記事で読んでください。';
+  }
+}
 
 /** 記事本文。上部にAI要約カードを固定で出し、その下に本文を置く。 */
 export function ArticleView({
@@ -176,11 +203,14 @@ export function ArticleView({
               </ActionForm>
             )}
 
-            {/* 本文が空なら、抽出に失敗したのではなく保持期間を過ぎて消したほう。
-                取得失敗と同じ文言を出すと原因を取り違えるので分けている。 */}
+            {/* 本文が空なときの理由は1つではない。**「保持期間を過ぎた」で全部を
+                まとめないこと。** 消したのではなく最初から取れていない記事が
+                41件あり（漫画の各話ページのように、どの記事でも同じものが出る
+                ページ）、そこに「削除されています」と出すと、あるはずのものが
+                失われたように読める。理由は extract_fail が持っている（0028）。 */}
             {!a.content_text?.trim() ? (
               <p className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-2 text-xs text-zinc-400">
-                保持期間を過ぎたため本文は削除されています。元記事で読んでください。
+                {missingBodyMessage(a.extract_fail)}
               </p>
             ) : (
               !a.content_ok &&
