@@ -9,6 +9,11 @@ import { useId, useState } from 'react';
  * パスワードマネージャを使えない場面（別の端末から入るとき、初回の設定）が
  * 必ずあるので、目で確かめられるようにしておく。
  *
+ * **開いた直後は必ず伏せる。** 一時は「新しいパスワードを決める画面だけは
+ * はじめから見せる」ようにしていたが、パスワード欄が最初から読める画面は
+ * 世の中に無く、見慣れない形はそれだけで「安全でない」と読まれる。
+ * 肩越しに覗かれる場面も、こちらでは選べない。見せるかどうかは押した人が決める。
+ *
  * **`type="button"` を落とさないこと。** フォームの中のボタンは既定で submit なので、
  * 付け忘れると「見る」を押した瞬間にログインが走る（しかも入力途中で走るので、
  * 「パスワードが違います」だけが出て理由が分からない）。
@@ -23,7 +28,6 @@ export function PasswordField({
   autoComplete,
   minLength,
   required,
-  defaultVisible = false,
 }: {
   name: string;
   placeholder: string;
@@ -31,9 +35,8 @@ export function PasswordField({
   autoComplete: string;
   minLength?: number;
   required?: boolean;
-  defaultVisible?: boolean;
 }) {
-  const [visible, setVisible] = useState(defaultVisible);
+  const [visible, setVisible] = useState(false);
   const id = useId();
 
   return (
