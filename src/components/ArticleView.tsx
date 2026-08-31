@@ -169,7 +169,9 @@ export function ArticleView({
               本文側も訳した見出しを主にする。一覧と見出しが変わると、
               同じ記事を開いた気がしない。原題は下に小さく残す。
             */}
-            <h1 className="mt-2 text-xl font-bold leading-snug md:text-2xl">
+            {/* 記事の題は、本文の中の見出し（.prose-rich h2 ＝ 本文の1.4倍）より
+                大きいこと。同じだと、どこからが本文の節なのか分からなくなる。 */}
+            <h1 className="mt-2 text-2xl font-bold leading-snug tracking-tight md:text-3xl">
               {a.summaries?.title_ja?.trim() || a.title}
             </h1>
             {a.summaries?.title_ja?.trim() && a.summaries.title_ja.trim() !== a.title && (

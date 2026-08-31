@@ -589,8 +589,8 @@ export function ArticleList({
       <header className="border-b border-zinc-800 px-3 py-2">
         {/* どのビューを見ているかを常に出す。スマホでは下部タブしか手がかりが無かった。 */}
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold">{VIEW_LABELS[view]}</h2>
-          <span className="text-xs text-zinc-500">
+          <h2 className="section-title shrink-0 whitespace-nowrap">{VIEW_LABELS[view]}</h2>
+          <span className="whitespace-nowrap text-xs text-zinc-500">
             {/* まだ続きがあるなら「+」を付ける。確定した数字として出すと、
                 スクロールのたびに増えるのが数え間違いに見える。 */}
             {rows.length}件{!done && '+'}
@@ -832,7 +832,7 @@ function HelpOverlay({ onClose }: { onClose: () => void }) {
         className="w-full max-w-sm rounded border border-zinc-700 bg-zinc-900 p-4"
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">キーボードショートカット</h2>
+          <h2 className="section-title">キーボードショートカット</h2>
           <button type="button" onClick={onClose} aria-label="閉じる" className="text-zinc-500 hover:text-zinc-200">
             ✕
           </button>
@@ -982,7 +982,7 @@ function Row({
             英語のフィードで、原題のままだと一覧を目で追うのが重い。
             原題は捨てずに下に小さく残す（訳が的外れなときに気づけるように）。
           */}
-          <h3 className={`flex-1 text-sm leading-snug ${read ? 'text-zinc-500' : 'font-medium'}`}>
+          <h3 className={`flex-1 text-sm leading-snug ${read ? 'text-zinc-500' : 'font-semibold text-zinc-50'}`}>
             {heading}
             {heading !== article.title && (
               <span className="mt-0.5 block text-[14px] font-normal text-zinc-600">

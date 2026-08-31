@@ -64,7 +64,7 @@ export function ExportDialog({
         className="w-full max-w-lg rounded-t-xl md:rounded-xl border border-zinc-800 bg-zinc-950 p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold">NotebookLM に渡す</h2>
+        <h2 className="section-title">NotebookLM に渡す</h2>
         <p className="mt-1 text-xs text-zinc-500">{result.title}</p>
 
         <div className="mt-4 space-y-2">
