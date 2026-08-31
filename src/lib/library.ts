@@ -42,6 +42,7 @@ type RawRow = {
   excerpt: string | null;
   content_ok: boolean;
   extracted_at: string | null;
+  created_at: string | null;
   feeds: { id: string; title: string } | null;
   summaries: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
   article_states: {
@@ -66,7 +67,7 @@ export async function searchLibrary(
   let q = supabase
     .from('articles')
     .select(
-      `id, title, url, author, published_at, excerpt, content_ok, extracted_at,
+      `id, title, url, author, published_at, excerpt, content_ok, extracted_at, created_at,
        feeds!inner (id, title),
        ${summaryJoin} (bullets, tags, importance, title_ja),
        article_states!inner (is_read, is_starred, read_later, exported_at)`,
@@ -113,6 +114,7 @@ export async function searchLibrary(
       excerpt: r.excerpt,
       content_ok: r.content_ok,
       extracted_at: r.extracted_at,
+      created_at: r.created_at,
       feed: r.feeds ? { id: r.feeds.id, title: r.feeds.title } : null,
       summary: r.summaries ?? null,
       state: r.article_states ?? null,

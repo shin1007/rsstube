@@ -20,6 +20,14 @@ export type ArticleRow = {
    * content_ok の false だけでは、失敗したのか順番待ちなのかが分からない。
    */
   extracted_at: string | null;
+  /**
+   * こちらに入ってきた時刻（巡回で取り込んだとき）。
+   *
+   * 記事の日付（`published_at`）は**書き手が打ったもの**で、実際に読めるように
+   * なった時刻とはずれる。省庁のように「日付は同じで、出てくるのは数日後」という
+   * 出し方も普通にあるので、並び順と手元に来た順が食い違って見える。
+   */
+  created_at: string | null;
   feed: { id: string; title: string } | null;
   /**
    * 要約。title_ja は設定言語での見出し（0023）。一覧では原題より
