@@ -120,3 +120,21 @@
 **APIキーでは叩けません**（`GEMINI_API_KEY` で試すと 401 で
 「API keys are not supported by this API」）。GCPプロジェクトで [Cloud Text-to-Speech API](https://console.cloud.google.com/apis/library) を
 有効にし、サービスアカウントの鍵を発行して入れる必要があります。**いま急ぐ必要はありません。**
+
+---
+
+## 8. 既にある記事にも「本体はPDF」を効かせる（実行の判断だけ）
+
+厚労省のように **HTMLには表題とリンクしか無く、中身はPDF（や別ページ）にある記事**を
+読めるようにしました。これから入る記事には自動で効きますが、**既に取り込んだぶんは
+取り直しません**（`extracted_at` が入っている記事は二度と取りに行かない作りのため）。
+いま50件が、フッターや「言語切替」の案内を本文として持ったまま残っています
+（うち20件が厚労省）。
+
+```
+node --env-file=.env.local scripts/reextract-thin.mjs               # 対象を数えるだけ
+node --env-file=.env.local scripts/reextract-thin.mjs --run --limit 10   # 10件だけ試す
+```
+
+- [ ] まず `--limit 10` で流し、出来上がった要約を見てから残りを流すか決める
+      （要約は Gemini の無料枠を使うので、一度に全部は積まないこと）

@@ -37,6 +37,12 @@ for (const url of urls) {
     console.log(`${mark} ${url}`);
     console.log(`   文字コード: ${r.charset}   Content-Type: ${r.contentType || '(なし)'}`);
 
+    // HTMLに本文が無く、PDFや別ページから読んだときはそれを出す。
+    // どこから取れたのかが分からないと、正しい本体かどうかを確かめられない。
+    for (const s of r.sources ?? []) {
+      console.log(`   本体は${s.kind === 'pdf' ? 'PDF' : '別ページ'}: ${s.label || '(無題)'} ${s.url}`);
+    }
+
     if (r.error) {
       console.log(`   取得できず: ${r.error}`);
     } else if (r.ok) {
