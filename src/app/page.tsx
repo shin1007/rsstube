@@ -151,6 +151,10 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
           sort={sort}
           selectedId={selectedId}
           search={search}
+          // ← → で前後の記事へ移るためだけに渡す。下のボタンと同じ行き先を使う
+          // ——一覧から数え直すと、開いた記事が一覧に居ないときに動かなくなる。
+          prevHref={prevId ? linkTo(prevId) : undefined}
+          nextHref={nextId ? linkTo(nextId) : undefined}
         />
       </div>
 

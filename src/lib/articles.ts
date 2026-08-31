@@ -39,6 +39,7 @@ type RawRow = {
   excerpt: string | null;
   content_ok: boolean;
   extracted_at: string | null;
+  created_at: string | null;
   feeds: { id: string; title: string; subscriptions?: unknown } | null;
   summaries: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
   article_states: {
@@ -50,7 +51,7 @@ type RawRow = {
 };
 
 /** 一覧に出すぶん。 */
-const LIST_SELECT = `id, title, url, author, published_at, excerpt, content_ok, extracted_at,
+const LIST_SELECT = `id, title, url, author, published_at, excerpt, content_ok, extracted_at, created_at,
    feeds!inner (id, title, subscriptions!inner (folder_id)),
    summaries (bullets, tags, importance, title_ja),
    article_states!inner (is_read, is_starred, read_later, exported_at)`;
@@ -147,6 +148,7 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
     excerpt: r.excerpt,
     content_ok: r.content_ok,
     extracted_at: r.extracted_at,
+    created_at: r.created_at,
     feed: r.feeds ? { id: r.feeds.id, title: r.feeds.title } : null,
     summary: r.summaries ?? null,
     state: r.article_states ?? null,
@@ -185,7 +187,7 @@ export async function getArticle(id: string) {
   const { data, error } = await supabase
     .from('articles')
     .select(
-      `id, title, url, author, published_at, excerpt, content_text, content_html, content_ok, extracted_at, extract_fail,
+      `id, title, url, author, published_at, excerpt, content_text, content_html, content_ok, extracted_at, extract_fail, created_at,
        feeds (id, title),
        summaries (bullets, tags, importance, title_ja),
        article_states (is_read, is_starred, read_later, exported_at)`,

@@ -44,9 +44,10 @@ import {
  * ヘルプに出す一覧。実際の処理は onKey 側にあるので、増やしたら両方直すこと。
  */
 const SHORTCUTS: [string, string][] = [
-  ['j / ↓', '次の記事'],
-  ['k / ↑', '前の記事'],
+  ['j / ↓', '一覧で次へ'],
+  ['k / ↑', '一覧で前へ'],
   ['o / Enter', '開く'],
+  ['→ / ←', '開いたまま次／前の記事へ'],
   ['Esc', '記事を閉じる'],
   ['m', '既読・未読'],
   ['s', 'スター'],
@@ -68,6 +69,7 @@ const SHORTCUTS: [string, string][] = [
 const BAR: [string, string][] = [
   ['j/k', '移動'],
   ['o', '開く'],
+  ['←/→', '前後'],
   ['m', '既読'],
   ['s', '★'],
   ['l', 'あとで'],
@@ -81,6 +83,23 @@ const EMPTY_STATE = {
 };
 
 type StatePatch = Partial<typeof EMPTY_STATE>;
+
+/**
+ * 「取得」に出す時刻。
+ *
+ * 記事の日付と**同じ日なら時刻だけ**（`15:07`）、違う日なら日付から出す（`8/31`）。
+ * 一覧に日付が2つ並ぶと、どちらが記事の日付なのか分からなくなる。知りたいのは
+ * たいてい「ずれているかどうか」なので、ずれている日だけ日付が出れば足りる。
+ */
+export function formatFetched(fetched: string, published: string | null): string {
+  const at = new Date(fetched);
+  const sameDay =
+    published && new Date(published).toLocaleDateString('ja-JP') === at.toLocaleDateString('ja-JP');
+
+  return sameDay
+    ? at.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+    : at.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+}
 
 /** キーの見た目。文字だけだと本文に紛れて、押せる文字だと分からない。 */
 function Kbd({ children }: { children: React.ReactNode }) {
@@ -97,12 +116,21 @@ export function ArticleList({
   sort,
   selectedId,
   search,
+  prevHref,
+  nextHref,
 }: {
   articles: ArticleRow[];
   view: View;
   sort: 'new' | 'important';
   selectedId?: string;
   search?: string;
+  /**
+   * 前後の記事への行き先。**画面の下のボタンと同じものを受け取る**（app/page.tsx）。
+   * ← → をここで一覧から数えると、開いた記事が一覧に居ないときに動かなくなる
+   * （未読ビューでは開いた拍子に既読になり、その回の一覧から抜けているため）。
+   */
+  prevHref?: string;
+  nextHref?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -421,6 +449,30 @@ export function ArticleList({
             open(current.id);
           }
           break;
+        /**
+         * 記事を開いている間は、← → で前後の記事へ移る。
+         *
+         * スマホの「横に払う」と同じ操作をキーに割り当てたもの。画面の下の
+         * 「← 前の記事 / 次の記事 →」を押しに行かなくても読み進められる。
+         *
+         * **開いていないときは何もしない。** 一覧だけを見ているときの ← → は、
+         * 横に長い行を流し読みするための操作として残しておく。
+         */
+        case 'ArrowRight':
+        case 'ArrowLeft': {
+          // 行き先は**画面の下のボタンと同じもの**を使う（サーバーが出した prev/next）。
+          // ここで一覧から自分で数えると、**開いた記事が一覧に居ないときに動かなくなる**
+          // ——未読ビューでは開いた拍子に既読になり、その回の一覧からは抜けているため。
+          // 実際それで ← → が無反応だった（app/page.tsx の位置の引き直しと同じ穴）。
+          // 横に流れる要素（コード・表）の中では、その中を見るための矢印にする。
+          // スワイプで pre / table を避けているのと同じ理由。
+          if ((e.target as HTMLElement | null)?.closest?.('pre, table')) break;
+          const href = e.key === 'ArrowRight' ? nextHref : prevHref;
+          if (!href) break;
+          e.preventDefault();
+          router.push(href);
+          break;
+        }
         case 'm':
           if (current) {
             e.preventDefault();
@@ -465,7 +517,7 @@ export function ArticleList({
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [rows, cursor, open, helpOpen, selectedId, pushParams, markAll, patch, loadMore]);
+  }, [rows, cursor, open, helpOpen, selectedId, pushParams, markAll, patch, loadMore, router, prevHref, nextHref]);
 
   const unreadCount = rows.filter((a) => !a.state?.is_read).length;
 
@@ -915,6 +967,17 @@ function Row({
                 month: 'numeric',
                 day: 'numeric',
               })}
+            </time>
+          )}
+          {/* 記事の日付の隣に、こちらへ入ってきた時刻。**同じ日なら時刻だけ**にする
+              ——一覧では日付が2つ並ぶより、違う日のときだけ日付が出るほうが目立つ。 */}
+          {article.created_at && (
+            <time
+              dateTime={article.created_at}
+              title={`取得 ${new Date(article.created_at).toLocaleString('ja-JP')}`}
+              className="text-zinc-700"
+            >
+              取得{formatFetched(article.created_at, article.published_at)}
             </time>
           )}
           {article.state?.is_starred && (

@@ -23,6 +23,8 @@ type ArticleDetail = {
   extracted_at: string | null;
   /** 取れなかった理由（0028）。空なら「取れた」か「まだ試していない」。 */
   extract_fail: string | null;
+  /** こちらへ入ってきた時刻。記事の日付（published_at）とはずれる。 */
+  created_at: string | null;
   feeds: { id: string; title: string } | null;
   summaries: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
   article_states: {
@@ -147,6 +149,19 @@ export function ArticleView({
                   month: 'numeric',
                   day: 'numeric',
                 })}`}
+              {/* 記事の日付の隣に、こちらへ入ってきた時刻。日付は書き手が打ったもので、
+                  実際に読めるようになった時刻とはずれる（省庁は特に）。 */}
+              {a.created_at && (
+                <span className="text-zinc-600">
+                  {' · 取得 '}
+                  {new Date(a.created_at).toLocaleString('ja-JP', {
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              )}
             </p>
 
             {/*
