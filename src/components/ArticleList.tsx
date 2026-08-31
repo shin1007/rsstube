@@ -76,6 +76,14 @@ const BAR: [string, string][] = [
   ['l', 'あとで'],
 ];
 
+/**
+ * 移動中に溜めておける押下の数。
+ *
+ * 連打はそのまま効かせたいが、際限なく溜めると行き過ぎたときに戻すのが大仕事に
+ * なる（溜まったぶんは1件ずつ本当に開いていくので、既読も付く）。
+ */
+const MAX_QUEUED_MOVES = 10;
+
 const EMPTY_STATE = {
   is_read: false,
   is_starred: false,
@@ -152,20 +160,32 @@ export function ArticleList({
    * 場所があった。**「途中で止まった」に見えるのはこれ。**キーを押しっぱなしに
    * すると自動リピートは30ms 間隔なので、まず抜け出せない。
    *
-   * ただし**最後の1回だけは覚えておく**。捨てるだけにすると、押した回数の半分しか
-   * 進まない（実測: 300ms 間隔40回で20件）。着いた時点で新しい行き先が分かるので、
-   * そこで続きを出す。2つ以上は溜めない——溜めるほど、指を離したあとに勝手に
-   * 進み続けることになる。
+   * **押したぶんは数えて覚えておく。**捨てると連打が効かない（実測: 300ms 間隔で
+   * 40回押して20件しか進まなかった）。着けば次の行き先が分かるので、そこで残りを
+   * 出す。5回押せば5つ先に着く——ただの遅れになる。
+   *
+   * **押しっぱなしの自動リピートは数えない**（`e.repeat`）。あれは30ms 間隔で
+   * 際限なく届くので、数えると指を離したあとも延々と進み続ける。連打（1回ずつの
+   * 押下）と押しっぱなしは、この旗でしか見分けられない。
+   *
+   * それでも上限を置くのは、連打しすぎたときに戻れなくなるため。溜まったぶんは
+   * 1件ずつ本当に開いていく（既読も付く）ので、行き過ぎは手で戻すことになる。
    */
   const [moving, startMove] = useTransition();
-  /** 移動中に押されたぶん（1 = 次へ / -1 = 前へ / 0 = 無し）。 */
-  const queuedMove = useRef<1 | -1 | 0>(0);
+  /** 移動中に押されたぶん。符号は向き（+ が次へ）。 */
+  const queuedMove = useRef(0);
 
   useEffect(() => {
-    if (moving || !queuedMove.current) return;
-    const href = queuedMove.current === 1 ? nextHref : prevHref;
-    queuedMove.current = 0;
-    if (href) startMove(() => router.push(href));
+    if (moving || queuedMove.current === 0) return;
+    const dir = queuedMove.current > 0 ? 1 : -1;
+    const href = dir === 1 ? nextHref : prevHref;
+    // 端に着いたら、残っているぶんは捨てる。押した回数ぶん壁を叩いても仕方がない。
+    if (!href) {
+      queuedMove.current = 0;
+      return;
+    }
+    queuedMove.current -= dir;
+    startMove(() => router.push(href));
   }, [moving, nextHref, prevHref, router]);
 
   const folderId = searchParams.get('folder') ?? undefined;
@@ -502,9 +522,15 @@ export function ArticleList({
           const href = e.key === 'ArrowRight' ? nextHref : prevHref;
           if (!href) break;
           e.preventDefault();
-          // 着く前に押されたぶんは、最後の1回だけ覚えて着いてから出す（上の moving）。
+          // 着く前に押されたぶんは数えておいて、着いてから順に出す（上の moving）。
           if (moving) {
-            queuedMove.current = e.key === 'ArrowRight' ? 1 : -1;
+            // 押しっぱなしの自動リピートは数えない。離しても進み続けてしまう。
+            if (e.repeat) break;
+            const dir = e.key === 'ArrowRight' ? 1 : -1;
+            queuedMove.current = Math.max(
+              -MAX_QUEUED_MOVES,
+              Math.min(MAX_QUEUED_MOVES, queuedMove.current + dir),
+            );
             break;
           }
           startMove(() => router.push(href));
