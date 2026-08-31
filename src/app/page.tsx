@@ -5,7 +5,7 @@ import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
 import { getArticle, listArticleIds, listArticles, unreadCounts } from '@/lib/articles';
 import { createClient } from '@/lib/supabase/server';
-import { type FeedRow, type FolderRow, type View } from '@/lib/types';
+import { PAGE_SIZE, type FeedRow, type FolderRow, type View } from '@/lib/types';
 
 /**
  * リーダー本体。
@@ -86,6 +86,22 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   let nextId = index >= 0 && index < articles.length - 1 ? articles[index + 1].id : undefined;
 
   /**
+   * 一覧の**最後の1件**を開いているときは、その先があるかどうかが分からない。
+   *
+   * ここで見ている `articles` は1ページぶん（PAGE_SIZE = 60）しかない。60件目を
+   * 開くと `index === articles.length - 1` になって「次は無い」と出てしまい、
+   * **ちょうど60件目で読み進められなくなる**（下のボタンも ← → も止まる）。
+   * 実測で確認済み——「すべて」ビューで → を押し続けると、毎回60件目で止まった。
+   * 一覧を下までスクロールすれば61件目以降は継ぎ足されるのに、前後の行き先だけは
+   * サーバーの1ページ目しか見ていなかった。
+   *
+   * ちょうど60件で終わっている一覧は「ここが終わり」なのか「続きがある」のかを
+   * 区別できないので、そのときだけ id しか運ばない一覧を引き直す。
+   * 60件に満たなければ本当の終わりなので、引き直さない。
+   */
+  const atPageEnd = index >= 0 && index === articles.length - 1 && articles.length >= PAGE_SIZE;
+
+  /**
    * 一覧に居ない記事を開いたときは、位置を引き直す。
    *
    * そのまま index = -1 で描くと**前後の帯そのものが出ない**（下の nav は
@@ -104,7 +120,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
    * id で見つからなければ日付で「居たはずの場所」を出す（新着順のときだけ。
    * 重要度順の位置は importance で決まるので、日付では出せない）。
    */
-  if (previewId && index === -1) {
+  if (previewId && (index === -1 || atPageEnd)) {
     const slots = await listArticleIds({ view, folderId, feedId, sort, search });
     const at = slots.findIndex((s) => s.id === previewId);
 
