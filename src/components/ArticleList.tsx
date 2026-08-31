@@ -140,6 +140,34 @@ export function ArticleList({
   // 来た道があればそちらへ戻す（lib/trail.ts）。下のボタン・スワイプと同じ行き先。
   const { prevHref, nextHref } = useNeighbours(selectedId, serverPrev, serverNext);
 
+  /**
+   * 前後への移動が終わるまで、次の ← → を受けない。
+   *
+   * **押し続けると一歩も進まなくなる。** 行き先（`nextHref`）はサーバーが描き直す
+   * まで変わらないので、着く前にもう一度押すと**いま向かっている先へもう一度**
+   * 押したことになる。同じ場所への push は React の遷移をやり直させるだけなので、
+   * 押し続けているあいだ永久に着かない。
+   *
+   * 実測（手元・300ms 間隔で40回）: 進んだのは3件だけで、13回続けて何も起きない
+   * 場所があった。**「途中で止まった」に見えるのはこれ。**キーを押しっぱなしに
+   * すると自動リピートは30ms 間隔なので、まず抜け出せない。
+   *
+   * ただし**最後の1回だけは覚えておく**。捨てるだけにすると、押した回数の半分しか
+   * 進まない（実測: 300ms 間隔40回で20件）。着いた時点で新しい行き先が分かるので、
+   * そこで続きを出す。2つ以上は溜めない——溜めるほど、指を離したあとに勝手に
+   * 進み続けることになる。
+   */
+  const [moving, startMove] = useTransition();
+  /** 移動中に押されたぶん（1 = 次へ / -1 = 前へ / 0 = 無し）。 */
+  const queuedMove = useRef<1 | -1 | 0>(0);
+
+  useEffect(() => {
+    if (moving || !queuedMove.current) return;
+    const href = queuedMove.current === 1 ? nextHref : prevHref;
+    queuedMove.current = 0;
+    if (href) startMove(() => router.push(href));
+  }, [moving, nextHref, prevHref, router]);
+
   const folderId = searchParams.get('folder') ?? undefined;
   const feedId = searchParams.get('feed') ?? undefined;
 
@@ -474,7 +502,12 @@ export function ArticleList({
           const href = e.key === 'ArrowRight' ? nextHref : prevHref;
           if (!href) break;
           e.preventDefault();
-          router.push(href);
+          // 着く前に押されたぶんは、最後の1回だけ覚えて着いてから出す（上の moving）。
+          if (moving) {
+            queuedMove.current = e.key === 'ArrowRight' ? 1 : -1;
+            break;
+          }
+          startMove(() => router.push(href));
           break;
         }
         case 'm':
@@ -521,7 +554,7 @@ export function ArticleList({
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [rows, cursor, open, helpOpen, selectedId, pushParams, markAll, patch, loadMore, router, prevHref, nextHref]);
+  }, [rows, cursor, open, helpOpen, selectedId, pushParams, markAll, patch, loadMore, router, prevHref, nextHref, moving, startMove]);
 
   const unreadCount = rows.filter((a) => !a.state?.is_read).length;
 
