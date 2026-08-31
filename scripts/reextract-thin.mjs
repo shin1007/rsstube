@@ -16,6 +16,7 @@ import { connectionString } from './db-connect.mjs';
  *   node --env-file=.env.local scripts/reextract-thin.mjs            # 対象を数えるだけ
  *   node --env-file=.env.local scripts/reextract-thin.mjs --run      # 積む
  *   node --env-file=.env.local scripts/reextract-thin.mjs --run --limit 20
+ *   node --env-file=.env.local scripts/reextract-thin.mjs --run --all       # 望みの薄いフィードも含める
  *
  * 積んだあとはワーカーが回るのを待つ（本番は pg_cron が5分おき）。
  * 要約は無料枠を使うので、まずは --limit を小さくして出来を確かめること。
@@ -27,6 +28,17 @@ const LIMIT = limitArg > -1 ? Number(process.argv[limitArg + 1]) : 50;
 
 /** ここを下回る本文は「入口ページを掴んでいる」疑い（extract.ts の FOLLOW_BELOW_CHARS と同じ）。 */
 const THIN_CHARS = 600;
+
+/**
+ * 取り直しても何も変わらないフィード。
+ *
+ * 東洋経済はペイウォールで本文がHTMLに無く、Hacker News はリンク先が第三者のサイトで
+ * 403 か JS 描画（`docs/site-compat.md`。どちらも「直せない」と分かっている）。
+ * 実データでは対象100件のうち**53件がこの2つ**で、積めばそのぶん Gemini の
+ * 無料枠だけが減る。`--all` を付けたときだけ含める。
+ */
+const HOPELESS = ['東洋経済オンライン', 'Hacker News'];
+const ALL = process.argv.includes('--all');
 
 const client = new pg.Client({ connectionString: connectionString(), ssl: { rejectUnauthorized: false } });
 await client.connect();
@@ -45,6 +57,7 @@ const targets = (
        join feeds f on f.id = a.feed_id
       where a.extracted_at is not null
         and (a.content_ok = false or coalesce(length(a.content_text), 0) < $1)
+        and ($3::boolean or not (f.title = any($4::text[])))
         and not exists (
           select 1 from jobs j
            where j.status in ('queued', 'running')
@@ -52,7 +65,7 @@ const targets = (
         )
       order by a.published_at desc nulls last
       limit $2`,
-    [THIN_CHARS, LIMIT],
+    [THIN_CHARS, LIMIT, ALL, HOPELESS],
   )
 ).rows;
 
