@@ -4,6 +4,7 @@ import { ArticleView } from '@/components/ArticleView';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
 import { getArticle, listArticleIds, listArticles, unreadCounts } from '@/lib/articles';
+import { unplayedMediaCount } from '@/lib/media/list';
 import { createClient } from '@/lib/supabase/server';
 import { PAGE_SIZE, type FeedRow, type FolderRow, type View } from '@/lib/types';
 
@@ -33,11 +34,12 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
 
   const supabase = await createClient();
 
-  const [{ data: folders }, feeds, articles, counts, picked] = await Promise.all([
+  const [{ data: folders }, feeds, articles, counts, unplayed, picked] = await Promise.all([
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
     listSubscribedFeeds(),
     listArticles({ view, folderId, feedId, sort, search }),
     unreadCounts(),
+    unplayedMediaCount(),
     selectedId ? getArticle(selectedId) : Promise.resolve(null),
   ]);
 
@@ -149,6 +151,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
         folders={(folders ?? []) as FolderRow[]}
         feeds={(feeds ?? []) as FeedRow[]}
         unread={counts}
+        unplayed={unplayed}
         view={view}
         folderId={folderId}
         feedId={feedId}
@@ -184,7 +187,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
         />
       </div>
 
-      <BottomTabs view={view} hidden={Boolean(selectedId)} />
+      <BottomTabs view={view} hidden={Boolean(selectedId)} unplayed={unplayed} />
     </div>
   );
 }

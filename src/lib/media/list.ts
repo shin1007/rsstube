@@ -29,6 +29,8 @@ export type MediaSummary = {
    * ダイジェストは束ねた記事が複数あるので、1本には決まらない（再生ページで一覧にする）。
    */
   sourceUrl: string | null;
+  /** 最初に再生した時刻。null なら未視聴（一覧に印を出し、タブのバッジで数える）。 */
+  playedAt: string | null;
 };
 
 /** 音声のもとになった記事。再生ページから元記事へ辿るために出す。 */
@@ -51,7 +53,7 @@ export async function listMedia(limit = 30): Promise<MediaSummary[]> {
   const { data, error } = await supabase
     .from('media')
     .select(
-      'id, kind, title, status, duration_sec, created_at, last_error,' +
+      'id, kind, title, status, duration_sec, created_at, last_error, played_at,' +
         ' media_segments (audio_path), articles (url)',
     )
     .order('created_at', { ascending: false })
@@ -66,6 +68,7 @@ export async function listMedia(limit = 30): Promise<MediaSummary[]> {
     duration_sec: number;
     created_at: string;
     last_error: string | null;
+    played_at: string | null;
     media_segments: { audio_path: string | null }[];
     // media.article_id の参照先。ダイジェストは article_id が null なので来ない。
     articles: { url: string } | null;
@@ -80,7 +83,30 @@ export async function listMedia(limit = 30): Promise<MediaSummary[]> {
     doneSegments: m.media_segments.filter((s) => s.audio_path).length,
     totalSegments: m.media_segments.length,
     sourceUrl: m.articles?.url ?? null,
+    playedAt: m.played_at,
   }));
+}
+
+/**
+ * まだ一度も聴いていない音声の数。サイドバーと下部タブのバッジに出す。
+ *
+ * **数えるのは ready だけ。** 生成中のものを混ぜると、押しても聴けないぶんまで
+ * バッジが出て「開いたのに聴くものが無い」になる（できあがれば ready になり、
+ * そのとき数に入る）。失敗したものも未視聴ではないので数えない。
+ *
+ * 行は引かずに件数だけ取る。全ページの描画で1回ずつ通るところなので、
+ * 台本や署名まで連れてこない。
+ */
+export async function unplayedMediaCount(): Promise<number> {
+  const supabase = await createClient();
+
+  const { count } = await supabase
+    .from('media')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'ready')
+    .is('played_at', null);
+
+  return count ?? 0;
 }
 
 export async function getPlayable(id: string): Promise<{

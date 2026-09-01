@@ -78,6 +78,16 @@ export default async function ListenPage() {
                   <>
                     <div className="flex items-start gap-2">
                       <span className="min-w-0 flex-1 text-sm">
+                        {/*
+                          バッジ（サイドバー・下部タブ）の数はここの印の数と一致する。
+                          数だけ出して行に印が無いと、どれを聴けばいいのか分からない。
+                          出来上がる前のものには出さない（まだ聴けないので）。
+                        */}
+                        {m.status === 'ready' && !m.playedAt && (
+                          <span className="mr-1.5 rounded bg-amber-600 px-1.5 py-0.5 text-[13px] font-medium text-zinc-950">
+                            未聴
+                          </span>
+                        )}
                         {m.kind === 'digest' && (
                           <span className="mr-1.5 rounded bg-zinc-800 px-1.5 py-0.5 text-[13px] text-zinc-300">
                             朝

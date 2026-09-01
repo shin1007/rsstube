@@ -2,6 +2,7 @@ import { listSubscribedFeeds } from '@/lib/subscriptions';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
 import { unreadCounts } from '@/lib/articles';
+import { unplayedMediaCount } from '@/lib/media/list';
 import { createClient } from '@/lib/supabase/server';
 import type { FeedRow, FolderRow } from '@/lib/types';
 
@@ -19,10 +20,11 @@ import type { FeedRow, FolderRow } from '@/lib/types';
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
 
-  const [{ data: folders }, feeds, counts] = await Promise.all([
+  const [{ data: folders }, feeds, counts, unplayed] = await Promise.all([
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
     listSubscribedFeeds(),
     unreadCounts(),
+    unplayedMediaCount(),
   ]);
 
   return (
@@ -37,6 +39,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         folders={(folders ?? []) as FolderRow[]}
         feeds={(feeds ?? []) as FeedRow[]}
         unread={counts}
+        unplayed={unplayed}
         view="unread"
         active={false}
       />
@@ -44,7 +47,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       {children}
 
       {/* 二次画面では記事を開いていないので、常に出す。 */}
-      <BottomTabs view="unread" hidden={false} />
+      <BottomTabs view="unread" hidden={false} unplayed={unplayed} />
     </div>
   );
 }
