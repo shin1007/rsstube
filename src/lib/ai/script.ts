@@ -66,7 +66,12 @@ export const VOICE_MODE_LABELS: Record<VoiceMode, string> = {
  * 「同じスライドを延々と繰り返して出力を使い切る」壊れ方がまた起きる。
  */
 const MAX_SLIDES = 12;
-const MAX_LINES = 70;
+/**
+ * 発話数の天井。70 では15分の番組が収まらない（5100字を70個に割ると
+ * 1発話73字が下限になり、密度を上げようとすると字数のほうが削られる）。
+ * normalizeLines もここで切るので、プロンプトの上限だけ上げても効かない。
+ */
+const MAX_LINES = 80;
 
 /**
  * maxOutputTokens は思考トークンも含む。8192 にしたら思考だけで使い切って
@@ -158,65 +163,107 @@ export type ScriptSource = {
 };
 
 /**
- * 1記事あたりに渡す本文の長さ。
+ * 1本の作り方。素材の件数だけで決まる。
  *
- * 記事が多いほど短くする。8件に4000字ずつ渡したら、モデルが素材の量に引きずられて
- * 8万字を超える台本を書き、出力の上限で JSON が途中で切れて丸ごと壊れた。
- * ダイジェストで効くのは要点（summaries.bullets）のほうで、本文は雰囲気を掴む程度でよい。
+ * **記事1本の深掘り（deep）と、複数をまとめた番組（roundup）は別物**として扱う。
+ * 以前は「記事が多いときは1件あたりを短くして収める」としか言っていなかったので、
+ * ダイジェストは**記事1本につきスライド1枚の読み上げの列**になっていた。
+ * 2026-09-01 の6件で実測すると、8枚のうち6枚が記事そのままの見出しで、
+ * 同じ審議会の第1部会と第2部会が別々の枠に分かれていた——聴くと
+ * 「ニュースを1本ずつ読み上げている」だけに聞こえる。
+ * 欲しいのは「ここまでのニュースに1本で追いつく番組」なので、roundup では
+ * 記事の並びではなく**話題**で括り直させる。
  */
-function textLimit(articleCount: number): number {
-  if (articleCount <= 1) return 9_000;
-  if (articleCount <= 3) return 3_500;
-  return 1_000;
-}
+type Plan = {
+  kind: 'deep' | 'roundup';
+  /** 台本全体の目安（字）。 */
+  chars: number;
+  /** 読み上げるとおよそ何分か。プロンプトに書くための数字。 */
+  minutes: number;
+  /** 話題の数。roundup では話題、deep では論点。表紙とまとめを除いたスライドの数。 */
+  topics: number;
+  slides: number;
+  /** 発話数の上限。schema の maxItems とプロンプトの「◯個以内」の両方に使う。 */
+  lines: number;
+  /** 1話題あたりの字数。**合計より、こちらのほうが守られる**（下の注記）。 */
+  charsPerTopic: number;
+  /** 1記事あたりに渡す本文の長さ。 */
+  textLimit: number;
+};
 
 /**
- * 1本の目安の長さ。長すぎると聴き通せないし、TTS の呼び出しも増える。
+ * 読み上げの速さ。**実測から出す。**
  *
- * **素材の量に合わせること。** 8分で固定していたら、記事1本から音声を作るときに
- * モデルが尺を埋めようとして膨らみ、**必ず出力の上限で落ちていた**
- * （実測: 日本語で49605字、英語で22705字。どちらも JSON が途中で切れて丸ごと無駄になる）。
- * ダイジェスト（8件）では起きず、記事1本の「音声にする」だけが壊れていた。
- *
- * 分数だけでなく字数でも言うこと。モデルは「8分程度」より
- * 「3000字以内」のほうがよく従う。
+ * 手元の音声3本で 1678字/307秒・1116字/199秒・532字/90秒 ＝ 328〜355字/分だった。
+ * 間の取り方で少し動くので真ん中を取る。ここを楽観的に見積もると、
+ * 「15分ぶん」と頼んだものが10分で終わる。
  */
-function targetChars(articleCount: number): number {
-  if (articleCount <= 1) return 2_400;
-  if (articleCount <= 3) return 3_400;
-  return 4_400;
-}
+const CHARS_PER_MINUTE = 340;
 
 /**
- * スライドの枚数。
+ * まとめ番組の尺。「1本1本のニュースではなく、15分くらいの今までのまとめ」（2026-09-01 の指示）。
  *
- * 「1（表紙）＋記事の数」にしていたので、**記事1本の音声は表紙＋1枚しか無かった**。
- * 3行の箇条書きで記事を1本片付けることになり、スライドも台本も薄くなる。
- * 1本を掘り下げるときこそ論点ごとに割るべきなので、素材が1件のときは多めに取る。
- * 複数件のときは記事ごとに1枚＋まとめ1枚。
- *
- * 増やしても壊れないのは、スライドを3項目に平たくして `maxItems` が
- * 効くようになったため（CLAUDE.md の罠）。項目を増やすと maxItems が
- * 弾かれ、モデルが同じスライドを延々と繰り返す壊れ方に戻る。
+ * 件数から出して上限で頭打ちにする。上限を置くのは、素材が少ない日に尺を
+ * 埋めさせないため——空いた尺は言い換えの水増しになり、JSON が長くなるだけで
+ * 中身は増えない（記事1本で8分を固定していた頃、出力の上限で毎回落ちていた）。
+ * 下限があるのは、2件しか無い日でも番組の形（冒頭・話題・締め）は要るため。
  */
-function slideTarget(articleCount: number): number {
-  if (articleCount <= 1) return 5;
-  return Math.min(articleCount + 2, MAX_SLIDES);
-}
+const ROUNDUP_MAX_MINUTES = 15;
+const ROUNDUP_MIN_MINUTES = 6;
+/** 1記事あたりに見込む分数。8件で上限の15分、6件でちょうど15分になる。 */
+const MINUTES_PER_ARTICLE = 2.5;
 
 /**
- * 発話数の上限も素材に合わせる。
- *
- * 字数で頼むだけでは止まらなかった（1件の素材に対して43000字を書き、
- * 出力トークンを使い切った）。**モデルは「何個作るか」のほうがよく守る**ので、
- * 個数で縛る。ただし絞りすぎると今度は中身が薄くなる——記事1本に14個では、
- * 1発話40〜120字なので最大でも1700字にしかならず、要点を3つ挙げて終わっていた。
- * 頼む字数（targetChars）を1発話の下限で割った数を下回らないようにする。
+ * 冒頭（全体の見取り図）と締めに使う字数。話題ぶんの割り当てから先に取っておく。
+ * ここを引かずに割ると、話題の合計だけで目安の字数を使い切る。
  */
-function maxLines(articleCount: number): number {
-  if (articleCount <= 1) return 28;
-  if (articleCount <= 3) return 44;
-  return MAX_LINES;
+const OPENING_CHARS = 350;
+const CLOSING_CHARS = 250;
+
+export function plan(articleCount: number): Plan {
+  // 記事1本の深掘り。数字は据え置き（2400字で実測1116〜1678字）。
+  if (articleCount <= 1) {
+    return {
+      kind: 'deep',
+      chars: 2_400,
+      minutes: 7,
+      topics: 4,
+      slides: 5,
+      lines: 28,
+      charsPerTopic: Math.round((2_400 - OPENING_CHARS - CLOSING_CHARS) / 4),
+      // 1件しか無いので、渡せる本文は全部渡す。
+      textLimit: 9_000,
+    };
+  }
+
+  const minutes = Math.min(
+    ROUNDUP_MAX_MINUTES,
+    Math.max(ROUNDUP_MIN_MINUTES, Math.round(articleCount * MINUTES_PER_ARTICLE)),
+  );
+  const chars = minutes * CHARS_PER_MINUTE;
+
+  // 話題は記事より少なくする。**同数にすると必ず1記事1話題に戻る**
+  // （枠がちょうど足りるので、モデルはまとめる理由が無くなる）。
+  const topics = Math.min(Math.max(Math.ceil((articleCount * 2) / 3), 2), MAX_SLIDES - 2);
+
+  return {
+    kind: 'roundup',
+    chars,
+    minutes,
+    topics,
+    slides: topics + 2,
+    // 1発話60字でも足りるだけの枠を渡す。ここが窮屈だと、字数を守るために
+    // 1発話が200字を超えて、聴くと息継ぎの無い読み上げになる。
+    lines: Math.min(Math.ceil(chars / 60), MAX_LINES),
+    charsPerTopic: Math.round((chars - OPENING_CHARS - CLOSING_CHARS) / topics),
+    /**
+     * 話題ごとに深く話させるので、素材も以前（1000字）より厚く渡す。
+     * 薄いまま長さだけ頼むと、書かれていないことで埋めにくる。
+     * ただし青天井にはしない——8件に4000字ずつ渡した頃、モデルが素材の量に
+     * 引きずられて8万字の台本を書き、出力の上限で JSON ごと壊れた。
+     */
+    textLimit: articleCount <= 3 ? 3_500 : 2_500,
+  };
 }
 
 function buildPrompt(
@@ -225,11 +272,11 @@ function buildPrompt(
   mode: VoiceMode,
   language: string,
 ): string {
-  const limit = textLimit(source.articles.length);
-  const chars = targetChars(source.articles.length);
-  const lines = maxLines(source.articles.length);
-  const slideCount = slideTarget(source.articles.length);
+  const p = plan(source.articles.length);
+  const limit = p.textLimit;
   const solo = mode === 'solo';
+  const roundup = p.kind === 'roundup';
+  const count = source.articles.length;
 
   const body = source.articles
     .map((a, i) =>
@@ -264,33 +311,70 @@ function buildPrompt(
       : `話者A = ${SPEAKERS.A.name}（${SPEAKERS.A.role}）\n話者B = ${SPEAKERS.B.name}（${SPEAKERS.B.role}）`,
     '',
     '## 分量（守ること）',
-    `- スライドは${slideCount}枚ちょうど、発話は${lines}個以内。これを超えてはいけない。`,
+    `- スライドは${p.slides}枚ちょうど、発話は${p.lines}個以内。これを超えてはいけない。`,
     // 字数で言い切る。分数だけだと、素材が少ないときに尺を埋めようとして膨らむ。
     // 上限だけ言うと、モデルは上限を「守るべき天井」としか読まない。実測で
     // 2400字と頼んで1116字（約3分）しか書かなかった。下限も添えて幅で頼む。
     // ただし**禁止するのは超過だけ**にしておく。下限を絶対の決まりにすると、
     // 素材が薄い記事で言い換えを増やして尺を埋めにいく。
-    `- lines の text の合計は${Math.round(chars * 0.7)}〜${chars}字を目安にする。` +
-      `**${chars}字を超えてはいけない。**（読み上げて約${Math.max(1, Math.round(chars / 350))}分）`,
+    `- lines の text の合計は${Math.round(p.chars * 0.9)}〜${p.chars}字を目安にする。` +
+      `**${p.chars}字を超えてはいけない。**（読み上げて約${p.minutes}分）`,
+    // **合計だけ頼んでも届かない。**6件のダイジェストで4400字と頼んで3545字（81%）。
+    // 一方でスライドごとの字数は 344/509/459/465/467/512/501/288 とよく揃っていた——
+    // モデルは「全体で何字」より「この枠に何字」のほうを守る。だから割り当てで言う。
+    roundup
+      ? `- **1つの話題につき${p.charsPerTopic}字前後を使うこと。**これが一番大事な決まり。` +
+        `冒頭は${OPENING_CHARS}字前後、締めは${CLOSING_CHARS}字前後。` +
+        `どの話題も、短くて${Math.round(p.charsPerTopic * 0.8)}字は話すこと。`
+      : `- 1つの論点につき${p.charsPerTopic}字前後を使うこと。`,
     '- 素材に書かれている限り、目安の下のほうで切り上げず、しっかり分量を使うこと。',
-    source.articles.length <= 1
-      ? // 「短くてよい」と言っていたら、要点を3つ読み上げるだけの90秒になっていた。
+    roundup
+      ? '- 分量が足りないときは、話題を増やすのではなく1つの話題を深く話して埋めること。' +
+        'ただし書かれていないことで尺を埋めたり、同じ話を言い換えて伸ばしたりしてはいけない。'
+      : // 「短くてよい」と言っていたら、要点を3つ読み上げるだけの90秒になっていた。
         // 尺を埋めるなという歯止めは残しつつ、掘る方向へ向ける。
         '- 素材は1件。その1件を掘り下げることに字数を使うこと。' +
-        'ただし書かれていないことで尺を埋めたり、同じ話を言い換えて伸ばしたりしてはいけない。'
-      : '- 記事が多いときは1件あたりを短くして収める。全部を深く語ろうとしないこと。',
+        'ただし書かれていないことで尺を埋めたり、同じ話を言い換えて伸ばしたりしてはいけない。',
+    // ここが 2026-09-01 の指示（「1本1本のニュースではなく、15分くらいの
+    // 今までのニュースまとめに」）の中心。番組の骨格を先に決めて渡す。
+    roundup ? '## 番組の作り（まとめ番組）' : null,
+    roundup
+      ? `- これは「ここまでのニュースに1本で追いつくためのまとめ番組」。` +
+        `**記事を1本ずつ順に紹介する形にしてはいけない。**`
+      : null,
+    roundup
+      ? `- 冒頭（スライド0）で、今回扱う全体像を先に言い切る。何が起きた日なのかが` +
+        `これだけで分かるようにする。`
+      : null,
+    roundup
+      ? `- 続く${p.topics}枚は話題ごとに1枚。**関連する記事は同じ話題にまとめて1つの流れとして話す**` +
+        `（同じ会議の別の部会、同じテーマの続報、同じ分野の複数件などは分けない）。`
+      : null,
+    roundup
+      ? `- **${count}件すべてに必ず触れること。**まとめた結果、一度も出てこない記事があってはいけない。`
+      : null,
+    roundup
+      ? '- 話題から話題へ移るときは一言でつなぐ。「次のニュースです」の繰り返しにしない。' +
+        '前の話題との関係（似ている・逆・同じ流れ）が言えるなら言う。'
+      : null,
+    roundup
+      ? '- 話題ごとに「何があったか → なぜ今それが起きているか → 何が変わるか」の順で話す。' +
+        '見出しの読み上げで終わらせない。'
+      : null,
+    roundup ? '- 最後の1枚は、全体を通して見えることを一言でまとめる。' : null,
     '',
     '## スライド',
-    `- ${slideCount}枚ちょうど作ること。少なく済ませてはいけない。`,
+    `- ${p.slides}枚ちょうど作ること。少なく済ませてはいけない。`,
     '- 先頭は必ず type="title" の1枚。全体の主題を出す。',
-    source.articles.length <= 1
-      ? // 記事1本を1枚で片付けると、3行の箇条書きに要約されて終わる。
+    roundup
+      ? `- 続く${p.topics}枚は type="bullets" を話題ごとに1枚。**heading は話題の名前**にする` +
+        '（記事の見出しをそのまま写さない。2件をまとめた話題なら、2件に共通する言い方にする）。' +
+        '最後の1枚は全体を振り返るまとめにする。'
+      : // 記事1本を1枚で片付けると、3行の箇条書きに要約されて終わる。
         // 論点で割らせると、台本のほうも1論点ずつ掘る形になる。
-        `- 続く${slideCount - 1}枚は、この記事を**論点で割って**1枚ずつ。` +
+        `- 続く${p.slides - 1}枚は、この記事を**論点で割って**1枚ずつ。` +
         '「何が起きたか」「なぜそうなったか」「何が変わるか」「引っかかる点・今後」のように、' +
-        '別々の切り口にする。同じ話を言い換えた2枚を作ってはいけない。'
-      : '- 続けて記事ごとに type="bullets" を1枚ずつ。heading は記事の主題。' +
-        '最後の1枚は全体を振り返るまとめにする。',
+        '別々の切り口にする。同じ話を言い換えた2枚を作ってはいけない。',
     '- 特に印象的な一文があれば type="quote" を挟んでよい（多用しない）。',
     '- bullets は3〜4個。1個あたり40字以内。',
     // 「重要だ」「注目される」だけのスライドは、読んでも何も分からない。
@@ -301,10 +385,12 @@ function buildPrompt(
     '- lines は発話の並び。各発話に slide（そのとき表示しているスライドの添字、0始まり）を付ける。',
     '- slide は前の発話と同じか+1のみ。戻ってはいけない。スライドは必ず順に進む。',
     '- 最後のスライドまで必ず進めること。全部の発話が slide=0 のままではいけない。',
-    '- ある記事の話をしている間は、その記事のスライドを指すこと。',
+    roundup
+      ? '- ある話題を話している間は、その話題のスライドを指すこと。'
+      : '- ある記事の話をしている間は、その記事のスライドを指すこと。',
     solo
-      ? '- 1発話は40〜120字程度。長い説明は文を切って並べる。相手はいないので問いかけない。'
-      : '- 1発話は40〜120字程度。長い説明は相手の相槌や質問を挟んで分ける。',
+      ? '- 1発話は60〜140字程度。長い説明は文を切って並べる。相手はいないので問いかけない。'
+      : '- 1発話は60〜140字程度。長い説明は相手の相槌や質問を挟んで分ける。',
     '- 「何が新しいのか」「なぜ重要か」を軸にする。記事に書かれていないことは足さない。',
     // 薄い台本は、たいてい「要点を3つ読み上げて終わり」になっている。
     // 素材にある具体を必ず口に出させると、聴いて分かる密度になる。
@@ -312,9 +398,9 @@ function buildPrompt(
       '要約せずにそのまま出す。「大きな影響がありそうです」で済ませない。',
     '- 要点を並べるだけで終わらせない。それぞれについて、' +
       '背景（なぜ今そうなったか）と、読み手にとっての意味（何が変わるか）まで踏み込む。',
-    source.articles.length <= 1
-      ? '- 素材は1件なので、掘り下げるほうへ使うこと。同じ内容を言い換えて尺を伸ばさない。'
-      : '',
+    roundup
+      ? '- 記事の順番に引きずられない。話題の中では、記事をまたいで話をつないでよい。'
+      : '- 素材は1件なので、掘り下げるほうへ使うこと。同じ内容を言い換えて尺を伸ばさない。',
     '- 冒頭で全体を予告し、最後に一言でまとめる。',
     '- 読み上げられるので、記号や箇条書き、URL、英略語の羅列は避けて話し言葉にする。',
     // スライドは音声の付随物で、画面を見ずに聴いている時間のほうが長い
@@ -344,13 +430,12 @@ export async function generateScript(
   language: string = DEFAULT_LANGUAGE,
 ): Promise<ScriptResult> {
   // 上限はプロンプトとスキーマの両方で言う。プロンプトだけだと守られなかった。
-  const slideCount = slideTarget(source.articles.length);
-  const lineCount = maxLines(source.articles.length);
+  const p = plan(source.articles.length);
 
   const { data, usage } = await generateJson<{ slides: RawSlide[]; lines: ScriptLine[] }>({
     model: SCRIPT_MODEL,
     prompt: buildPrompt(source, extra, mode, language),
-    schema: buildSchema(slideCount, lineCount),
+    schema: buildSchema(p.slides, p.lines),
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     thinkingBudget: THINKING_BUDGET,
   });
