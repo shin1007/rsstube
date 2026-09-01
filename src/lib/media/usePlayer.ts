@@ -1,5 +1,6 @@
 'use client';
 
+import { markMediaPlayed } from '@/app/actions/media';
 import type { PlayableSegment } from '@/lib/media/list';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -86,6 +87,23 @@ export function usePlayer({
    */
   const storageKey = `rsstube:pos:${mediaId}`;
   const restored = useRef(false);
+
+  /**
+   * 「聴いた」の印。**鳴り始めたときに1回だけ**送る（サイドバーと下部タブの
+   * 未視聴バッジがこれを数える）。
+   *
+   * 押したときではなく鳴ったときにするのは、素材が取れずに鳴らなかったぶんまで
+   * 「聴いた」にしないため。ここは再生ページと一覧の下部プレイヤーの両方が通るので、
+   * 印の付け場所はここ1か所で済む。
+   *
+   * 送りっぱなしにする。失敗してもバッジが1つ多いだけで、聴くことには関係が無い。
+   */
+  const marked = useRef(false);
+  const markPlayed = useCallback(() => {
+    if (marked.current) return;
+    marked.current = true;
+    void markMediaPlayed(mediaId).catch(() => {});
+  }, [mediaId]);
 
   useEffect(() => {
     localStorage.setItem(storageKey, String(current));
@@ -231,7 +249,10 @@ export function usePlayer({
     const el = audioRef.current;
     if (!el) return;
 
-    const onPlay = () => setPlaying(true);
+    const onPlay = () => {
+      setPlaying(true);
+      markPlayed();
+    };
 
     /**
      * **終端でも pause が飛ぶ。**しかも ended より先に来る（仕様の順番が
@@ -280,7 +301,7 @@ export function usePlayer({
       el.removeEventListener('timeupdate', onTimeUpdate);
       el.removeEventListener('ended', onEnded);
     };
-  }, [audioRef, scrub, current, segments.length, go]);
+  }, [audioRef, scrub, current, segments.length, go, markPlayed]);
   return {
     segment,
     current,

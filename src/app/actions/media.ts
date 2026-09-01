@@ -150,3 +150,27 @@ export async function loadPlayable(id: string): Promise<PlayableResult> {
   }
   return { ok: true, title: media.title, segments: media.segments, sources: media.sources };
 }
+
+/**
+ * 「聴いた」の印を付ける。**最初に鳴り始めた時点**で1回だけ呼ぶ（usePlayer）。
+ *
+ * 押したときではなく鳴ったときにするのは、素材の取得に失敗しても押しただけで
+ * 未視聴が消えてしまわないようにするため。
+ *
+ * `is('played_at', null)` を付けて、二度目以降は行に触れない。「最初に聴いた時刻」を
+ * 聴き直すたびに今へ動かすと、あとから「いつ聴いたか」で並べたくなったときに使えない。
+ *
+ * **revalidate しない。** ここはバッジの数を1つ減らすためだけの書き込みで、
+ * 呼ばれるのは音が鳴り始めた瞬間——一覧を丸ごと描き直させると、聴き始めと同時に
+ * ページの再構築が走る（`revalidatePath('/')` は描き直した RSC を応答に積む）。
+ * バッジは次の画面遷移で追いつけばよい。
+ */
+export async function markMediaPlayed(mediaId: string): Promise<void> {
+  const supabase = await createClient();
+
+  await supabase
+    .from('media')
+    .update({ played_at: new Date().toISOString() })
+    .eq('id', mediaId)
+    .is('played_at', null);
+}

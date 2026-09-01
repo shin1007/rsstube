@@ -21,6 +21,7 @@ export function Sidebar({
   folderId,
   feedId,
   sort,
+  unplayed = 0,
   active = true,
 }: {
   folders: FolderRow[];
@@ -31,6 +32,13 @@ export function Sidebar({
   feedId?: string;
   /** 並び順は絞り込みを変えても保つ。フォルダを移るたびに戻ると使いにくい。 */
   sort?: string;
+  /**
+   * まだ聴いていない音声の数。0 ならバッジを出さない。
+   *
+   * フィードの未読数と違って色を付ける。音声は待って出来上がるものなので、
+   * 「増えた」ことに気づけないと、出来ているのに何日も開かれないままになる。
+   */
+  unplayed?: number;
   /**
    * いま一覧を見ているか。設定などの二次画面では false にして、どこも
    * 選択中にしない。false にしないと、設定を開いている間ずっと「未読」が
@@ -192,9 +200,17 @@ export function Sidebar({
           <Link
             key={href}
             href={href}
-            className="block rounded px-1 py-1.5 text-xs font-medium tracking-wide text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+            className="flex items-center rounded px-1 py-1.5 text-xs font-medium tracking-wide text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
           >
-            {label}
+            <span>{label}</span>
+            {href === '/listen' && unplayed > 0 && (
+              <span
+                className="ml-2 shrink-0 rounded-full bg-amber-600 px-1.5 text-[11px] leading-4 text-zinc-950"
+                aria-label={`未視聴 ${unplayed}件`}
+              >
+                {unplayed}
+              </span>
+            )}
           </Link>
         ))}
       </div>
