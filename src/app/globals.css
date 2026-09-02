@@ -63,6 +63,34 @@ body {
   padding-top: env(safe-area-inset-top);
 }
 
+/**
+ * 記事の操作の帯に並ぶボタン（← ★ ◷ ▤ ♪ ↗）。
+ *
+ * **指の当たり判定は 44px を下限にする。** 実測（390px幅）では 29〜40 × 32 しか
+ * なく、それが 2px の隙間で6つ並んでいた——記号にして詰めたぶんが、そのまま
+ * 「隣を押す」に化ける大きさ。Apple は 44pt、Material は 48dp を下限にしている。
+ *
+ * **文字ではなく枠に下限を入れること。** 文字を大きくして広げると、記号（★ ◷）と
+ * 日本語ラベル（PC側）で必要な大きさが違うので、どちらかが必ず不格好になる。
+ * min-* なら見た目は今のまま、当たり判定だけが広がる。
+ *
+ * PC はマウスなので下限を外す（44px のボタンが6つ並ぶと帯が太くなるだけ）。
+ */
+.bar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+@media (width >= 48rem) {
+  .bar-button {
+    min-width: 0;
+    min-height: 0;
+  }
+}
+
 /* 記事本文。長文を読むので行間を広めに取る。 */
 .prose-article {
   line-height: 1.9;

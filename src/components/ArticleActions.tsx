@@ -122,7 +122,7 @@ function Toggle({
       onClick={() => run(!shown, true)}
       // 読み上げには短い形ではなく、いつも同じ言葉を渡す。
       aria-label={label}
-      className={`shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs transition-opacity md:text-sm ${
+      className={`bar-button shrink-0 whitespace-nowrap rounded px-2 text-xs transition-opacity md:py-1 md:text-sm ${
         shown ? activeClass : 'text-zinc-500 hover:text-zinc-300'
       } ${pending ? 'opacity-50' : ''}`}
     >

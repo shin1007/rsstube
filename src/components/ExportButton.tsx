@@ -55,7 +55,7 @@ export function ExportButton({
         onClick={run}
         disabled={pending || articleIds.length === 0}
         aria-label="NotebookLM へ書き出す"
-        className={`shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs disabled:opacity-50 md:text-sm ${
+        className={`bar-button shrink-0 whitespace-nowrap rounded px-2 text-xs disabled:opacity-50 md:py-1 md:text-sm ${
           exported ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-100'
         }`}
       >
