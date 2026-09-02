@@ -32,4 +32,16 @@ describe('sanitizeSearch', () => {
   it('記号だけなら空になる', () => {
     expect(sanitizeSearch('%%')).toBe('');
   });
+
+  it('長すぎる語は切る', () => {
+    // URL に3回（title / title_ja / content_text）並べるので、長いまま渡すと
+    // 接続が切れるか 400 が返り、画面が500になる。実測で200字あたりが境目。
+    expect(sanitizeSearch('あ'.repeat(500))).toHaveLength(100);
+    expect(sanitizeSearch('あ'.repeat(50))).toHaveLength(50);
+  });
+
+  it('切った末尾に空白を残さない', () => {
+    const s = sanitizeSearch('あ'.repeat(99) + ' ' + 'い'.repeat(50));
+    expect(s).toBe('あ'.repeat(99));
+  });
 });
