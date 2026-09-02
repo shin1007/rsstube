@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { sanitizeSearch } from '@/lib/search';
-import { PAGE_SIZE, type ArticleRow, type View } from '@/lib/types';
+import { PAGE_SIZE, asId, type ArticleRow, type View } from '@/lib/types';
 
 /**
  * 一覧用の記事取得。
@@ -61,14 +61,24 @@ const LIST_SELECT = `id, title, published_at, excerpt, extracted_at, created_at,
    article_states!inner (is_read, is_starred, read_later, exported_at)`;
 
 /**
- * 前後の記事を出すためだけの、id しか要らないぶん。
+ * 前後の記事を出すためだけの、id しか要らないぶん。件数を数えるのにも使う。
  *
  * 埋め込みを落とせないのは、絞り込み（未読・スター・フォルダ）が
  * 埋め込んだ表の列を見るため。!inner が無いと条件そのものが書けない。
  * 運ぶ列は id だけなので、本文も要約も付いてこない。
+ *
+ * **`summaries` も埋めておくこと。** 「要約なし」ビューの条件が
+ * `.is('summaries', null)` で、埋め込んでいないと PostgREST が
+ * `column articles.summaries does not exist` で落ちる。しかも
+ * `head: true`（件数だけ数える形）だと本文が返らないぶん**メッセージが空の
+ * エラー**になり、画面には `Error: {"message":""}` の500だけが出る
+ * ——どの問い合わせが落ちたのか手掛かりが無い。
+ * `!inner` にはしないこと。要約が無い記事こそがこのビューの中身なので、
+ * 内部結合にすると1件も残らない。
  */
 const ID_SELECT = `id, published_at,
    feeds!inner (id, subscriptions!inner (folder_id)),
+   summaries (importance),
    article_states!inner (is_read, is_starred, read_later)`;
 
 /**
@@ -232,6 +242,9 @@ export async function listArticleIds(query: ArticleQuery): Promise<ArticleSlot[]
 }
 
 export async function getArticle(id: string) {
+  // 形が違う id は「無い記事」と同じ扱い（lib/types.ts の asId を参照）。
+  if (!asId(id)) return null;
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('articles')

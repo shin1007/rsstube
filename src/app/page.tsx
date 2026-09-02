@@ -6,7 +6,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { countArticles, getArticle, listArticleIds, listArticles, unreadCounts } from '@/lib/articles';
 import { unplayedMediaCount } from '@/lib/media/list';
 import { createClient } from '@/lib/supabase/server';
-import { PAGE_SIZE, type FeedRow, type FolderRow, type View } from '@/lib/types';
+import { PAGE_SIZE, asId, type FeedRow, type FolderRow, type View } from '@/lib/types';
 
 /**
  * リーダー本体。
@@ -27,24 +27,48 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
     ? (params.view as View)
     : 'unread';
   const sort = params.sort === 'important' ? 'important' : 'new';
-  const folderId = typeof params.folder === 'string' ? params.folder : undefined;
-  const feedId = typeof params.feed === 'string' ? params.feed : undefined;
+  // URL から来る id は形を見てから使う。形が違うだけでページ全体が500に
+  // なっていた（lib/types.ts の asId）。
+  const folderId = asId(params.folder);
+  const feedId = asId(params.feed);
   const search = typeof params.q === 'string' && params.q.trim() ? params.q.trim() : undefined;
-  const selectedId = typeof params.article === 'string' ? params.article : undefined;
+  const selectedId = asId(params.article);
 
   const supabase = await createClient();
 
-  const [{ data: folders }, feeds, articles, counts, unplayed, picked, total] = await Promise.all([
-    supabase.from('folders').select('id, name').order('sort_order').order('name'),
-    listSubscribedFeeds(),
-    listArticles({ view, folderId, feedId, sort, search }),
-    unreadCounts(),
-    unplayedMediaCount(),
-    selectedId ? getArticle(selectedId) : Promise.resolve(null),
-    // 「あと何件」を出すためだけの数。**並べて投げること**——直列にすると
-    // そのぶんが画面遷移の待ち時間にまるごと乗る（docs/traps/perf.md）。
-    countArticles({ view, folderId, feedId, sort, search }),
-  ]);
+  /**
+   * **検索だけは、失敗してもページごと落とさない。**
+   *
+   * 検索語は URL のクエリに3回並べて PostgREST へ渡すので、こちらの都合の
+   * 外で失敗しうる——長すぎれば接続が切れるし、`drop table` のような並びは
+   * Supabase の手前の WAF に HTML のブロックページを返されて、supabase-js が
+   * 解釈できずに落ちる（実測。技術系のフィードを読む人なら普通に打つ語）。
+   *
+   * ここで落とすと**検索欄を直す場所ごと消える**ので、一覧を空にして
+   * 「検索できなかった」と出すほうに倒す。検索していないときの失敗は
+   * こちらの不具合なので、そのまま投げる（黙って空の一覧を出さない）。
+   */
+  const searchable = async <T,>(run: () => Promise<T>, fallback: T): Promise<[T, boolean]> => {
+    try {
+      return [await run(), false];
+    } catch (e) {
+      if (!search) throw e;
+      return [fallback, true];
+    }
+  };
+
+  const [{ data: folders }, feeds, [articles, searchFailed], counts, unplayed, picked, [total]] =
+    await Promise.all([
+      supabase.from('folders').select('id, name').order('sort_order').order('name'),
+      listSubscribedFeeds(),
+      searchable(() => listArticles({ view, folderId, feedId, sort, search }), []),
+      unreadCounts(),
+      unplayedMediaCount(),
+      selectedId ? getArticle(selectedId) : Promise.resolve(null),
+      // 「あと何件」を出すためだけの数。**並べて投げること**——直列にすると
+      // そのぶんが画面遷移の待ち時間にまるごと乗る（docs/traps/perf.md）。
+      searchable(() => countArticles({ view, folderId, feedId, sort, search }), null),
+    ] as const);
 
   /**
    * 何も選んでいないときは先頭の記事を出す。
@@ -67,8 +91,18 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
    * 一覧を取ってからでないと先頭が分からないので、この1回だけ往復が増える。
    * 東京に寄せたあとなので10ms程度。
    */
-  const previewId = selectedId ?? articles[0]?.id;
-  const selected = selectedId ? picked : previewId ? await getArticle(previewId) : null;
+  /**
+   * **見つからない記事を指していたら、選んでいない扱いに戻す。**
+   *
+   * `?article=` は URL に出ているので、古いブックマーク・打ち間違い・
+   * 保持期間を過ぎて消えた記事を指したリンクが普通に来る。ここで戻さないと、
+   * スマホでは一覧が `hidden` のままで**何も出ない画面**になる
+   * （PC は一覧が横にあるので気づけるが、スマホには出口が無い）。
+   */
+  const openId = selectedId && picked ? selectedId : undefined;
+
+  const previewId = openId ?? articles[0]?.id;
+  const selected = openId ? picked : previewId ? await getArticle(previewId) : null;
 
   // 記事を開いていても、戻り先と前後の記事は「今の絞り込み」を保った URL にする。
   // ここを / にしてしまうと、フォルダや検索を選んだ状態が戻るたびに消える。
@@ -134,8 +168,11 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
    * id で見つからなければ日付で「居たはずの場所」を出す（新着順のときだけ。
    * 重要度順の位置は importance で決まるので、日付では出せない）。
    */
-  if (previewId && (index === -1 || atPageEnd)) {
-    const slots = await listArticleIds({ view, folderId, feedId, sort, search });
+  if (previewId && (index === -1 || atPageEnd) && !searchFailed) {
+    const [slots] = await searchable(
+      () => listArticleIds({ view, folderId, feedId, sort, search }),
+      [] as Awaited<ReturnType<typeof listArticleIds>>,
+    );
     const at = slots.findIndex((s) => s.id === previewId);
 
     if (at >= 0) {
@@ -177,15 +214,16 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
       {/* 記事リスト。スマホでは記事を選んでいる間は隠す。 */}
       <div
         className={`w-full md:w-96 md:shrink-0 border-r border-zinc-800 min-h-0 ${
-          selectedId ? 'hidden md:block' : 'block'
+          openId ? 'hidden md:block' : 'block'
         }`}
       >
         <ArticleList
           articles={articles}
           view={view}
           sort={sort}
-          selectedId={selectedId}
+          selectedId={openId}
           search={search}
+          searchFailed={searchFailed}
           // ← → で前後の記事へ移るためだけに渡す。下のボタンと同じ行き先を使う
           // ——一覧から数え直すと、開いた記事が一覧に居ないときに動かなくなる。
           prevHref={prevId ? linkTo(prevId) : undefined}
@@ -194,7 +232,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
       </div>
 
       {/* 本文。スマホでは記事を選んだときだけ出す。 */}
-      <div className={`flex-1 min-w-0 min-h-0 ${selectedId ? 'block' : 'hidden md:block'}`}>
+      <div className={`flex-1 min-w-0 min-h-0 ${openId ? 'block' : 'hidden md:block'}`}>
         <ArticleView
           article={selected}
           backHref={linkTo()}
@@ -204,7 +242,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
         />
       </div>
 
-      <BottomTabs view={view} hidden={Boolean(selectedId)} unplayed={unplayed} />
+      <BottomTabs view={view} hidden={Boolean(openId)} unplayed={unplayed} />
     </div>
   );
 }

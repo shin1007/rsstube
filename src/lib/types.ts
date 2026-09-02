@@ -79,6 +79,22 @@ export type FeedRow = {
 
 export type FolderRow = { id: string; name: string };
 
+/**
+ * URL から来た id が UUID の形をしているか。
+ *
+ * `?article=` `?folder=` `?feed=` は URL に出ているので、古いブックマーク・
+ * 打ち間違い・リンクの切り貼りで UUID でない値がそのまま来る。素通しすると
+ * Postgres が `invalid input syntax for type uuid`（22P02）で落ち、
+ * **フォルダを1つ選び損ねただけのはずが、ページ全体が500になる**（一覧も
+ * サイドバーも出ない）。実測で `/?folder=not-a-uuid` と `/?feed=not-a-uuid`
+ * がこれだった。形が違えば「指定されていない」と同じ扱いにする。
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function asId(value: unknown): string | undefined {
+  return typeof value === 'string' && UUID_RE.test(value) ? value : undefined;
+}
+
 /** 一覧の表示モード。 */
 export type View = 'unread' | 'starred' | 'later' | 'all' | 'unsummarized';
 

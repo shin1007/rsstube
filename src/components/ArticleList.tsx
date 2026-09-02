@@ -125,10 +125,13 @@ export function ArticleList({
   sort,
   selectedId,
   search,
+  searchFailed,
   prevHref: serverPrev,
   nextHref: serverNext,
 }: {
   articles: ArticleRow[];
+  /** 検索そのものが失敗したか。0件と「引けなかった」を混ぜないため。 */
+  searchFailed?: boolean;
   view: View;
   sort: 'new' | 'important';
   selectedId?: string;
@@ -682,7 +685,12 @@ export function ArticleList({
       >
         {rows.length === 0 && (
           <p className="p-6 text-center text-sm text-zinc-500">
-            {search
+            {/* **「0件」と「引けなかった」を同じ文面にしないこと。**
+                前者は探し方を変える話、後者は語を短くする・記号を外す話で、
+                次にやることが違う。 */}
+            {searchFailed
+              ? `「${search}」では検索できませんでした。語を短くするか、記号を減らして試してください`
+              : search
               ? `「${search}」に一致する記事はありません`
               : view === 'unread'
                 ? '未読はありません'
