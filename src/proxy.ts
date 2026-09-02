@@ -32,23 +32,43 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  // getUser() を呼ぶことでトークンの検証と更新が走る。
-  // Supabase に到達できないときは「未ログイン」として扱う（開けてしまうより安全）。
-  let user = null;
+  /**
+   * ログインしているかを**手元で**確かめる。
+   *
+   * ここは全ページの前に必ず通る。`getUser()` は Supabase の Auth に
+   * 毎回聞きに行くので、その1往復が**すべての画面遷移に丸ごと乗る**。
+   * 実測（本番・東京、ログイン済みで /login を叩いて 307 だけ返させた形＝
+   * ページ描画ゼロ）で 250ms。記事を開く1回が 570ms なので、**待ち時間の
+   * 4割強がここ**だった。
+   *
+   * `getClaims()` は同じ検証を WebCrypto でその場でやる。このプロジェクトの
+   * 署名鍵は ES256（非対称）なので、公開鍵さえ持っていれば通信は要らない
+   * ——鍵は JWKS を1回取って**プロセスに残る**（auth-js の GLOBAL_JWKS）ので、
+   * 温まった関数では往復ゼロ。冷えた1回目だけ取りに行く。
+   *
+   * 検証を緩めたわけではない。`getSession()` を直に見るのとは違い、署名を
+   * 実際に照合して `exp` も見る（Cookie を書き換えても通らない）。対称鍵の
+   * プロジェクトや WebCrypto の無い環境では、auth-js が自分で `getUser()` に
+   * 落ちる。トークンの更新も従来どおり——期限が近ければ getClaims の中の
+   * getSession が先に更新し、上の setAll が新しい Cookie を書く。
+   *
+   * Supabase に到達できないときは「未ログイン」として扱う（開けてしまうより安全）。
+   */
+  let userId: string | null = null;
   try {
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+    const { data } = await supabase.auth.getClaims();
+    userId = data?.claims?.sub ?? null;
   } catch {
-    user = null;
+    userId = null;
   }
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/login');
-  if (!user && !isAuthPage) {
+  if (!userId && !isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
-  if (user && isAuthPage) {
+  if (userId && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
