@@ -33,12 +33,15 @@ export function BottomTabs({
         <Link
           key={tab.label}
           href={tab.href}
-          // iPhone のホームバーぶんは**リンクの padding** で確保する。nav 側に
-          // 付けると、その帯は nav の地色で塗られているのに、どのリンクにも
-          // 当たらない——画面のいちばん下に「タブに見えて押せない」場所が
-          // 30px ほどできる（親指が最初に届くのは、まさにそこ）。
-          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-          className={`flex-1 pt-3 text-center text-xs ${
+          // ホームバーぶんは**リンクの padding** で確保する。nav 側に付けると、
+          // その帯は nav の地色で塗られているのにどのリンクにも当たらない
+          // ——画面のいちばん下に「タブに見えて押せない」場所ができる。
+          //
+          // 文字は 48px の枠に入れて上下中央に置き、ホームバーぶんはその下に
+          // 残す。文字を上に寄せたままだと、下に何も無い帯ができて
+          // 「押せない空白」に見える（当たり判定はあるのに）。
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          className={`flex min-h-12 flex-1 items-center justify-center text-center text-xs ${
             tab.view && tab.view === view ? 'text-zinc-100' : 'text-zinc-500'
           }`}
         >

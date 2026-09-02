@@ -72,32 +72,25 @@ const ID_SELECT = `id, published_at,
    article_states!inner (is_read, is_starred, read_later)`;
 
 /**
- * 絞り込みと並び順は1か所にまとめる。一覧と id 取得で条件がずれると、
- * 「前後の記事」だけ別の並びを指すことになり、押すたびに飛ぶ先が変わる。
- *
- * select を変数で渡しているので supabase-js の型推論は効かない。
- * 呼び出し側が形を知っているので、そちらで受け直すこと。
+ * 絞り込みだけを当てる。**一覧と件数で条件がずれないように1か所にまとめる。**
+ * ずれると「あと12件」と出しておきながら3件目で終わる、という形で表に出る。
  */
-async function run(select: string, query: ArticleQuery, limit: number) {
-  const supabase = await createClient();
+function applyFilters<T>(q: T, query: ArticleQuery): T {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  let b = q as any;
 
-  let q = supabase
-    .from('articles')
-    .select(select)
-    .range(query.offset ?? 0, (query.offset ?? 0) + limit - 1);
-
-  if (query.feedId) q = q.eq('feed_id', query.feedId);
-  if (query.folderId) q = q.eq('feeds.subscriptions.folder_id', query.folderId);
+  if (query.feedId) b = b.eq('feed_id', query.feedId);
+  if (query.folderId) b = b.eq('feeds.subscriptions.folder_id', query.folderId);
 
   switch (query.view) {
     case 'unread':
-      q = q.eq('article_states.is_read', false);
+      b = b.eq('article_states.is_read', false);
       break;
     case 'starred':
-      q = q.eq('article_states.is_starred', true);
+      b = b.eq('article_states.is_starred', true);
       break;
     case 'later':
-      q = q.eq('article_states.read_later', true);
+      b = b.eq('article_states.read_later', true);
       break;
     case 'unsummarized':
       // ワーカーは要約が返らなかった記事もジョブを完了扱いにする（無料枠を
@@ -106,7 +99,7 @@ async function run(select: string, query: ArticleQuery, limit: number) {
       // ただし「まだ本文を取りに行っていない記事」は、要約が無くて当たり前で、
       // 待てば付く。混ぜると順番待ちの山に埋もれて、本当に落ちたものが見えなくなる
       // （実際に95件の順番待ちがあった）。処理済みのものだけを出す（0014）。
-      q = q.is('summaries', null).not('extracted_at', 'is', null);
+      b = b.is('summaries', null).not('extracted_at', 'is', null);
       break;
     case 'all':
       break;
@@ -119,9 +112,31 @@ async function run(select: string, query: ArticleQuery, limit: number) {
     // 訳した見出しも対象にする。一覧に出しているのはそちらなので、原題だけだと
     // 「見えている語で検索して当たらない」ことになる（0024 の複製を引く）。
     if (term) {
-      q = q.or(`title.ilike.%${term}%,title_ja.ilike.%${term}%,content_text.ilike.%${term}%`);
+      b = b.or(`title.ilike.%${term}%,title_ja.ilike.%${term}%,content_text.ilike.%${term}%`);
     }
   }
+
+  return b as T;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+
+/**
+ * 絞り込みと並び順は1か所にまとめる。一覧と id 取得で条件がずれると、
+ * 「前後の記事」だけ別の並びを指すことになり、押すたびに飛ぶ先が変わる。
+ *
+ * select を変数で渡しているので supabase-js の型推論は効かない。
+ * 呼び出し側が形を知っているので、そちらで受け直すこと。
+ */
+async function run(select: string, query: ArticleQuery, limit: number) {
+  const supabase = await createClient();
+
+  let q = applyFilters(
+    supabase
+      .from('articles')
+      .select(select)
+      .range(query.offset ?? 0, (query.offset ?? 0) + limit - 1),
+    query,
+  );
 
   if (query.sort === 'important') {
     // articles.importance は summaries.importance の複製（0007）。
@@ -184,6 +199,28 @@ const NEIGHBOUR_SCAN = 600;
  * 未読ビューで開いた記事はその場で既読になるので、次に一覧を引いたときには
  * もう居ない。id では引っかからないが、日付なら「居たはずの場所」が分かる。
  */
+/**
+ * いまの絞り込みに何件あるか。**「あと何件」を出すためだけのもの。**
+ *
+ * 行は1件も運ばない（`head: true`）ので、返ってくるのは数だけ。
+ * 一覧の取得とは**並行して**投げること（page.tsx の Promise.all）。
+ * 直列にすると、そのぶんがまるごと画面遷移の待ち時間に乗る。
+ *
+ * 以前ここを数えなかったのは「未読ビューでは読むそばから変わるから」だった。
+ * 変わるのはそのとおりだが、**読み手が知りたいのは正確な在庫ではなく
+ * 「まだ続くのか、もう終わりか」**で、1件ずれても用は足りる。
+ * 数が無いほうが困る——終わりが見えないまま押し続けることになる。
+ */
+export async function countArticles(query: ArticleQuery): Promise<number | null> {
+  const supabase = await createClient();
+  const { count, error } = await applyFilters(
+    supabase.from('articles').select(ID_SELECT, { count: 'exact', head: true }),
+    query,
+  );
+  if (error) throw error;
+  return count;
+}
+
 export type ArticleSlot = { id: string; published_at: string | null };
 
 export async function listArticleIds(query: ArticleQuery): Promise<ArticleSlot[]> {

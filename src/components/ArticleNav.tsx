@@ -33,10 +33,16 @@ export function ArticleNav({
   articleId,
   prevHref: serverPrev,
   nextHref: serverNext,
+  remaining,
 }: {
   articleId: string;
   prevHref?: string;
   nextHref?: string;
+  /**
+   * この記事より後ろに残っている件数。**「まだ続くのか」を出すため。**
+   * 分からないときは undefined（0 とは違う。0 は「ここで終わり」）。
+   */
+  remaining?: number;
 }) {
   const { prevHref, nextHref } = useNeighbours(articleId, serverPrev, serverNext);
   /**
@@ -55,23 +61,56 @@ export function ArticleNav({
     return () => clearTimeout(timer);
   }, [text]);
 
-  const cell = 'flex-1 py-2 text-center';
-  // iPhone のホームバーぶんは**中のボタン**が持つこと。nav 側の padding にすると、
-  // その帯は nav の地色で埋まっているのに、どのリンクにも当たらない
-  // ——画面のいちばん下に「押せるように見えて押せない」場所ができる。
-  const pad = { paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' };
+  /**
+   * 残りの件数。**「次の記事」の隣に添える。**
+   *
+   * 押す前に「まだ続くのか、もう終わりか」が分かる場所はここしかない
+   * ——一覧に戻れば件数は出ているが、それを見るために戻るなら意味がない。
+   * 0 のときは出さない（そのときは次のボタン自体が押せなくなっている）。
+   */
+  const rest =
+    typeof remaining === 'number' && remaining > 0 ? (
+      <span className="ml-1.5 text-zinc-600">あと{remaining}</span>
+    ) : null;
+
+  /**
+   * **ホームバーのぶんは「バーの土台」として見せる。**
+   *
+   * 以前はボタンの padding を 0.5rem ＋ ホームバーぶん にしていた。当たり判定は
+   * 正しく下端まであるのだが、**文字は上に寄ったままで、その下に40px近い
+   * 何も無い帯ができる**——押せないように見えるし、iPhone はいちばん下の数十pxを
+   * ホームバーの操作に使うので、実際そこを叩いても反応しないことがある。
+   *
+   * ボタンの中身は 44px の枠に入れて上下中央に置き、ホームバーぶんはその下に
+   * 素の padding として残す。iOS のタブバーと同じ組み方で、下の帯は
+   * 「バーの下端」に見える（空白ではなく地の色）。nav に色を敷くのはそのため
+   * ——透明のままだと、そこだけ本文の背景が覗いて「余った隙間」に見える。
+   */
+  const cell = 'flex min-h-11 flex-1 items-center justify-center text-center';
+  const pad = { paddingBottom: 'env(safe-area-inset-bottom)' };
 
   return (
     // order-3 はスマホ用。上から 本文 → 操作の帯 → ここ の順にする。
-    <nav className="relative order-3 flex shrink-0 items-stretch border-t border-zinc-800 text-xs md:order-none">
-      {/* 端に来たことを伝える。押しても何も起きないのと、端であることは別物。 */}
+    <nav className="relative order-3 flex shrink-0 items-stretch border-t border-zinc-800 bg-zinc-900/50 text-xs md:order-none md:bg-transparent">
+      {/*
+        端に来たことを伝える。押しても何も起きないのと、端であることは別物。
+
+        **画面の真ん中に出す。** ボタンのすぐ上に出していたときは、押した指が
+        そのまま覆いかぶさる位置で、しかも画面の下端は目が向いていない場所
+        だった（読んでいるのは上）。真ん中なら、目を動かさずに気づける。
+        `fixed` なのは、この nav が画面の下に固定された細い帯だから
+        ——その中に absolute で置くと、真ん中に出しようがない。
+        `pointer-events-none` で、出ている間も下のボタンを押せるままにする。
+      */}
       {text && (
         <div
           role="status"
           aria-live="polite"
-          className="absolute inset-x-3 bottom-full z-30 mx-auto mb-2 max-w-sm rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-center text-xs shadow-lg"
+          className="pointer-events-none fixed inset-0 z-30 grid place-items-center p-6"
         >
-          {text}
+          <span className="rounded-lg border border-zinc-700 bg-zinc-800/95 px-4 py-3 text-center text-sm shadow-xl">
+            {text}
+          </span>
         </div>
       )}
 
@@ -102,7 +141,7 @@ export function ArticleNav({
           style={pad}
           className={`${cell} text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100`}
         >
-          次の記事 →
+          次の記事 →{rest}
         </Link>
       ) : (
         <button

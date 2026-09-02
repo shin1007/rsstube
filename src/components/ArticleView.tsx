@@ -67,12 +67,15 @@ export function ArticleView({
   backHref = '/',
   prevHref,
   nextHref,
+  remaining,
 }: {
   article: unknown;
   /** 一覧へ戻る先。絞り込みを保つため呼び出し側で組み立てて渡す。 */
   backHref?: string;
   prevHref?: string;
   nextHref?: string;
+  /** この記事より後ろに残っている件数。分からないときは undefined。 */
+  remaining?: number;
 }) {
   const a = article as ArticleDetail | null;
 
@@ -283,7 +286,7 @@ export function ArticleView({
       </ArticleSwipe>
 
       {/* 前後への導線は、来た道も見るので client 側（ArticleNav）。 */}
-      <ArticleNav articleId={a.id} prevHref={prevHref} nextHref={nextHref} />
+      <ArticleNav articleId={a.id} prevHref={prevHref} nextHref={nextHref} remaining={remaining} />
     </div>
   );
 }
