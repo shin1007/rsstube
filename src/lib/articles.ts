@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { subscribedFeedIds } from '@/lib/subscriptions';
 import { sanitizeSearch } from '@/lib/search';
 import { PAGE_SIZE, asId, type ArticleRow, type View } from '@/lib/types';
 
@@ -48,6 +49,35 @@ type RawRow = {
 };
 
 /**
+ * **購読しているフィードだけに絞るのは `feed_id in (…)` で行う。**
+ *
+ * 記事とフィードは全ユーザー共通なので（0005）、購読していないフィードの記事も
+ * 表には残っている。以前はそれを `feeds!inner (subscriptions!inner (folder_id))` の
+ * 入れ子で落としていた——正しいのだが、**その入れ子ひとつで未読一覧が7倍遅かった**
+ * （本番相当のデータで 227ms → 31ms）。埋め込みは1つ増えるごとに横結合が増え、
+ * Supabase の無料枠では計画だけで数十msかかる（EXPLAIN で計画44ms・実行61ms）。
+ * 購読は12本しかないので、id を先に引いて集合で絞るほうが圧倒的に速い。
+ *
+ * `article_states!inner` のほうは残す。あれは「自分の記事」を切り出すためのもので
+ * （状態行は購読時と巡回時にしか作られない）、購読の絞り込みとは別の仕事をしている。
+ */
+/**
+ * **問い合わせの組み立て役を async にしないこと。**
+ *
+ * supabase-js の builder は thenable なので、`async` 関数から返すと
+ * その `await` が builder を実行してしまう（返るのは組み立て途中の builder
+ * ではなく**結果**になる）。`.order()` が無いと型検査で言われて気づいたが、
+ * 型が緩い書き方をしていたら、そのまま並べ替えの無い問い合わせが走っていた。
+ * 非同期に要るもの（購読の id）だけを先に取り、当てるのは同期でやる。
+ */
+async function subscribedIdsFor(query: ArticleQuery): Promise<string[]> {
+  const subs = await subscribedFeedIds();
+  return query.folderId
+    ? subs.filter((s) => s.folder_id === query.folderId).map((s) => s.feed_id)
+    : subs.map((s) => s.feed_id);
+}
+
+/**
  * 一覧に出すぶん。**行に出していない列は取らない。**
  *
  * 記事は `?article=` の付け替えで開くので、1回開くたびにこの一覧が
@@ -56,7 +86,7 @@ type RawRow = {
  * 元記事のリンクも書き手も、開いた先（getArticle）が持っている。
  */
 const LIST_SELECT = `id, title, published_at, excerpt, extracted_at, created_at,
-   feeds!inner (id, title, subscriptions!inner (folder_id)),
+   feeds!inner (id, title),
    summaries (bullets, importance, title_ja),
    article_states!inner (is_read, is_starred, read_later, exported_at)`;
 
@@ -77,7 +107,6 @@ const LIST_SELECT = `id, title, published_at, excerpt, extracted_at, created_at,
  * 内部結合にすると1件も残らない。
  */
 const ID_SELECT = `id, published_at,
-   feeds!inner (id, subscriptions!inner (folder_id)),
    summaries (importance),
    article_states!inner (is_read, is_starred, read_later)`;
 
@@ -89,8 +118,8 @@ function applyFilters<T>(q: T, query: ArticleQuery): T {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   let b = q as any;
 
+  // フォルダの絞り込みは scopeToSubscribed が feed_id の集合として当てる。
   if (query.feedId) b = b.eq('feed_id', query.feedId);
-  if (query.folderId) b = b.eq('feeds.subscriptions.folder_id', query.folderId);
 
   switch (query.view) {
     case 'unread':
@@ -140,25 +169,42 @@ function applyFilters<T>(q: T, query: ArticleQuery): T {
 async function run(select: string, query: ArticleQuery, limit: number) {
   const supabase = await createClient();
 
+  // 購読しているフィードだけに絞る。空の in は「1件も無い」で、
+  // 購読ゼロやフォルダが空のときの正しい答えになる。
+  const feedIds = await subscribedIdsFor(query);
+
   let q = applyFilters(
     supabase
       .from('articles')
       .select(select)
+      .in('feed_id', feedIds)
       .range(query.offset ?? 0, (query.offset ?? 0) + limit - 1),
     query,
   );
 
+  /**
+   * **最後に id で並べること（同着の決着）。**
+   *
+   * articles.importance は summaries.importance の複製（0007）。埋め込んだ
+   * summaries 側を order しても親の記事順は変わらないので、並べ替えは必ず
+   * articles 側の列で行う。要約がまだ無い記事は null になり末尾に回る。
+   *
+   * そして日時だけでは順番が決まらない。実データで**243件が同じ日時**を持ち
+   * （45組、最大18件が同時刻。自治体や省庁は同じ時刻でまとめて出す）、
+   * その中の並びは Postgres の気分次第になる。決まらないと2つ壊れる:
+   *   - **無限スクロールで記事が重複・欠落する。** offset で継ぎ足すので、
+   *     同着の組が60件の境目をまたぐと、2ページ目に同じ記事が出たり抜けたりする
+   *   - **「次の記事」が戻ったり飛んだりする。** 前後は毎回この並びから数え直す
+   * 実行計画が変われば並びも変わるので、いま安定して見えるのは偶然。
+   */
   if (query.sort === 'important') {
-    // articles.importance は summaries.importance の複製（0007）。
-    // 埋め込んだ summaries 側を order しても親の記事順は変わらないので、
-    // 並べ替えは必ず articles 側の列で行うこと。
-    // 要約がまだ無い記事は null になり、末尾に回る。
     q = q
       .order('importance', { ascending: false, nullsFirst: false })
       .order('published_at', { ascending: false, nullsFirst: false });
   } else {
     q = q.order('published_at', { ascending: false, nullsFirst: false });
   }
+  q = q.order('id', { ascending: false });
 
   const { data, error } = await q;
   if (error) throw error;
@@ -223,8 +269,13 @@ const NEIGHBOUR_SCAN = 600;
  */
 export async function countArticles(query: ArticleQuery): Promise<number | null> {
   const supabase = await createClient();
+  const feedIds = await subscribedIdsFor(query);
+
   const { count, error } = await applyFilters(
-    supabase.from('articles').select(ID_SELECT, { count: 'exact', head: true }),
+    supabase
+      .from('articles')
+      .select(ID_SELECT, { count: 'exact', head: true })
+      .in('feed_id', feedIds),
     query,
   );
   if (error) throw error;

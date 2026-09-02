@@ -96,7 +96,9 @@ export async function searchLibrary(
     q = q.gte('published_at', since);
   }
 
-  q = q.order('published_at', { ascending: false, nullsFirst: false });
+  // 同着は id で決める。ここも offset でページを繰るので、決めないと
+  // ページの境目で記事が重複・欠落する（lib/articles.ts の run を参照）。
+  q = q.order('published_at', { ascending: false, nullsFirst: false }).order('id', { ascending: false });
 
   const { data, error } = await q;
   if (error) throw error;
