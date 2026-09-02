@@ -62,7 +62,8 @@ export function ArticleNav({
   const pad = { paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' };
 
   return (
-    <nav className="relative flex shrink-0 items-stretch border-t border-zinc-800 text-xs">
+    // order-3 はスマホ用。上から 本文 → 操作の帯 → ここ の順にする。
+    <nav className="relative order-3 flex shrink-0 items-stretch border-t border-zinc-800 text-xs md:order-none">
       {/* 端に来たことを伝える。押しても何も起きないのと、端であることは別物。 */}
       {text && (
         <div

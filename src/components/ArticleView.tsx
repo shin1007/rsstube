@@ -102,7 +102,14 @@ export function ArticleView({
         読み上げには記号ではなく、いつもと同じ言葉が渡る。
         記号にして空いたぶんは上下の余白ではなく**指の当たり判定（px-3）**に回す。
       */}
-      <header className="flex flex-nowrap items-center gap-0.5 overflow-x-auto border-b border-zinc-800 px-2 py-1 md:gap-1 md:px-3">
+      {/*
+        **スマホではこの帯を画面の下に出す**（`order`）。上に置いていたときは、
+        OS の時計と同じ高さに並ぶうえ、片手で持つと親指がいちばん届かない場所に
+        操作が全部集まっていた。読むのは上、触るのは下。
+        PC では今までどおり本文の上（`md:order-none`）——マウスなら距離は問題にならず、
+        本文の持ち物であることが上にあるほうが分かる。
+      */}
+      <header className="order-2 flex flex-nowrap items-center gap-0.5 overflow-x-auto border-t border-zinc-800 px-2 py-1 md:order-none md:gap-1 md:border-t-0 md:border-b md:px-3">
         {/* スマホでリストへ戻る導線。PCではリストが常に見えているので不要。 */}
         <Link
           href={backHref}
