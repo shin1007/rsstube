@@ -34,6 +34,7 @@ export type ArticleQuery = {
 type RawRow = {
   id: string;
   title: string;
+  url: string;
   published_at: string | null;
   excerpt: string | null;
   extracted_at: string | null;
@@ -85,7 +86,7 @@ async function subscribedIdsFor(query: ArticleQuery): Promise<string[]> {
  * `tags` は行のどこにも出していないのに、そのぶんが遷移のたびに乗っていた。
  * 元記事のリンクも書き手も、開いた先（getArticle）が持っている。
  */
-const LIST_SELECT = `id, title, published_at, excerpt, extracted_at, created_at,
+const LIST_SELECT = `id, title, url, published_at, excerpt, extracted_at, created_at,
    feeds!inner (id, title),
    summaries (bullets, importance, title_ja),
    article_states!inner (is_read, is_starred, read_later, exported_at)`;
@@ -221,6 +222,9 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
     return {
       id: r.id,
       title: r.title,
+      // 行には出さないが、`v`（元記事を開く）が使う。**消さないこと**
+      // ——消したときは window.open(undefined) になって about:blank が開いた。
+      url: r.url,
       published_at: r.published_at,
       /**
        * **要点があるときは抜粋を運ばない。** 行に出るのはどちらか片方で、
