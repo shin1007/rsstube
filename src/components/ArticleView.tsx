@@ -138,8 +138,19 @@ export function ArticleView({
       <ArticleSwipe articleId={a.id} prevHref={prevHref} nextHref={nextHref}>
         {/* 下の余白は 24（96px）あったが、あれは下部タブを避けるためのもので、
             記事を開いている間はそのタブが消えている。下に前後の帯が付いた今は
-            本文の終わりに画面半分の空白ができるだけなので詰める。 */}
-        <div className="flex-1 overflow-y-auto thin-scroll px-4 py-5 md:px-8 pb-10 md:pb-8">
+            本文の終わりに画面半分の空白ができるだけなので詰める。
+
+            **key に記事の id を入れて、スクロールを頭に戻す。** 記事は
+            `?article=` の付け替えで開くので、React から見ると同じ位置の同じ
+            div のままで、DOM ごと使い回される＝ scrollTop が前の記事のまま
+            残る。長い記事を下まで読んでから「次の記事」を押すと、次の記事の
+            途中から始まって、題も要約も画面の上に無い（読み進めるほど症状が
+            重くなるので、いちばん困るときに起きる）。key を変えれば React が
+            作り直すので、必ず先頭から出る。 */}
+        <div
+          key={a.id}
+          className="flex-1 overflow-y-auto thin-scroll px-4 py-5 md:px-8 pb-10 md:pb-8"
+        >
           <div className="mx-auto max-w-2xl">
             <p className="text-xs text-zinc-500">
               {a.feeds?.title}
