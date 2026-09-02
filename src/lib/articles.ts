@@ -33,15 +33,12 @@ export type ArticleQuery = {
 type RawRow = {
   id: string;
   title: string;
-  url: string;
-  author: string | null;
   published_at: string | null;
   excerpt: string | null;
-  content_ok: boolean;
   extracted_at: string | null;
   created_at: string | null;
   feeds: { id: string; title: string; subscriptions?: unknown } | null;
-  summaries: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
+  summaries: { bullets: string[]; importance: number; title_ja: string | null } | null;
   article_states: {
     is_read: boolean;
     is_starred: boolean;
@@ -50,10 +47,17 @@ type RawRow = {
   } | null;
 };
 
-/** 一覧に出すぶん。 */
-const LIST_SELECT = `id, title, url, author, published_at, excerpt, content_ok, extracted_at, created_at,
+/**
+ * 一覧に出すぶん。**行に出していない列は取らない。**
+ *
+ * 記事は `?article=` の付け替えで開くので、1回開くたびにこの一覧が
+ * まるごと運び直される（実測61KB / 24行）。`url` `author` `content_ok`
+ * `tags` は行のどこにも出していないのに、そのぶんが遷移のたびに乗っていた。
+ * 元記事のリンクも書き手も、開いた先（getArticle）が持っている。
+ */
+const LIST_SELECT = `id, title, published_at, excerpt, extracted_at, created_at,
    feeds!inner (id, title, subscriptions!inner (folder_id)),
-   summaries (bullets, tags, importance, title_ja),
+   summaries (bullets, importance, title_ja),
    article_states!inner (is_read, is_starred, read_later, exported_at)`;
 
 /**
@@ -139,20 +143,28 @@ async function run(select: string, query: ArticleQuery, limit: number) {
 export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
   const data = await run(LIST_SELECT, query, PAGE_SIZE);
 
-  return (data as unknown as RawRow[]).map((r) => ({
-    id: r.id,
-    title: r.title,
-    url: r.url,
-    author: r.author,
-    published_at: r.published_at,
-    excerpt: r.excerpt,
-    content_ok: r.content_ok,
-    extracted_at: r.extracted_at,
-    created_at: r.created_at,
-    feed: r.feeds ? { id: r.feeds.id, title: r.feeds.title } : null,
-    summary: r.summaries ?? null,
-    state: r.article_states ?? null,
-  }));
+  return (data as unknown as RawRow[]).map((r) => {
+    // 行は先頭3つしか出さない。4つ目から先は運ぶだけ無駄になる。
+    const bullets = r.summaries?.bullets?.slice(0, 3) ?? [];
+
+    return {
+      id: r.id,
+      title: r.title,
+      published_at: r.published_at,
+      /**
+       * **要点があるときは抜粋を運ばない。** 行に出るのはどちらか片方で、
+       * 要点があればそちらが勝つ（ArticleList の Row）。抜粋は日本語で
+       * 150字ほどあり、1行あたりでいちばん重い列なのに、ほとんどの行では
+       * 一度も表示されない。
+       */
+      excerpt: bullets.length > 0 ? null : r.excerpt,
+      extracted_at: r.extracted_at,
+      created_at: r.created_at,
+      feed: r.feeds ? { id: r.feeds.id, title: r.feeds.title } : null,
+      summary: r.summaries ? { ...r.summaries, bullets } : null,
+      state: r.article_states ?? null,
+    };
+  });
 }
 
 /**

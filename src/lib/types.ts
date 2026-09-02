@@ -7,14 +7,26 @@
  */
 export const PAGE_SIZE = 60;
 
+/**
+ * 一覧の1行。**リーダーの一覧（/）と アーカイブ（/library）で運ぶ列が違う。**
+ *
+ * `?` が付いているのはアーカイブだけが使う列。リーダーの一覧は記事を開くたびに
+ * 60行ぶんまるごと運び直すので（RSC のペイロードは実測61KB / 24行）、
+ * **画面に出していない列を1つ足すと、その重さが全部の遷移に乗る**。
+ * 出していないものは運ばないこと。
+ */
 export type ArticleRow = {
   id: string;
   title: string;
-  url: string;
-  author: string | null;
+  /** 元記事へのリンク。リーダーの行には出していない（開いてから出す）。 */
+  url?: string;
+  /** 書き手。リーダーの行には出していない。 */
+  author?: string | null;
   published_at: string | null;
+  /** RSSの抜粋。**要点（bullets）があるときは出さないので、そのときは運ばない。** */
   excerpt: string | null;
-  content_ok: boolean;
+  /** 本文が取れたか。リーダーの行では見ていない（extracted_at で足りる）。 */
+  content_ok?: boolean;
   /**
    * 本文抽出を試みた時刻。null は「まだ取りに行っていない」（0014）。
    * content_ok の false だけでは、失敗したのか順番待ちなのかが分からない。
@@ -34,7 +46,18 @@ export type ArticleRow = {
    * こちらを主にする。英語のフィードは記事の42%を占めていて、
    * 原題のままだと目で追うのが重い。
    */
-  summary: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
+  /**
+   * 要約。title_ja は設定言語での見出し（0023）。
+   *
+   * bullets はリーダーの行では**先頭3つしか出していない**ので、そこまでしか
+   * 運ばない。tags を出しているのはアーカイブだけなので `?`。
+   */
+  summary: {
+    bullets: string[];
+    tags?: string[];
+    importance: number;
+    title_ja: string | null;
+  } | null;
   state: {
     is_read: boolean;
     is_starred: boolean;
