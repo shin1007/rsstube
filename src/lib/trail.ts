@@ -27,14 +27,24 @@ import { useEffect, useSyncExternalStore } from 'react';
  */
 
 type Trail = {
-  /** どの絞り込みの並びか。変わったら捨てる。 */
-  key: string;
+  /**
+   * どの絞り込みの並びか。変わったら捨てる。
+   *
+   * **まだ何も記録していない状態は `null`。空文字にしないこと。**
+   * 絞り込みが何も無い一覧（＝未読ビューをそのまま開いた状態）のキーは
+   * 空文字なので、初期値を空文字にすると「同じ並びを見ている」と一致してしまい、
+   * 下の `at === state.pos` に -1 === -1 で引っかかって**1件も記録されない**。
+   * 未読ビューだけ来た道が空のままになり、「次」で進んだあと「前」が
+   * 押せないままだった（フォルダや検索で開いたときは、キーが空でないので
+   * 初回に上の分岐で作り直され、正しく動いていた）。
+   */
+  key: string | null;
   ids: readonly string[];
   /** いま何番目を見ているか。-1 は空。 */
   pos: number;
 };
 
-const EMPTY: Trail = { key: '', ids: [], pos: -1 };
+const EMPTY: Trail = { key: null, ids: [], pos: -1 };
 
 let state: Trail = EMPTY;
 const listeners = new Set<() => void>();

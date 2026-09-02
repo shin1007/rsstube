@@ -673,12 +673,12 @@ export function ArticleList({
         </div>
       </header>
 
-      {/* 下の余白は下部タブぶん。**ホームバーぶん（safe-area）も足すこと**
-          ——タブ自身がその高さだけ背が高くなるので、4rem だけだと最後の行が
-          タブの下に潜って押せなくなる。 */}
+      {/* 下の余白は下部タブぶん（3rem）＋ホームバーぶん。**両方要る**
+          ——タブ自身がホームバーのぶんだけ背が高くなるので、3rem だけだと
+          最後の行がタブの下に潜って押せなくなる。数はタブの min-h-12 と揃える。 */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto thin-scroll pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0"
+        className="flex-1 overflow-y-auto thin-scroll pb-[calc(3rem+env(safe-area-inset-bottom))] md:pb-0"
       >
         {rows.length === 0 && (
           <p className="p-6 text-center text-sm text-zinc-500">

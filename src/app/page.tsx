@@ -3,7 +3,7 @@ import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
-import { getArticle, listArticleIds, listArticles, unreadCounts } from '@/lib/articles';
+import { countArticles, getArticle, listArticleIds, listArticles, unreadCounts } from '@/lib/articles';
 import { unplayedMediaCount } from '@/lib/media/list';
 import { createClient } from '@/lib/supabase/server';
 import { PAGE_SIZE, type FeedRow, type FolderRow, type View } from '@/lib/types';
@@ -34,13 +34,16 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
 
   const supabase = await createClient();
 
-  const [{ data: folders }, feeds, articles, counts, unplayed, picked] = await Promise.all([
+  const [{ data: folders }, feeds, articles, counts, unplayed, picked, total] = await Promise.all([
     supabase.from('folders').select('id, name').order('sort_order').order('name'),
     listSubscribedFeeds(),
     listArticles({ view, folderId, feedId, sort, search }),
     unreadCounts(),
     unplayedMediaCount(),
     selectedId ? getArticle(selectedId) : Promise.resolve(null),
+    // 「あと何件」を出すためだけの数。**並べて投げること**——直列にすると
+    // そのぶんが画面遷移の待ち時間にまるごと乗る（docs/traps/perf.md）。
+    countArticles({ view, folderId, feedId, sort, search }),
   ]);
 
   /**
@@ -88,6 +91,15 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   let nextId = index >= 0 && index < articles.length - 1 ? articles[index + 1].id : undefined;
 
   /**
+   * いま開いている記事より後ろに何件あるか。**「まだ続くのか」を出すため。**
+   *
+   * 位置が出せないときは undefined のままにする（0 にしない）。0 は
+   * 「ここで終わり」という別の意味を持っていて、分からないことと同じではない。
+   */
+  let remaining: number | undefined =
+    total !== null && index >= 0 ? Math.max(0, total - 1 - index) : undefined;
+
+  /**
    * 一覧の**最後の1件**を開いているときは、その先があるかどうかが分からない。
    *
    * ここで見ている `articles` は1ページぶん（PAGE_SIZE = 60）しかない。60件目を
@@ -129,6 +141,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
     if (at >= 0) {
       prevId = at > 0 ? slots[at - 1].id : undefined;
       nextId = at < slots.length - 1 ? slots[at + 1].id : undefined;
+      if (total !== null) remaining = Math.max(0, total - 1 - at);
     } else if (sort === 'new' && selected?.published_at) {
       // 並びは新しい順。自分より古い最初の記事が「次」、その1つ手前が「前」。
       const when = selected.published_at;
@@ -136,6 +149,9 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
       if (older >= 0) {
         prevId = older > 0 ? slots[older - 1].id : undefined;
         nextId = slots[older].id;
+        // 自分は一覧から抜けている（未読ビューで既読になった）ので、
+        // older から後ろが「まだ読んでいないぶん」そのもの。1を引かない。
+        if (total !== null) remaining = Math.max(0, total - older);
       } else if (slots.length > 0) {
         // 自分がいちばん古い。前だけ出す。
         prevId = slots[slots.length - 1].id;
@@ -184,6 +200,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
           backHref={linkTo()}
           prevHref={prevId ? linkTo(prevId) : undefined}
           nextHref={nextId ? linkTo(nextId) : undefined}
+          remaining={remaining}
         />
       </div>
 
