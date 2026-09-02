@@ -109,12 +109,12 @@ export function ArticleView({
         PC では今までどおり本文の上（`md:order-none`）——マウスなら距離は問題にならず、
         本文の持ち物であることが上にあるほうが分かる。
       */}
-      <header className="order-2 flex flex-nowrap items-center gap-0.5 overflow-x-auto border-t border-zinc-800 px-2 py-1 md:order-none md:gap-1 md:border-t-0 md:border-b md:px-3">
+      <header className="order-2 flex flex-nowrap items-center gap-1 overflow-x-auto border-t border-zinc-800 px-2 md:order-none md:gap-1 md:border-t-0 md:border-b md:px-3 md:py-1">
         {/* スマホでリストへ戻る導線。PCではリストが常に見えているので不要。 */}
         <Link
           href={backHref}
           aria-label="一覧へ戻る"
-          className="md:hidden shrink-0 whitespace-nowrap rounded px-3 py-1 text-xs text-zinc-400"
+          className="bar-button md:hidden shrink-0 whitespace-nowrap rounded text-xs text-zinc-400"
         >
           ←
         </Link>
@@ -134,7 +134,7 @@ export function ArticleView({
           target="_blank"
           rel="noopener noreferrer"
           aria-label="元記事を開く"
-          className="ml-auto shrink-0 whitespace-nowrap rounded px-3 py-1 text-xs text-zinc-500 hover:text-zinc-100 md:px-2 md:text-sm"
+          className="bar-button ml-auto shrink-0 whitespace-nowrap rounded text-xs text-zinc-500 hover:text-zinc-100 md:px-2 md:py-1 md:text-sm"
         >
           <span className="md:hidden">↗</span>
           <span className="hidden md:inline">元記事 ↗</span>

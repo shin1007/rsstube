@@ -69,7 +69,7 @@ export function MediaButton({
         onClick={run}
         disabled={pending}
         aria-label={label}
-        className="shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs text-zinc-500 hover:text-zinc-100 disabled:opacity-50 md:text-sm"
+        className="bar-button shrink-0 whitespace-nowrap rounded px-2 text-xs text-zinc-500 hover:text-zinc-100 disabled:opacity-50 md:py-1 md:text-sm"
       >
         {pending ? (
           '受付中…'
