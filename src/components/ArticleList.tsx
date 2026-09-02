@@ -55,6 +55,7 @@ const SHORTCUTS: [string, string][] = [
   ['l', 'あとで'],
   ['v', '元記事を新しいタブで開く'],
   ['Shift + A', '表示中をすべて既読'],
+  ['Shift + M', 'ここから下（古い方）を既読'],
   ['/', '検索'],
   ['?', 'このヘルプ'],
 ];
@@ -432,6 +433,29 @@ export function ArticleList({
     prefetchArticle(id);
   }, [cursor, rows, selectedId, prefetchArticle]);
 
+  /**
+   * **ここから下（古い方）をまとめて既読にする。**
+   *
+   * これまで一括で消せるのは `全既読`（読み込んだぶん全部）だけで、その中間が
+   * 無かった。朝に30件たまっていて上から5件読んで残りは要らない、という日に
+   * 一件ずつ捌くか全部捨てるかしかない。NetNewsWire・Inoreader・Feedly は
+   * どれも「ここより上／下を既読」を持っている（docs/usability.md）。
+   *
+   * **押した行も含める。** 「ここから」と言われて自分が残ると、
+   * もう一度その行を消す手間が要る。取り消しは全既読と同じ帯を使う。
+   */
+  const markBelow = useCallback(
+    (index: number) => {
+      const target = rows.slice(index).filter((a) => !a.state?.is_read);
+      if (target.length === 0) return;
+      const ids = target.map((a) => a.id);
+      setUndoIds(ids);
+      for (const id of ids) patch(id, { is_read: true });
+      startTransition(() => void setReadMany(ids, true));
+    },
+    [rows, patch, setUndoIds],
+  );
+
   const markAll = useCallback(() => {
     // 既に既読だったものは戻す対象にしない。
     const wasUnread = rows.filter((a) => !a.state?.is_read).map((a) => a.id);
@@ -578,12 +602,18 @@ export function ArticleList({
             markAll();
           }
           break;
+        case 'M':
+          if (e.shiftKey && cursor >= 0) {
+            e.preventDefault();
+            markBelow(cursor);
+          }
+          break;
       }
     }
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [rows, cursor, open, helpOpen, selectedId, pushParams, markAll, patch, loadMore, router, prevHref, nextHref, moving, startMove]);
+  }, [rows, cursor, open, helpOpen, selectedId, pushParams, markAll, markBelow, patch, loadMore, router, prevHref, nextHref, moving, startMove]);
 
   const unreadCount = rows.filter((a) => !a.state?.is_read).length;
 
@@ -717,6 +747,7 @@ export function ArticleList({
             onFlash={setFlash}
             onPatch={patch}
             onIntent={() => prefetchArticle(article.id)}
+            onMarkBelow={() => markBelow(i)}
           />
         ))}
 
@@ -879,6 +910,7 @@ function Row({
   onFlash,
   onPatch,
   onIntent,
+  onMarkBelow,
 }: {
   ref: (el: HTMLElement | null) => void;
   article: ArticleRow;
@@ -892,6 +924,8 @@ function Row({
   onPatch: (id: string, patch: StatePatch) => void;
   /** 開きそうだと分かった時点（指を置く・上に載せる）で本文を取りに行かせる。 */
   onIntent: () => void;
+  /** 長押し（PCは右クリック）で、ここから下を既読にする。 */
+  onMarkBelow: () => void;
 }) {
   const [, startTransition] = useTransition();
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -941,6 +975,18 @@ function Row({
         // サーバーが2回組み立てるだけ**になる（実測で2本飛んでいた）。
         onPointerEnter={(e) => {
           if (e.pointerType === 'mouse') onIntent();
+        }}
+        /**
+         * 長押し（スマホ）と右クリック（PC）で、ここから下を既読にする。
+         *
+         * `contextmenu` を使うのは、**この2つが同じ1つのイベントで来る**から。
+         * 長押しを自前のタイマーで作ると、既にあるスワイプ（左=既読 / 右=あとで）と
+         * 指の取り合いになる。標準のイベントに乗れば競合しない。
+         * 押し間違いは取り消しの帯で戻せる。
+         */
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onMarkBelow();
         }}
         onKeyDown={(e) => {
           // 行そのものにフォーカスがあるとき用。全体のショートカットとは別。

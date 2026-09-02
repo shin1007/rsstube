@@ -1,6 +1,7 @@
 import { listSubscribedFeeds } from '@/lib/subscriptions';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
+import { AppBadge } from '@/components/AppBadge';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
 import { countArticles, getArticle, listArticleIds, listArticles, unreadCounts } from '@/lib/articles';
@@ -241,6 +242,9 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
           remaining={remaining}
         />
       </div>
+
+      {/* ホーム画面のアイコンに未読の数を出す。サイドバーと同じ値。 */}
+      <AppBadge count={[...counts.values()].reduce((sum, n) => sum + n, 0)} />
 
       <BottomTabs view={view} hidden={Boolean(openId)} unplayed={unplayed} />
     </div>

@@ -18,7 +18,11 @@ export const PAGE_SIZE = 60;
 export type ArticleRow = {
   id: string;
   title: string;
-  /** 元記事へのリンク。リーダーの行には出していない（開いてから出す）。 */
+  /**
+   * 元記事へのリンク。行には出していないが、キーボードの `v`（元記事を開く）が
+   * 使うので運ぶ。**外すと `window.open(undefined)` で about:blank が開く**
+   * ——型は `string | undefined` を受けるので、検査では気づけない。
+   */
   url?: string;
   /** 書き手。リーダーの行には出していない。 */
   author?: string | null;

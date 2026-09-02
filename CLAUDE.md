@@ -14,6 +14,7 @@ AI要約つきの個人用RSSリーダー。
 | オーナーがやること（指示） | `docs/owner-todo.md` |
 | 無料枠と、詰まったときの見分けかた | `docs/quotas.md` |
 | 音声・スライドの他サービス比較 | `docs/tts-options.md` |
+| 競合と比べて足りないもの（改善提案） | `docs/usability.md` |
 | どのサイトの本文が取れるか（110件実測） | `docs/site-compat.md` |
 | 設計の全体像 | `docs/plan.md` |
 | セットアップと使い方 | `README.md` |

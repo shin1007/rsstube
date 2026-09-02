@@ -8,6 +8,7 @@ import { ExportButton } from '@/components/ExportButton';
 import { ActionForm } from '@/components/ActionForm';
 import { MarkReadOnView } from '@/components/MarkReadOnView';
 import { MediaButton } from '@/components/MediaButton';
+import { ShareButton } from '@/components/ShareButton';
 import Link from 'next/link';
 
 type ArticleDetail = {
@@ -89,6 +90,16 @@ export function ArticleView({
 
   const state = a.article_states;
 
+  /**
+   * 読み終わるのにかかる目安（分）。
+   *
+   * 日本語で 500字/分。**1分未満は1分**と出す（「0分」は情報にならない）。
+   * 本文が取れていない記事は出さない——RSSの抜粋だけで「1分」と出すと、
+   * 短い記事なのだと誤解させる。
+   */
+  const chars = a.content_text?.trim().length ?? 0;
+  const readingMinutes = a.content_ok && chars > 0 ? Math.max(1, Math.round(chars / 500)) : null;
+
   return (
     <div className="flex h-full flex-col min-h-0">
       {/* 出したなら既読にする。押して開いたものは ArticleList の open が見る。 */}
@@ -132,6 +143,9 @@ export function ArticleView({
 
         <MediaButton articleId={a.id} />
 
+        {/* 共有できないブラウザでは、このボタンごと出ない（ShareButton の中で判定）。 */}
+        <ShareButton title={a.summaries?.title_ja?.trim() || a.title} url={a.url} />
+
         <a
           href={a.url}
           target="_blank"
@@ -173,6 +187,12 @@ export function ArticleView({
                 })}`}
               {/* 記事の日付の隣に、こちらへ入ってきた時刻。日付は書き手が打ったもので、
                   実際に読めるようになった時刻とはずれる（省庁は特に）。 */}
+              {/* **読み終わるのにどれくらいか。** 要点3つで「読むかどうか」は
+                  決まるが、「いま読める長さか（3分か15分か）」は分からなかった。
+                  日本語はおよそ500字/分。本文が無い記事には出さない。 */}
+              {readingMinutes !== null && (
+                <span className="text-zinc-600">{` · ${readingMinutes}分`}</span>
+              )}
               {a.created_at && (
                 <span className="text-zinc-600">
                   {' · 取得 '}
