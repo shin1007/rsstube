@@ -28,16 +28,17 @@ export function BottomTabs({
   ];
 
   return (
-    <nav
-      className="md:hidden fixed inset-x-0 bottom-0 z-10 flex border-t border-zinc-800 bg-zinc-950"
-      // iPhone のホームバーに隠れないように下側の安全領域を確保する。
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-    >
+    <nav className="md:hidden fixed inset-x-0 bottom-0 z-10 flex border-t border-zinc-800 bg-zinc-950">
       {tabs.map((tab) => (
         <Link
           key={tab.label}
           href={tab.href}
-          className={`flex-1 py-3 text-center text-xs ${
+          // iPhone のホームバーぶんは**リンクの padding** で確保する。nav 側に
+          // 付けると、その帯は nav の地色で塗られているのに、どのリンクにも
+          // 当たらない——画面のいちばん下に「タブに見えて押せない」場所が
+          // 30px ほどできる（親指が最初に届くのは、まさにそこ）。
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+          className={`flex-1 pt-3 text-center text-xs ${
             tab.view && tab.view === view ? 'text-zinc-100' : 'text-zinc-500'
           }`}
         >
