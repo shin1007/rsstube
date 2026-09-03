@@ -19,6 +19,7 @@ import { UnsubscribeButton } from '@/components/UnsubscribeButton';
 import { FolderSelect } from '@/components/FolderSelect';
 import { PasskeyManager, type PasskeyRow } from '@/components/PasskeyManager';
 import { TextScale } from '@/components/TextScale';
+import { ThemeColorPicker } from '@/components/ThemeColorPicker';
 import { PushToggle } from '@/components/PushToggle';
 import { SettingsForm, type SaveState } from '@/components/SettingsForm';
 import { UsageTable } from '@/components/UsageTable';
@@ -166,9 +167,14 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
           </div>
         </div>
 
-        {/* ---------------- パスキー ---------------- */}
+        {/* ---------------- 外観設定 ---------------- */}
         {/* 読むことに直結するので上のほうに置く。
-            設定を開く動機のほとんどは「読みにくい」なので。 */}
+            設定を開く動機のほとんどは「読みにくい・見づらい」なので。 */}
+        <section>
+          <h2 className="mb-2 section-title">アクセントカラー（テーマ色）</h2>
+          <ThemeColorPicker />
+        </section>
+
         <section>
           <h2 className="mb-2 section-title">文字の大きさ</h2>
           <TextScale />

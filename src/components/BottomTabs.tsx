@@ -41,8 +41,10 @@ export function BottomTabs({
           // 残す。文字を上に寄せたままだと、下に何も無い帯ができて
           // 「押せない空白」に見える（当たり判定はあるのに）。
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-          className={`flex min-h-12 flex-1 items-center justify-center text-center text-xs ${
-            tab.view && tab.view === view ? 'text-zinc-100' : 'text-zinc-500'
+          className={`flex min-h-12 flex-1 items-center justify-center text-center text-xs transition ${
+            tab.view && tab.view === view
+              ? 'text-[var(--color-accent-text)] font-semibold border-t-2 border-[var(--color-accent)] -mt-px bg-[var(--color-accent-subtle)]'
+              : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
           {/*

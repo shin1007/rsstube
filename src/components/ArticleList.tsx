@@ -672,7 +672,7 @@ export function ArticleList({
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            className="md:hidden rounded border border-zinc-700 bg-zinc-800/80 px-2 py-0.5 text-xs text-zinc-300 hover:text-zinc-100 hover:bg-zinc-700 active:scale-95 transition"
+            className="md:hidden rounded border border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-accent-text)] hover:brightness-110 active:scale-95 transition cursor-pointer"
             aria-label="フィード・フォルダ一覧を開く"
           >
             フィード
@@ -1157,19 +1157,23 @@ function Row({
           }
         }}
         style={swipe !== 0 ? { transform: `translateX(${swipe}px)` } : undefined}
-        className={`relative cursor-pointer px-3 py-2.5 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-500 ${
+        className={`relative cursor-pointer px-3 py-2.5 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)] ${
           releasing ? 'transition-transform duration-150' : ''
         } ${
           selected
-            ? 'bg-zinc-800'
+            ? 'bg-[var(--color-accent-subtle)] border-l-2 border-[var(--color-accent)]'
             : active
-              ? 'bg-zinc-900 shadow-[inset_2px_0_0_0_var(--color-sky-500)]'
+              ? 'bg-zinc-900/90 shadow-[inset_2px_0_0_0_var(--color-accent)]'
               : 'bg-zinc-950 hover:bg-zinc-900/60'
         }`}
       >
         <div className="flex items-start gap-2">
           {!read && (
-            <span aria-label="未読" className="mt-1.5 size-2 shrink-0 rounded-full bg-sky-500" />
+            <span
+              aria-label="未読"
+              className="mt-1.5 size-2 shrink-0 rounded-full shadow-sm"
+              style={{ backgroundColor: 'var(--color-accent)' }}
+            />
           )}
           {/*
             訳した見出しがあればそれを主にする。記事の42%（1262件中531件）が

@@ -70,6 +70,78 @@
    * **いちばん長く見る文字だけが取り残された**（同じ壊れ方を一度している）。
    */
   --text-body: calc(19px * var(--text-scale));
+
+  /*
+   * アクセントカラーの既定値（cyan/sky）。設定画面でユーザーが選べる。
+   */
+  --color-accent: #0284c7;
+  --color-accent-hover: #0369a1;
+  --color-accent-text: #38bdf8;
+  --color-accent-subtle: rgba(14, 165, 233, 0.12);
+  --color-accent-border: rgba(14, 165, 233, 0.35);
+  --color-accent-badge-bg: #0284c7;
+  --color-accent-badge-text: #ffffff;
+}
+
+/* 各カラーテーマごとの変数値 */
+:root[data-accent="cyan"] {
+  --color-accent: #0284c7;
+  --color-accent-hover: #0369a1;
+  --color-accent-text: #38bdf8;
+  --color-accent-subtle: rgba(14, 165, 233, 0.12);
+  --color-accent-border: rgba(14, 165, 233, 0.35);
+  --color-accent-badge-bg: #0284c7;
+  --color-accent-badge-text: #ffffff;
+}
+
+:root[data-accent="blue"] {
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-text: #818cf8;
+  --color-accent-subtle: rgba(99, 102, 241, 0.14);
+  --color-accent-border: rgba(99, 102, 241, 0.4);
+  --color-accent-badge-bg: #4f46e5;
+  --color-accent-badge-text: #ffffff;
+}
+
+:root[data-accent="emerald"] {
+  --color-accent: #059669;
+  --color-accent-hover: #047857;
+  --color-accent-text: #34d399;
+  --color-accent-subtle: rgba(16, 185, 129, 0.14);
+  --color-accent-border: rgba(16, 185, 129, 0.4);
+  --color-accent-badge-bg: #059669;
+  --color-accent-badge-text: #ffffff;
+}
+
+:root[data-accent="amber"] {
+  --color-accent: #d97706;
+  --color-accent-hover: #b45309;
+  --color-accent-text: #fbbf24;
+  --color-accent-subtle: rgba(245, 158, 11, 0.14);
+  --color-accent-border: rgba(245, 158, 11, 0.4);
+  --color-accent-badge-bg: #d97706;
+  --color-accent-badge-text: #ffffff;
+}
+
+:root[data-accent="violet"] {
+  --color-accent: #9333ea;
+  --color-accent-hover: #7e22ce;
+  --color-accent-text: #c084fc;
+  --color-accent-subtle: rgba(168, 85, 247, 0.14);
+  --color-accent-border: rgba(168, 85, 247, 0.4);
+  --color-accent-badge-bg: #9333ea;
+  --color-accent-badge-text: #ffffff;
+}
+
+:root[data-accent="rose"] {
+  --color-accent: #e11d48;
+  --color-accent-hover: #be123c;
+  --color-accent-text: #fb7185;
+  --color-accent-subtle: rgba(244, 63, 94, 0.14);
+  --color-accent-border: rgba(244, 63, 94, 0.4);
+  --color-accent-badge-bg: #e11d48;
+  --color-accent-badge-text: #ffffff;
 }
 
 /*

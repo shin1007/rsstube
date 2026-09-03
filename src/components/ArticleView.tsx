@@ -219,22 +219,31 @@ export function ArticleView({
 
             {/* AI要約カード。 */}
             {a.summaries?.bullets?.length ? (
-              <section className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-3">
+              <section className="mt-4 rounded-lg border border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)] p-3.5 shadow-sm">
                 <div className="mb-2 flex items-center gap-2">
-                  <span className="text-xs font-semibold text-zinc-400">AI要約</span>
+                  <span
+                    className="size-2 rounded-full shadow-sm"
+                    style={{ backgroundColor: 'var(--color-accent)' }}
+                  />
+                  <span className="text-xs font-semibold text-[var(--color-accent-text)]">
+                    AI要約
+                  </span>
                 </div>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {a.summaries.bullets.map((b, i) => (
-                    <li key={i} className="text-sm leading-relaxed text-zinc-300">
+                    <li key={i} className="text-sm leading-relaxed text-zinc-200">
                       ・{b}
                     </li>
                   ))}
                 </ul>
                 {a.summaries.tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
                     {a.summaries.tags.map((t) => (
-                      <span key={t} className="rounded bg-zinc-800 px-1.5 py-0.5 text-[14px] text-zinc-400">
-                        {t}
+                      <span
+                        key={t}
+                        className="rounded border border-[var(--color-accent-border)] bg-zinc-900/80 px-2 py-0.5 text-[14px] text-[var(--color-accent-text)]"
+                      >
+                        #{t}
                       </span>
                     ))}
                   </div>

@@ -56,9 +56,9 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       */}
       <body className="h-dvh overflow-hidden flex flex-col bg-zinc-950 text-zinc-100">
         {/*
-          文字の大きさ（設定で選んだ倍率）を、**描く前に**当てる。
+          文字の大きさ（設定で選んだ倍率）およびアクセントカラーを、**描く前に**当てる。
 
-          React の中でやると、一瞬だけ既定の大きさで出てから切り替わる
+          React の中でやると、一瞬だけ既定の大きさや色で出てから切り替わる
           ——毎回1回ちらつくのは、設定そのものより気になる。端末ごとの値なので
           サーバーは知りようがなく、ここで読むしかない。
           localStorage が使えない状況（プライベートウィンドウ等）では
@@ -67,9 +67,12 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{var v=localStorage.getItem('rsstube:text-scale');" +
-              "if(v==='0.9'||v==='1'||v==='1.15')" +
-              "document.documentElement.style.setProperty('--text-scale',v)}catch(e){}",
+              "try{" +
+              "var s=localStorage.getItem('rsstube:text-scale');" +
+              "if(s==='0.9'||s==='1'||s==='1.15')document.documentElement.style.setProperty('--text-scale',s);" +
+              "var c=localStorage.getItem('rsstube:theme-color');" +
+              "if(c)document.documentElement.setAttribute('data-accent',c);" +
+              "}catch(e){}",
           }}
         />
 

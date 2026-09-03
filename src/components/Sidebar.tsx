@@ -91,10 +91,10 @@ export function SidebarContent({
               key={v}
               href={link({ view: v })}
               onClick={onNavigate}
-              className={`block rounded px-2 py-1.5 text-sm ${
+              className={`block rounded px-2 py-1.5 text-sm transition ${
                 active && view === v && !folderId && !feedId
-                  ? "bg-zinc-800 text-zinc-100"
-                  : "text-zinc-400 hover:bg-zinc-900"
+                  ? "bg-[var(--color-accent-subtle)] text-zinc-100 font-medium border-l-2 border-[var(--color-accent)]"
+                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
               }`}
             >
               {VIEW_LABELS[v]}
@@ -243,8 +243,10 @@ function FeedLink({
       href={href}
       onClick={onClick}
       title={feed.last_error ?? undefined}
-      className={`flex items-center justify-between rounded px-2 py-1 text-sm ${
-        active ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"
+      className={`flex items-center justify-between rounded px-2 py-1 text-sm transition ${
+        active
+          ? "bg-[var(--color-accent-subtle)] text-zinc-100 font-medium border-l-2 border-[var(--color-accent)]"
+          : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
       }`}
     >
       <span className="truncate">
