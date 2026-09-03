@@ -293,11 +293,13 @@ export function ArticleView({
                 古い記事は HTML を持たないので、そのときは従来どおりテキストを出す。 */}
             {a.content_html ? (
               <div
-                className="prose-rich mt-5 text-[19px] text-zinc-300"
+                // 実寸は .prose-rich が持つ（globals.css の --text-body）。
+                // ここに書くと「文字の大きさ」の設定が本文にだけ効かなくなる。
+                className="prose-rich mt-5 text-zinc-300"
                 dangerouslySetInnerHTML={{ __html: a.content_html }}
               />
             ) : (
-              <div className="prose-article mt-5 text-[19px] text-zinc-300">
+              <div className="prose-article mt-5 text-zinc-300">
                 {a.content_text ?? ''}
               </div>
             )}

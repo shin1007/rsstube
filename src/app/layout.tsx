@@ -56,6 +56,24 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       */}
       <body className="h-dvh overflow-hidden flex flex-col bg-zinc-950 text-zinc-100">
         {/*
+          文字の大きさ（設定で選んだ倍率）を、**描く前に**当てる。
+
+          React の中でやると、一瞬だけ既定の大きさで出てから切り替わる
+          ——毎回1回ちらつくのは、設定そのものより気になる。端末ごとの値なので
+          サーバーは知りようがなく、ここで読むしかない。
+          localStorage が使えない状況（プライベートウィンドウ等）では
+          触れると例外が出るので、丸ごと try で囲む。
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var v=localStorage.getItem('rsstube:text-scale');" +
+              "if(v==='0.9'||v==='1'||v==='1.15')" +
+              "document.documentElement.style.setProperty('--text-scale',v)}catch(e){}",
+          }}
+        />
+
+        {/*
           下部プレイヤーは**ここ**に置く。
 
           聴くページの中に置いていたので、一覧へ戻った時点で消えて音も止まっていた。
