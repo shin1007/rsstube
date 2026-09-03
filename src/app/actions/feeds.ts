@@ -89,6 +89,27 @@ async function renameFolderImpl(id: string, formData: FormData) {
   revalidatePath('/');
 }
 
+/**
+ * フォルダの重み（0036）。毎朝ダイジェストの選抜で重要度に掛ける割合(%)。
+ *
+ * 重要度は全ユーザー共通で、基準も読み手を見ていない一般的なニュース価値でしかない。
+ * 「自分にとって重要か」はここで足す。素の点数は共通のまま、順位だけが人ごとに変わる。
+ */
+export async function setFolderWeight(id: string, weight: number) {
+  return attempt(() => setFolderWeightImpl(id, weight));
+}
+
+async function setFolderWeightImpl(id: string, weight: number) {
+  // 画面の選択肢の外から来た値は入れない。DB 側の check と同じ範囲で丸める。
+  const value = Math.max(0, Math.min(200, Math.round(Number(weight) || 0)));
+
+  const { supabase } = await client();
+  const { error } = await supabase.from('folders').update({ weight: value }).eq('id', id);
+  if (error) throw error;
+
+  revalidatePath('/settings');
+}
+
 /** フォルダだけ消す。中のフィードは feeds.folder_id が null になって未分類に残る。 */
 export async function deleteFolder(id: string) {
   return attempt(() => deleteFolderImpl(id));
