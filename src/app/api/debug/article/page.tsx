@@ -33,16 +33,14 @@ const dummyArticle = {
 
 export default function DebugArticlePage() {
   return (
-    <div className="h-dvh flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        <ArticleView
-          article={dummyArticle}
-          backHref="/api/debug/article"
-          prevHref="/api/debug/article?prev=1"
-          nextHref="/api/debug/article?next=1"
-          remaining={5}
-        />
-      </div>
+    <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full overflow-hidden">
+      <ArticleView
+        article={dummyArticle}
+        backHref="/api/debug/article"
+        prevHref="/api/debug/article?prev=1"
+        nextHref="/api/debug/article?next=1"
+        remaining={5}
+      />
     </div>
   );
 }

@@ -86,7 +86,7 @@ export function ArticleNav({
    * 「バーの下端」に見える（空白ではなく地の色）。nav に色を敷くのはそのため
    * ——透明のままだと、そこだけ本文の背景が覗いて「余った隙間」に見える。
    */
-  const cell = 'flex min-h-12 flex-1 items-center justify-center text-center';
+  const cell = 'flex flex-1 items-center justify-center text-center py-2.5';
 
   return (
     <nav
