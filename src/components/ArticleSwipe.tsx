@@ -156,9 +156,7 @@ export function ArticleSwipe({
   const willMove = Math.abs(dx) > THRESHOLD;
 
   return (
-    // order-1 はスマホ用。操作の帯（ArticleView の header）を下へ回すため、
-    // 本文が先に来る並びにしてある。PC では全部 order:0 で DOM の順どおり。
-    <div ref={box} className="relative order-1 flex min-h-0 flex-1 flex-col overflow-hidden md:order-none">
+    <div ref={box} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* 何が起きるかを指の下で見せる。滑るだけだと壊れて見える（一覧と同じ作り）。 */}
       {dx !== 0 && (
         <div

@@ -63,7 +63,8 @@ export async function proxy(request: NextRequest) {
   }
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/login');
-  if (!userId && !isAuthPage) {
+  const isDebugPage = request.nextUrl.pathname.startsWith('/api/debug');
+  if (!userId && !isAuthPage && !isDebugPage) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

@@ -234,7 +234,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
       </div>
 
       {/* 本文。スマホでは記事を選んだときだけ出す。 */}
-      <div className={`flex-1 min-w-0 min-h-0 ${openId ? 'block' : 'hidden md:block'}`}>
+      <div className={`flex-1 min-w-0 min-h-0 h-full ${openId ? 'flex flex-col' : 'hidden md:flex md:flex-col'}`}>
         <ArticleView
           article={selected}
           backHref={linkTo()}
