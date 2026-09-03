@@ -106,7 +106,7 @@ const LIST_SELECT = `id, title, url, published_at, excerpt, extracted_at, create
  * 内部結合にすると1件も残らない。
  */
 const ID_SELECT = `id, published_at,
-   summaries (id),
+   summaries (article_id),
    article_states!inner (is_read, is_starred, read_later)`;
 
 /**
