@@ -8,8 +8,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * 毎朝ダイジェスト。過去24時間の未読から新しいものを選び、
  * NotebookLM にそのまま入れられる Markdown を1本作っておく。
  *
- * 重要度で選んでいたのをやめた（0037）。選抜はフォルダごとの上限を守りつつ
- * 新しい順に取る。
+ * 重要度で選んでいたのをやめた（0037）。選抜は**フィードごとの上限**を守りつつ
+ * 新しい順に取る（2026-09-03。以前はフォルダごとだったが、フォルダ分けをするかどうかは
+ * 読む人の趣味で、やるかどうかで朝のまとめの中身が変わるべきではない）。
  *
  * pg_cron から1時間毎に叩かれ、各ユーザーの settings.digest_hour（日本時間）を
  * 過ぎていて、その日のぶんがまだ無ければ作る。Vercel Hobby の cron は1日1回・
@@ -41,8 +42,8 @@ const DEFAULT_COUNT = 8;
 /** ダイジェストは生活時間に紐づくので、UTC ではなく日本時間で判定する。 */
 const TIME_ZONE = 'Asia/Tokyo';
 
-/** 選抜に使う項目＋下見で出すタイトル。 */
-type Candidate = DigestCandidate & { title: string };
+/** 選抜に使う項目＋下見で出すタイトルとフィード名。 */
+type Candidate = DigestCandidate & { title: string; feedTitle: string | null };
 
 type Result = {
   userId: string;
@@ -53,8 +54,8 @@ type Result = {
   articles?: number;
   /** 通知を送れた端末数。鍵が未設定・未登録なら 0。 */
   pushed?: number;
-  /** dry=1 のときだけ。選ばれた記事の中身を目で見るため。 */
-  preview?: { title: string; folder: string | null; publishedAt: string | null }[];
+  /** dry=1 のときだけ。選ばれた記事の中身と、どこから来たかを目で見るため。 */
+  preview?: { title: string; feed: string | null; publishedAt: string | null }[];
 };
 
 export async function POST(request: Request) {
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
 
   // 購読しているユーザーだけが対象。settings 行はまだ無いこともあるので
   // subscriptions を起点にして、設定は後から突き合わせる。
-  const { data: subs, error } = await db.from('subscriptions').select('user_id, feed_id, folder_id');
+  const { data: subs, error } = await db.from('subscriptions').select('user_id, feed_id');
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
   const userIds = [...new Set((subs ?? []).map((s) => s.user_id as string))];
@@ -120,14 +121,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // フォルダは購読ごとの持ち物（0005）。偏りを避ける判定に使う。
-    const folderByFeed = new Map<string, string | null>(
-      (subs ?? [])
-        .filter((s) => s.user_id === userId)
-        .map((s) => [s.feed_id as string, (s.folder_id as string | null) ?? null]),
-    );
-
-    const candidates = await loadCandidates(db, userId, folderByFeed);
+    const candidates = await loadCandidates(db, userId);
     const picked = pickDigestArticles(candidates, count);
 
     if (picked.length === 0) {
@@ -136,14 +130,13 @@ export async function POST(request: Request) {
     }
 
     if (dry) {
-      const folderNames = await loadFolderNames(db, userId);
       results.push({
         userId,
         status: 'skipped',
         articles: picked.length,
         preview: picked.map((c) => ({
           title: c.title,
-          folder: c.folderId ? (folderNames.get(c.folderId) ?? null) : null,
+          feed: c.feedTitle,
           publishedAt: c.publishedAt,
         })),
       });
@@ -197,17 +190,14 @@ export const GET = POST;
  * 何日も前の日付で流れてくるフィードがあり、published_at だと
  * 「昨日初めて届いた記事」が窓から外れてしまうため。
  */
-async function loadCandidates(
-  db: SupabaseClient,
-  userId: string,
-  folderByFeed: Map<string, string | null>,
-): Promise<Candidate[]> {
+async function loadCandidates(db: SupabaseClient, userId: string): Promise<Candidate[]> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await db
     .from('articles')
     .select(
       `id, title, feed_id, published_at, created_at,
+       feeds!inner (title),
        article_states!inner (user_id, is_read, exported_at)`,
     )
     .eq('article_states.user_id', userId)
@@ -227,22 +217,15 @@ async function loadCandidates(
     feed_id: string;
     published_at: string | null;
     created_at: string | null;
+    feeds: { title: string } | null;
   }[]).map((r) => ({
     id: r.id,
     title: r.title,
-    folderId: folderByFeed.get(r.feed_id) ?? null,
+    feedId: r.feed_id,
+    feedTitle: r.feeds?.title ?? null,
     publishedAt: r.published_at,
     createdAt: r.created_at,
   }));
-}
-
-/** dry=1 の下見でフォルダ名を出すためだけの引き当て。 */
-async function loadFolderNames(
-  db: SupabaseClient,
-  userId: string,
-): Promise<Map<string, string>> {
-  const { data } = await db.from('folders').select('id, name').eq('user_id', userId);
-  return new Map((data ?? []).map((f) => [f.id as string, f.name as string]));
 }
 
 /**

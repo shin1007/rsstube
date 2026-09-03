@@ -5,10 +5,17 @@
  * 重要度は記事の属性ではなく読み手との関係で決まるもので、記事に1つの数値として
  * 持たせること自体が誤りだった。代わりに**新しい順**で取る。
  *
- * 新しい順だけで上から取ると、更新の速いフォルダ（官公庁の新着など）で全部が
- * 埋まる。「今日の全体像」が欲しいのが目的なので、フォルダごとに上限を設けて
- * ばらけさせ、それでも枠が余ったら上限を外して埋める。この偏り対策は重要度とは
- * 関係なく要るので、重要度をやめても残してある。
+ * ただし新しい順だけで上から取ると、更新の速いフィードで全部が埋まる。実測で
+ * 直近7日の取り込みは厚労省87件・弁護士のブログ1件と**87倍**の開きがあり、
+ * 8件の枠は上位3フィードで7割が埋まっていた。件数の偏りは点数の偏りより桁が
+ * 大きい（点数は0〜100で有界だが、件数に上限は無い）ので、**重要度をやめた
+ * あとのほうが偏り対策は要る**。
+ *
+ * 上限は**フィードごと**に掛ける（2026-09-03）。以前はフォルダごとだったが、
+ * フォルダ分けをするかどうかは読む人の趣味で、**やるかどうかで朝のまとめの
+ * 中身が変わるべきではない**。偏りが起きているのもフィード単位だった
+ * （ある日の8件のうち5件が1フィードから）。フィードは購読すれば必ずあるので、
+ * 設定を何もしなくても効く。
  *
  * DB を触らない純粋な関数にしてあるのは、ここが唯一「音声の中身」を決める場所で、
  * 実データを流さずに挙動を固定しておきたいため。
@@ -16,8 +23,8 @@
 
 export type DigestCandidate = {
   id: string;
-  /** 購読のフォルダ。未分類は null。 */
-  folderId: string | null;
+  /** どのフィードから来たか。上限をここで数える。 */
+  feedId: string;
   publishedAt: string | null;
   /** 取り込んだ時刻。publishedAt が無い・当てにならないときの控え。 */
   createdAt?: string | null;
@@ -38,22 +45,19 @@ export function pickDigestArticles<T extends DigestCandidate>(
   // 変わるたびに選ばれる記事が変わり、同じ日を作り直しても再現しない。
   const ranked = [...candidates].sort((a, b) => time(b) - time(a) || cmp(b.id, a.id));
 
-  // 1フォルダで全体の1/3を超えないようにする。件数が少ないときは
-  // ceil で最低1件は通るので、フォルダが1つしか無くても空にはならない。
-  const perFolderMax = Math.max(1, Math.ceil(count / 3));
-  const perFolder = new Map<string, number>();
+  const perFeedMax = feedCap(ranked, count);
+  const perFeed = new Map<string, number>();
   const picked: T[] = [];
   const overflow: T[] = [];
 
   for (const c of ranked) {
     if (picked.length >= count) break;
-    const key = c.folderId ?? '';
-    const used = perFolder.get(key) ?? 0;
-    if (used >= perFolderMax) {
+    const used = perFeed.get(c.feedId) ?? 0;
+    if (used >= perFeedMax) {
       overflow.push(c);
       continue;
     }
-    perFolder.set(key, used + 1);
+    perFeed.set(c.feedId, used + 1);
     picked.push(c);
   }
 
@@ -66,6 +70,24 @@ export function pickDigestArticles<T extends DigestCandidate>(
 
   // 最後にもう一度新しい順へ。埋め戻しで順番が崩れているため。
   return picked.sort((a, b) => time(b) - time(a) || cmp(b.id, a.id));
+}
+
+/**
+ * 1フィードから取ってよい上限。
+ *
+ * **その日に記事があるフィードの数から決める。** 固定の割合（「全体の1/3まで」
+ * など）にすると、購読が増えても減っても同じ数のままで、実態と合わなくなる:
+ * フィードが2本しか動かなかった日は上限が厳しすぎて枠が埋まらず、20本動いた
+ * 日は緩すぎて偏りを止められない。
+ *
+ * 枠を均等に割った数にすれば、どちらも自分で追いつく。動いたフィードが1本
+ * だけの日は上限が枠と同じになり（＝実質上限なし）、その1本で埋まる——
+ * 他に選べるものが無いので、それが正しい。
+ */
+function feedCap(candidates: DigestCandidate[], count: number): number {
+  const feeds = new Set(candidates.map((c) => c.feedId)).size;
+  if (feeds === 0) return count;
+  return Math.max(1, Math.ceil(count / feeds));
 }
 
 /**
