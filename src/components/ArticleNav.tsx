@@ -89,10 +89,8 @@ export function ArticleNav({
   const cell = 'flex min-h-12 flex-1 items-center justify-center text-center';
 
   return (
-    // order-3 はスマホ用。上から 本文 → 操作の帯 → ここ の順にする。
     <nav
-      style={{ paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
-      className="relative order-3 flex shrink-0 items-stretch border-t border-zinc-800 bg-zinc-900/90 text-xs md:order-none md:bg-transparent md:pb-0"
+      className="relative order-3 flex shrink-0 items-stretch border-t border-zinc-800 bg-zinc-900/90 text-xs md:order-none md:bg-transparent"
     >
       {/*
         端に来たことを伝える。押しても何も起きないのと、端であることは別物。
@@ -119,7 +117,8 @@ export function ArticleNav({
       {prevHref ? (
         <Link
           href={prevHref}
-          className={`${cell} text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 active:bg-zinc-800`}
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          className={`${cell} text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 active:bg-zinc-800 md:!pb-0`}
         >
           ← 前の記事
         </Link>
@@ -127,7 +126,8 @@ export function ArticleNav({
         <button
           type="button"
           onClick={() => setNotice({ id: articleId, text: 'これが最初の記事です' })}
-          className={`${cell} text-zinc-700`}
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          className={`${cell} text-zinc-700 md:!pb-0`}
         >
           ← 前の記事
         </button>
@@ -138,7 +138,8 @@ export function ArticleNav({
       {nextHref ? (
         <Link
           href={nextHref}
-          className={`${cell} text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 active:bg-zinc-800`}
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          className={`${cell} text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 active:bg-zinc-800 md:!pb-0`}
         >
           次の記事 →{rest}
         </Link>
@@ -146,7 +147,8 @@ export function ArticleNav({
         <button
           type="button"
           onClick={() => setNotice({ id: articleId, text: '次の記事はありません（これが最後です）' })}
-          className={`${cell} text-zinc-700`}
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          className={`${cell} text-zinc-700 md:!pb-0`}
         >
           次の記事 →
         </button>
