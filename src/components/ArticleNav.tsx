@@ -86,12 +86,14 @@ export function ArticleNav({
    * 「バーの下端」に見える（空白ではなく地の色）。nav に色を敷くのはそのため
    * ——透明のままだと、そこだけ本文の背景が覗いて「余った隙間」に見える。
    */
-  const cell = 'flex min-h-11 flex-1 items-center justify-center text-center';
-  const pad = { paddingBottom: 'env(safe-area-inset-bottom)' };
+  const cell = 'flex min-h-12 flex-1 items-center justify-center text-center';
 
   return (
     // order-3 はスマホ用。上から 本文 → 操作の帯 → ここ の順にする。
-    <nav className="relative order-3 flex shrink-0 items-stretch border-t border-zinc-800 bg-zinc-900/50 text-xs md:order-none md:bg-transparent">
+    <nav
+      style={{ paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
+      className="relative order-3 flex shrink-0 items-stretch border-t border-zinc-800 bg-zinc-900/90 text-xs md:order-none md:bg-transparent md:pb-0"
+    >
       {/*
         端に来たことを伝える。押しても何も起きないのと、端であることは別物。
 
@@ -117,15 +119,13 @@ export function ArticleNav({
       {prevHref ? (
         <Link
           href={prevHref}
-          style={pad}
-          className={`${cell} text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100`}
+          className={`${cell} text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 active:bg-zinc-800`}
         >
           ← 前の記事
         </Link>
       ) : (
         <button
           type="button"
-          style={pad}
           onClick={() => setNotice({ id: articleId, text: 'これが最初の記事です' })}
           className={`${cell} text-zinc-700`}
         >
@@ -138,15 +138,13 @@ export function ArticleNav({
       {nextHref ? (
         <Link
           href={nextHref}
-          style={pad}
-          className={`${cell} text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100`}
+          className={`${cell} text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 active:bg-zinc-800`}
         >
           次の記事 →{rest}
         </Link>
       ) : (
         <button
           type="button"
-          style={pad}
           onClick={() => setNotice({ id: articleId, text: '次の記事はありません（これが最後です）' })}
           className={`${cell} text-zinc-700`}
         >
