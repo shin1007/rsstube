@@ -1,6 +1,5 @@
 import { AppShell } from '@/components/AppShell';
 import { LIBRARY_PAGE_SIZE, listTags, searchLibrary } from '@/lib/library';
-import { importanceTier, importanceTitle } from '@/lib/importance';
 import Link from 'next/link';
 
 /**
@@ -171,16 +170,6 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
                     {a.title}
                   </Link>
                 </h2>
-                {a.summary && (
-                  <span
-                    title={importanceTitle(a.summary.importance)}
-                    className={`shrink-0 rounded px-1.5 py-0.5 text-[13px] ${
-                      importanceTier(a.summary.importance).className
-                    }`}
-                  >
-                    {a.summary.importance}
-                  </span>
-                )}
               </div>
 
               <p className="mt-1 text-xs text-zinc-600">

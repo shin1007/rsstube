@@ -27,7 +27,6 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   const view = (VIEWS as string[]).includes(String(params.view))
     ? (params.view as View)
     : 'unread';
-  const sort = params.sort === 'important' ? 'important' : 'new';
   // URL から来る id は形を見てから使う。形が違うだけでページ全体が500に
   // なっていた（lib/types.ts の asId）。
   const folderId = asId(params.folder);
@@ -62,13 +61,13 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
     await Promise.all([
       supabase.from('folders').select('id, name').order('sort_order').order('name'),
       listSubscribedFeeds(),
-      searchable(() => listArticles({ view, folderId, feedId, sort, search }), []),
+      searchable(() => listArticles({ view, folderId, feedId, search }), []),
       unreadCounts(),
       unplayedMediaCount(),
       selectedId ? getArticle(selectedId) : Promise.resolve(null),
       // 「あと何件」を出すためだけの数。**並べて投げること**——直列にすると
       // そのぶんが画面遷移の待ち時間にまるごと乗る（docs/traps/perf.md）。
-      searchable(() => countArticles({ view, folderId, feedId, sort, search }), null),
+      searchable(() => countArticles({ view, folderId, feedId, search }), null),
     ] as const);
 
   /**
@@ -110,7 +109,6 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   const linkTo = (articleId?: string) => {
     const sp = new URLSearchParams();
     if (view !== 'unread') sp.set('view', view);
-    if (sort !== 'new') sp.set('sort', sort);
     if (folderId) sp.set('folder', folderId);
     if (feedId) sp.set('feed', feedId);
     if (search) sp.set('q', search);
@@ -166,12 +164,11 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
    * 以前は「未読ビューでは引いても空振り」として丸ごと飛ばしていた。2 が
    * 起きているときはそのとおりだが、**その結果が「前後のボタンが消える」だった**
    * ——一覧の1本目を開いた瞬間から、スマホでは次の記事へ行けなくなっていた。
-   * id で見つからなければ日付で「居たはずの場所」を出す（新着順のときだけ。
-   * 重要度順の位置は importance で決まるので、日付では出せない）。
+   * id で見つからなければ日付で「居たはずの場所」を出す。
    */
   if (previewId && (index === -1 || atPageEnd) && !searchFailed) {
     const [slots] = await searchable(
-      () => listArticleIds({ view, folderId, feedId, sort, search }),
+      () => listArticleIds({ view, folderId, feedId, search }),
       [] as Awaited<ReturnType<typeof listArticleIds>>,
     );
     const at = slots.findIndex((s) => s.id === previewId);
@@ -180,7 +177,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
       prevId = at > 0 ? slots[at - 1].id : undefined;
       nextId = at < slots.length - 1 ? slots[at + 1].id : undefined;
       if (total !== null) remaining = Math.max(0, total - 1 - at);
-    } else if (sort === 'new' && selected?.published_at) {
+    } else if (selected?.published_at) {
       // 並びは新しい順。自分より古い最初の記事が「次」、その1つ手前が「前」。
       const when = selected.published_at;
       const older = slots.findIndex((s) => !s.published_at || s.published_at < when);
@@ -209,7 +206,6 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
         view={view}
         folderId={folderId}
         feedId={feedId}
-        sort={sort}
       />
 
       {/* 記事リスト。スマホでは記事を選んでいる間は隠す。 */}
@@ -221,7 +217,6 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
         <ArticleList
           articles={articles}
           view={view}
-          sort={sort}
           selectedId={openId}
           search={search}
           searchFailed={searchFailed}

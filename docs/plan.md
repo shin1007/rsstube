@@ -73,7 +73,7 @@ pg_cron(1時間毎) → /api/cron/poll
 worker: /api/jobs/run (pg_cron 5分毎)
   extract   → 記事URLをfetch → Readability で本文抽出 → articles.content_text
               失敗時は RSS の description にフォールバック（フラグを立てて表示で区別）
-  summarize → Gemini Flash-Lite で「3行要点 / タグ / 重要度スコア(0-100)」を生成
+  summarize → Gemini Flash-Lite で「3行要点 / タグ」を生成
               1リクエストに複数記事をまとめて投げ、無料枠のRPDを節約
 ```
 
@@ -151,14 +151,13 @@ mp4 は生成しない（本人選択）。台本生成と同時に**スライ�
 
 - **PC**: 三ペイン（フォルダ / 記事リスト / 本文）。`j`/`k` 移動、`m` 既読、`s` スター、`v` 元記事、`a` 音声化、`Shift+A` 全既読
 - **スマホ**: 単カラム＋ボトムタブ（読む / 聴く / 保存 / 設定）。左右スワイプで既読・あとで
-- リストの各行に AI の3行要点と重要度スコアを出し、開かずに判断できるようにする
-- 重要度スコアでのソート / 「重要なものだけ」フィルタ
+- リストの各行に AI の3行要点を出し、開かずに判断できるようにする
 
 ### 6. 毎朝ダイジェスト
 
 ```
 Vercel Cron (毎日6時台) → /api/cron/digest
-  → 過去24hの未読から重要度上位N件を選抜（フォルダごとの重み × フォルダごとの上限）
+  → 過去24hの未読から新しい順にN件を選抜（フォルダごとの上限で偏りを防ぐ）
   → まとめ Markdown を生成し、Google Drive に「2026-08-11 ダイジェスト」として保存
   → Web Push で通知（開くと NotebookLM 用の指示文がコピーできる状態）
   → 朝、NotebookLM でそのファイルを選んで音声概要を生成 → 通勤中に聴く
@@ -182,7 +181,7 @@ Vercel Cron (毎日6時台) → /api/cron/digest
 | `feeds` | id, folder_id, url, site_url, title, etag, last_modified, last_fetched_at, error_count |
 | `articles` | id, feed_id, guid, url, url_hash(unique), title, author, published_at, excerpt, content_text, content_ok |
 | `article_states` | article_id, is_read, is_starred, read_later, read_at |
-| `summaries` | article_id, bullets(jsonb), tags(text[]), importance(int), model, created_at |
+| `summaries` | article_id, bullets(jsonb), tags(text[]), title_ja, model, created_at |
 | `exports` | id, kind('manual'\|'digest'), title, markdown, drive_file_id, drive_url, article_ids(uuid[]), created_at |
 | `digests` | id, date, export_id, media_id(nullable), article_ids(uuid[]) |
 | `jobs` | id, type, payload(jsonb), status, attempts, next_run_at, last_error |
@@ -206,8 +205,8 @@ Vercel Cron (毎日6時台) → /api/cron/digest
 
 **P1 — AI要約とトリアージ**
 - `jobs` キュー + ワーカールート、Gemini クライアントのラッパ（リトライ/バックオフ/使用量記録）
-- 本文抽出（Readability）、要約＋重要度スコア生成、リスト行への要点表示
-- キーボードショートカット、スワイプ操作、重要度ソート/フィルタ
+- 本文抽出（Readability）、要約生成、リスト行への要点表示
+- キーボードショートカット、スワイプ操作
 
 **P2 — NotebookLM 連携（ここまでで当初の目的は満たせる）**
 - まとめ Markdown 生成、クリップボードコピー、`.md` ダウンロード
@@ -251,7 +250,7 @@ RSSTube/
     feeds/parse.ts               rss-parser ラッパ、条件付きGET
     feeds/extract.ts             Readability 本文抽出
     ai/gemini.ts                 Gemini クライアント（リトライ・使用量記録）
-    ai/summarize.ts              要約＋重要度スコア（複数記事バッチ）
+    ai/summarize.ts              要約（複数記事バッチ）
     export/markdown.ts           記事群 → NotebookLM 用 Markdown
     export/drive.ts              Google Docs として Drive に書き出し
     export/prompt.ts             音声概要カスタマイズ用プロンプト生成

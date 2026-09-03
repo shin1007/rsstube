@@ -20,7 +20,6 @@ export function Sidebar({
   view,
   folderId,
   feedId,
-  sort,
   unplayed = 0,
   active = true,
 }: {
@@ -31,7 +30,6 @@ export function Sidebar({
   folderId?: string;
   feedId?: string;
   /** 並び順は絞り込みを変えても保つ。フォルダを移るたびに戻ると使いにくい。 */
-  sort?: string;
   /**
    * まだ聴いていない音声の数。0 ならバッジを出さない。
    *
@@ -82,7 +80,6 @@ export function Sidebar({
   const link = (params: Record<string, string | undefined>) => {
     const sp = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v) sp.set(k, v);
-    if (sort && sort !== "new") sp.set("sort", sort);
     const qs = sp.toString();
     return qs ? `/?${qs}` : "/";
   };

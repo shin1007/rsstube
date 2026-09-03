@@ -44,7 +44,7 @@ type RawRow = {
   extracted_at: string | null;
   created_at: string | null;
   feeds: { id: string; title: string } | null;
-  summaries: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
+  summaries: { bullets: string[]; tags: string[]; title_ja: string | null } | null;
   article_states: {
     is_read: boolean;
     is_starred: boolean;
@@ -69,7 +69,7 @@ export async function searchLibrary(
     .select(
       `id, title, url, author, published_at, excerpt, content_ok, extracted_at, created_at,
        feeds!inner (id, title),
-       ${summaryJoin} (bullets, tags, importance, title_ja),
+       ${summaryJoin} (bullets, tags, title_ja),
        article_states!inner (is_read, is_starred, read_later, exported_at)`,
     )
     // 状態行があるもの＝自分が購読しているフィードの記事（0005 以降の切り出し方）。

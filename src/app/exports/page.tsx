@@ -63,7 +63,7 @@ export default async function ExportsPage() {
 
         <p className="text-xs text-zinc-500">
           毎朝のダイジェストは設定した時刻に自動で作られます（設定 → 生成時刻）。
-          前日24時間ぶんの未読から、重要度の高いものをフォルダが偏らないように選びます。
+          前日24時間ぶんの未読から、新しいものをフォルダが偏らないように選びます。
         </p>
 
           <ExportList exports={exports} />

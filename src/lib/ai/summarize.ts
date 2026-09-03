@@ -2,11 +2,16 @@ import { generateJson, SUMMARY_MODEL, type Usage } from './gemini';
 import { languageName } from '@/lib/language';
 
 /**
- * 記事の要約と重要度スコア。
+ * 記事の要約。
  *
  * 一覧を開いた瞬間に「読むべきか」を判断できることが目的なので、
  * 要点は短く、記事を開かなくても意味が通る文にさせる。
- * 重要度スコアはトリアージのソートと、毎朝ダイジェストの選抜に使う。
+ *
+ * **重要度スコアは付けさせない**（0037）。0〜100 を出させて一覧の並べ替えと
+ * ダイジェストの選抜に使っていたが、重要度は記事の属性ではない——同じ記事でも
+ * 職業や立場が違えば重さは違う。読み手との関係で決まるものを記事の側に1つの
+ * 数値として持たせたのが誤りだった。判断は読む人に返し、こちらは
+ * 「何が書いてあるか」だけを渡す。
  *
  * 無料枠のRPD(1日あたりリクエスト数)を節約するため、複数記事を
  * 1リクエストにまとめて投げる。
@@ -30,7 +35,6 @@ export type SummaryOutput = {
   title_ja: string;
   bullets: string[];
   tags: string[];
-  importance: number;
 };
 
 /** 1リクエストにまとめる記事数。多すぎると出力が雑になるので控えめに。 */
@@ -51,9 +55,8 @@ const SCHEMA = {
           title_ja: { type: 'string' },
           bullets: { type: 'array', items: { type: 'string' } },
           tags: { type: 'array', items: { type: 'string' } },
-          importance: { type: 'integer' },
         },
-        required: ['id', 'title_ja', 'bullets', 'tags', 'importance'],
+        required: ['id', 'title_ja', 'bullets', 'tags'],
       },
     },
   },
@@ -100,10 +103,10 @@ function buildPrompt(articles: SummaryInput[], language: string): string {
     '- bullets: 要点を2〜3個。各40〜80字程度。記事を開かなくても内容がわかる具体的な文にすること。',
     '  「〜について述べている」のようなメタな説明ではなく、何が起きたか・何が主張されているかを直接書く。',
     '- tags: 内容を表す短いタグを1〜4個。一般的な語を使い、記事ごとに揺れないようにする。',
-    '- importance: 0〜100の重要度。以下を高くする基準とする。',
-    '    新規性がある / 影響範囲が広い / 一次情報である / 実務や判断に使える',
-    '  逆に、続報のない小ネタ、宣伝、既出の焼き直しは低くする。',
-    '  50を平均とし、機械的に高得点を付けないこと。',
+    // **重要度・おすすめ度のたぐいを足さないこと。** 読み手が誰かを知らないまま
+    // 出した点数は、読む人の判断を助けるより先に置き換えてしまう（0037）。
+    '記事の価値を評価したり、重要度・おすすめ度のような点数を付けたりしないこと。',
+    '書くのは「何が書いてあるか」だけにする。',
     '',
     // **「本文が取れなかった」ことを書かせない。**
     // 以前は「抜粋のみ」と注記だけ渡していたので、モデルが素材の乏しさのほうを
@@ -146,7 +149,6 @@ export async function summarizeBatch(
       title_ja: String(s.title_ja ?? '').trim().slice(0, 120),
       bullets: (s.bullets ?? []).slice(0, 4).map((b) => String(b).trim()).filter(Boolean),
       tags: (s.tags ?? []).slice(0, 6).map((t) => String(t).trim()).filter(Boolean),
-      importance: Math.max(0, Math.min(100, Math.round(Number(s.importance) || 50))),
     }));
 
   return { results, model: SUMMARY_MODEL, usage };

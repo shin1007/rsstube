@@ -191,7 +191,6 @@ const MAX_OFFSET = 3000;
  */
 export async function loadMoreArticles(input: {
   view: string;
-  sort: string;
   folderId?: string;
   feedId?: string;
   search?: string;
@@ -202,7 +201,6 @@ export async function loadMoreArticles(input: {
 
 async function loadMoreArticlesImpl(input: {
   view: string;
-  sort: string;
   folderId?: string;
   feedId?: string;
   search?: string;
@@ -215,7 +213,6 @@ async function loadMoreArticlesImpl(input: {
 
   const articles = await listArticles({
     view: (VIEWS as string[]).includes(input.view) ? (input.view as View) : 'unread',
-    sort: input.sort === 'important' ? 'important' : 'new',
     folderId: input.folderId || undefined,
     feedId: input.feedId || undefined,
     search: input.search?.trim() || undefined,

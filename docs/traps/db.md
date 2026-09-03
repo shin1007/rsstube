@@ -22,7 +22,9 @@ Supabase · PostgREST · actions/ · 追加した依存 を触るときに読む
 - **PostgREST の `.order(col, { referencedTable: X })` は親の行順を変えない。**
   埋め込んだ X 側の並びを変えるだけ。`articles` を主に `summaries` を埋め込んで
   重要度順にしていたつもりが、実際は published_at 順のままだった（`0007` で発覚）。
-  並べ替えは必ず親テーブルの列で行うこと。`articles.importance` はそのための複製。
+  並べ替えは必ず親テーブルの列で行うこと。当時は `articles.importance` という複製を
+  置いて凌いだが、重要度ごと廃止したので複製も消えている（`0037`）。
+  **罠自体は残る**——別の列で同じことをやれば同じように黙って無視される。
 
 - **ローカルで動いても Vercel で落ちる依存がある。** `jsdom@30` が引く
   html-encoding-sniffer が CJS のまま ESM を require していて、dev では通るが

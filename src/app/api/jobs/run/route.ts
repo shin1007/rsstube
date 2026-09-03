@@ -334,7 +334,6 @@ async function runSummarizeJobs(db: SupabaseClient, deadline: number): Promise<n
             title_ja: r.title_ja?.trim() || null,
             bullets: r.bullets,
             tags: r.tags,
-            importance: r.importance,
             model,
           })),
           { onConflict: 'article_id' },

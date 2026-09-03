@@ -33,8 +33,6 @@ import {
 } from '@/lib/settings/defaults';
 import { getDriveStatus, saveGoogleCredentials } from '@/app/actions/drive';
 import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
-import { FolderWeightSelect } from '@/components/FolderWeightSelect';
-import { DEFAULT_FOLDER_WEIGHT } from '@/lib/importance';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { headers } from 'next/headers';
@@ -54,7 +52,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
     await Promise.all([
       listSubscribedFeeds(),
       // 並び順はサイドバーと揃える（sort_order → 名前）。
-      supabase.from('folders').select('id, name, weight').order('sort_order').order('name'),
+      supabase.from('folders').select('id, name').order('sort_order').order('name'),
       supabase.from('settings').select('*').maybeSingle(),
       recentUsage(),
       pipelineStatus(),
@@ -472,12 +470,6 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             並び順はサイドバーにそのまま反映されます。名前を書き換えて Enter で保存。
             フォルダを削除しても中のフィードは残り、未分類に移ります。
           </p>
-          <p className="mb-2 text-xs text-zinc-500">
-            右の選択は<strong className="text-zinc-400">毎朝ダイジェストでの重み</strong>です。
-            AI の重要度は全ユーザー共通で「一般的なニュース価値」しか見ていないので、
-            自分にとっての軽重はここで足します。「出さない」にしたフォルダは
-            ダイジェストに載りません。一覧の並び順には効きません。
-          </p>
 
           <ul className="mb-2 divide-y divide-zinc-900 rounded border border-zinc-800">
             {(folders ?? []).map((f: FolderRow, i: number) => (
@@ -491,7 +483,6 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
                     className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-zinc-800 focus:border-zinc-700 focus:bg-zinc-900 focus:outline-none"
                   />
                 </ActionForm>
-                <FolderWeightSelect id={f.id} weight={f.weight ?? DEFAULT_FOLDER_WEIGHT} />
                 <ActionForm action={moveFolder.bind(null, f.id, 'up')}>
                   <button
                     type="submit"

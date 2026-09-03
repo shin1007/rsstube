@@ -1,12 +1,15 @@
-import { effectiveScore, pickDigestArticles, type DigestCandidate } from '@/lib/digest/select';
+import { pickDigestArticles, type DigestCandidate } from '@/lib/digest/select';
 import { createExportFor } from '@/lib/export/create';
 import { sendToUser } from '@/lib/push/send';
 import { authorizeCron, createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * 毎朝ダイジェスト。過去24時間の未読から重要度上位を選び、
+ * 毎朝ダイジェスト。過去24時間の未読から新しいものを選び、
  * NotebookLM にそのまま入れられる Markdown を1本作っておく。
+ *
+ * 重要度で選んでいたのをやめた（0037）。選抜はフォルダごとの上限を守りつつ
+ * 新しい順に取る。
  *
  * pg_cron から1時間毎に叩かれ、各ユーザーの settings.digest_hour（日本時間）を
  * 過ぎていて、その日のぶんがまだ無ければ作る。Vercel Hobby の cron は1日1回・
@@ -29,7 +32,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-/** 選抜の母数。ここから重要度順に digest_count 件へ絞る。 */
+/** 選抜の母数。ここから新しい順に digest_count 件へ絞る。 */
 const CANDIDATE_LIMIT = 200;
 /** 生成時刻の既定値（settings 行がまだ無いユーザー）。 */
 const DEFAULT_HOUR = 6;
@@ -41,9 +44,6 @@ const TIME_ZONE = 'Asia/Tokyo';
 /** 選抜に使う項目＋下見で出すタイトル。 */
 type Candidate = DigestCandidate & { title: string };
 
-/** フォルダに入っていない記事の重み。列の default と揃えること（0036）。 */
-const DEFAULT_WEIGHT = 100;
-
 type Result = {
   userId: string;
   status: 'created' | 'skipped';
@@ -53,16 +53,8 @@ type Result = {
   articles?: number;
   /** 通知を送れた端末数。鍵が未設定・未登録なら 0。 */
   pushed?: number;
-  /** dry=1 のときだけ。選ばれた記事の中身と、選ばれた理由を目で見るため。 */
-  preview?: {
-    title: string;
-    importance: number | null;
-    folder: string | null;
-    /** フォルダの重み(%)。未分類は 100。 */
-    weight: number;
-    /** 実際に順位を決めた点数（重要度 × 重み）。 */
-    score: number;
-  }[];
+  /** dry=1 のときだけ。選ばれた記事の中身を目で見るため。 */
+  preview?: { title: string; folder: string | null; publishedAt: string | null }[];
 };
 
 export async function POST(request: Request) {
@@ -128,17 +120,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // フォルダは購読ごとの持ち物（0005）。偏りを避ける判定と、重み付けに使う。
+    // フォルダは購読ごとの持ち物（0005）。偏りを避ける判定に使う。
     const folderByFeed = new Map<string, string | null>(
       (subs ?? [])
         .filter((s) => s.user_id === userId)
         .map((s) => [s.feed_id as string, (s.folder_id as string | null) ?? null]),
     );
 
-    // 重要度は全ユーザー共通なので、人ごとの好みはここで掛ける（0036）。
-    const foldersById = await loadFolders(db, userId);
-
-    const candidates = await loadCandidates(db, userId, folderByFeed, foldersById);
+    const candidates = await loadCandidates(db, userId, folderByFeed);
     const picked = pickDigestArticles(candidates, count);
 
     if (picked.length === 0) {
@@ -147,16 +136,15 @@ export async function POST(request: Request) {
     }
 
     if (dry) {
+      const folderNames = await loadFolderNames(db, userId);
       results.push({
         userId,
         status: 'skipped',
         articles: picked.length,
         preview: picked.map((c) => ({
           title: c.title,
-          importance: c.importance,
-          folder: c.folderId ? (foldersById.get(c.folderId)?.name ?? null) : null,
-          weight: c.weight ?? DEFAULT_WEIGHT,
-          score: Math.round(effectiveScore(c)),
+          folder: c.folderId ? (folderNames.get(c.folderId) ?? null) : null,
+          publishedAt: c.publishedAt,
         })),
       });
       continue;
@@ -213,14 +201,13 @@ async function loadCandidates(
   db: SupabaseClient,
   userId: string,
   folderByFeed: Map<string, string | null>,
-  foldersById: Map<string, Folder>,
 ): Promise<Candidate[]> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await db
     .from('articles')
     .select(
-      `id, title, feed_id, published_at, importance,
+      `id, title, feed_id, published_at, created_at,
        article_states!inner (user_id, is_read, exported_at)`,
     )
     .eq('article_states.user_id', userId)
@@ -228,8 +215,8 @@ async function loadCandidates(
     // 手で NotebookLM に投げた記事を朝もう一度出さない。
     .is('article_states.exported_at', null)
     .gte('created_at', since)
-    // 並べ替えは埋め込み先ではなく親テーブルの列で（0007 で踏んだ罠）。
-    .order('importance', { ascending: false, nullsFirst: false })
+    // 母数を切るのは取り込んだ順で。並べ直すのは pickDigestArticles の仕事。
+    .order('created_at', { ascending: false })
     .limit(CANDIDATE_LIMIT);
 
   if (error) throw error;
@@ -239,32 +226,23 @@ async function loadCandidates(
     title: string;
     feed_id: string;
     published_at: string | null;
-    importance: number | null;
-  }[]).map((r) => {
-    const folderId = folderByFeed.get(r.feed_id) ?? null;
-    return {
-      id: r.id,
-      title: r.title,
-      importance: r.importance,
-      folderId,
-      // 未分類のフィードには重みの置き場が無いので素通し。
-      weight: folderId ? (foldersById.get(folderId)?.weight ?? DEFAULT_WEIGHT) : DEFAULT_WEIGHT,
-      publishedAt: r.published_at,
-    };
-  });
+    created_at: string | null;
+  }[]).map((r) => ({
+    id: r.id,
+    title: r.title,
+    folderId: folderByFeed.get(r.feed_id) ?? null,
+    publishedAt: r.published_at,
+    createdAt: r.created_at,
+  }));
 }
 
-type Folder = { name: string; weight: number };
-
-/** 重み付けと、dry=1 の下見のためのフォルダ引き当て。 */
-async function loadFolders(db: SupabaseClient, userId: string): Promise<Map<string, Folder>> {
-  const { data } = await db.from('folders').select('id, name, weight').eq('user_id', userId);
-  return new Map(
-    (data ?? []).map((f) => [
-      f.id as string,
-      { name: f.name as string, weight: (f.weight as number | null) ?? DEFAULT_WEIGHT },
-    ]),
-  );
+/** dry=1 の下見でフォルダ名を出すためだけの引き当て。 */
+async function loadFolderNames(
+  db: SupabaseClient,
+  userId: string,
+): Promise<Map<string, string>> {
+  const { data } = await db.from('folders').select('id, name').eq('user_id', userId);
+  return new Map((data ?? []).map((f) => [f.id as string, f.name as string]));
 }
 
 /**
