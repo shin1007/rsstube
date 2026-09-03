@@ -36,7 +36,20 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="ja" className="h-full antialiased">
+    <html lang="ja" className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{" +
+              "var s=localStorage.getItem('rsstube:text-scale');" +
+              "if(s==='0.9'||s==='1'||s==='1.15')document.documentElement.style.setProperty('--text-scale',s);" +
+              "var c=localStorage.getItem('rsstube:theme-color');" +
+              "if(c)document.documentElement.setAttribute('data-accent',c);" +
+              "}catch(e){}",
+          }}
+        />
+      </head>
       {/*
         高さは `min-h-full` ではなく `h-dvh` で**確定**させる。
 
@@ -55,26 +68,6 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         **ルート要素に overflow-y-auto を付けること**（付けないと溢れが切れる）。
       */}
       <body className="h-dvh overflow-hidden flex flex-col bg-zinc-950 text-zinc-100">
-        {/*
-          文字の大きさ（設定で選んだ倍率）およびアクセントカラーを、**描く前に**当てる。
-
-          React の中でやると、一瞬だけ既定の大きさや色で出てから切り替わる
-          ——毎回1回ちらつくのは、設定そのものより気になる。端末ごとの値なので
-          サーバーは知りようがなく、ここで読むしかない。
-          localStorage が使えない状況（プライベートウィンドウ等）では
-          触れると例外が出るので、丸ごと try で囲む。
-        */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "try{" +
-              "var s=localStorage.getItem('rsstube:text-scale');" +
-              "if(s==='0.9'||s==='1'||s==='1.15')document.documentElement.style.setProperty('--text-scale',s);" +
-              "var c=localStorage.getItem('rsstube:theme-color');" +
-              "if(c)document.documentElement.setAttribute('data-accent',c);" +
-              "}catch(e){}",
-          }}
-        />
 
         {/*
           下部プレイヤーは**ここ**に置く。

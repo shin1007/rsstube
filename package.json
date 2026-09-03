@@ -16,6 +16,7 @@
     "db:backup": "node scripts/db-backup.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "db:restore": "node scripts/db-restore.mjs",
     "samples": "node --env-file=.env.local scripts/export-samples.mjs",
     "voices": "node --env-file=.env.local scripts/try-voices.mjs"
@@ -38,6 +39,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.21.0",
