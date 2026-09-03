@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import type { View } from '@/lib/types';
 
 /**
@@ -10,21 +13,29 @@ export function BottomTabs({
   hidden,
   unplayed = 0,
 }: {
-  view: View;
+  view?: View;
   hidden: boolean;
   /** まだ聴いていない音声の数。0 ならバッジを出さない。 */
   unplayed?: number;
 }) {
+  const pathname = usePathname();
   if (hidden) return null;
 
-  const tabs: { view?: View; href: string; label: string; badge?: number }[] = [
-    { view: 'unread', href: '/?view=unread', label: '読む' },
-    { view: 'later', href: '/?view=later', label: 'あとで' },
-    { view: 'starred', href: '/?view=starred', label: 'スター' },
+  const isMain = pathname === '/';
+
+  const tabs: {
+    href: string;
+    label: string;
+    badge?: number;
+    isActive: boolean;
+  }[] = [
+    { href: '/?view=unread', label: '読む', isActive: isMain && view === 'unread' },
+    { href: '/?view=later', label: 'あとで', isActive: isMain && view === 'later' },
+    { href: '/?view=starred', label: 'スター', isActive: isMain && view === 'starred' },
     // 朝のダイジェストを取り出すのも、音声を聴くのもスマホからが主。
-    { href: '/listen', label: '聴く', badge: unplayed },
-    { href: '/exports', label: '書き出し' },
-    { href: '/settings', label: '設定' },
+    { href: '/listen', label: '聴く', badge: unplayed, isActive: pathname.startsWith('/listen') },
+    { href: '/exports', label: '書き出し', isActive: pathname.startsWith('/exports') },
+    { href: '/settings', label: '設定', isActive: pathname.startsWith('/settings') },
   ];
 
   return (
@@ -33,16 +44,9 @@ export function BottomTabs({
         <Link
           key={tab.label}
           href={tab.href}
-          // ホームバーぶんは**リンクの padding** で確保する。nav 側に付けると、
-          // その帯は nav の地色で塗られているのにどのリンクにも当たらない
-          // ——画面のいちばん下に「タブに見えて押せない」場所ができる。
-          //
-          // 文字は 48px の枠に入れて上下中央に置き、ホームバーぶんはその下に
-          // 残す。文字を上に寄せたままだと、下に何も無い帯ができて
-          // 「押せない空白」に見える（当たり判定はあるのに）。
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           className={`flex min-h-12 flex-1 items-center justify-center text-center text-xs transition ${
-            tab.view && tab.view === view
+            tab.isActive
               ? 'text-[var(--color-accent-text)] font-semibold border-t-2 border-[var(--color-accent)] -mt-px bg-[var(--color-accent-subtle)]'
               : 'text-zinc-400 hover:text-zinc-200'
           }`}

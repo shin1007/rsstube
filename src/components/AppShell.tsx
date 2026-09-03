@@ -47,7 +47,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       {children}
 
       {/* 二次画面では記事を開いていないので、常に出す。 */}
-      <BottomTabs view="unread" hidden={false} unplayed={unplayed} />
+      <BottomTabs hidden={false} unplayed={unplayed} />
     </div>
   );
 }
