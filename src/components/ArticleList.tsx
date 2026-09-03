@@ -12,6 +12,7 @@ import {
   setReadMany,
   setStarred,
 } from '@/app/actions/articles';
+import { refreshFeeds } from '@/app/actions/feeds';
 import { PAGE_SIZE, VIEW_LABELS, type ArticleRow, type View } from '@/lib/types';
 import { prefetchFull } from '@/lib/prefetch';
 import { useNeighbours } from '@/lib/trail';
@@ -56,6 +57,7 @@ const SHORTCUTS: [string, string][] = [
   ['v', '元記事を新しいタブで開く'],
   ['Shift + A', '表示中をすべて既読'],
   ['Shift + M', 'ここから下（古い方）を既読'],
+  ['r', 'いま取りに行く（更新）'],
   ['/', '検索'],
   ['?', 'このヘルプ'],
 ];
@@ -300,6 +302,17 @@ export function ArticleList({
   // 押した／滑らせたことが伝わらず「効いていない」と受け取られていた。
   const [flash, setFlash] = useState<string | null>(null);
 
+  /**
+   * 引っぱって更新。
+   *
+   * 巡回は pg_cron が1時間毎なので、**最悪59分ぶん古いものを見ている**。
+   * 朝に開いて「まだ来ていない」ときに待つしかないのが不便だった。
+   * `pull` は指の移動量（0 なら触っていない）。
+   */
+  const [pull, setPull] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullFrom = useRef<{ x: number; y: number } | null>(null);
+
   // 記事が選択され直したらカーソルを合わせる。
   // effect ではなくレンダー中に調整する（effect でやると余計な再レンダーが1往復増える）。
   const [syncedId, setSyncedId] = useState(selectedId);
@@ -456,6 +469,19 @@ export function ArticleList({
     [rows, patch, setUndoIds],
   );
 
+  const refresh = useCallback(() => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setFlash(null);
+    startTransition(async () => {
+      // 結果は必ず出す。**押しても何も起きないのがいちばん悪い**
+      // ——新着ゼロなのか、失敗したのかが分からなくなる。
+      const r = await refreshFeeds();
+      setFlash(r.ok ? r.value : r.message);
+      setRefreshing(false);
+    });
+  }, [refreshing]);
+
   const markAll = useCallback(() => {
     // 既に既読だったものは戻す対象にしない。
     const wasUnread = rows.filter((a) => !a.state?.is_read).map((a) => a.id);
@@ -596,6 +622,10 @@ export function ArticleList({
             window.open(current.url, '_blank', 'noopener');
           }
           break;
+        case 'r':
+          e.preventDefault();
+          refresh();
+          break;
         case 'A':
           if (e.shiftKey) {
             e.preventDefault();
@@ -613,7 +643,7 @@ export function ArticleList({
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [rows, cursor, open, helpOpen, selectedId, pushParams, markAll, markBelow, patch, loadMore, router, prevHref, nextHref, moving, startMove]);
+  }, [rows, cursor, open, helpOpen, selectedId, pushParams, markAll, markBelow, refresh, patch, loadMore, router, prevHref, nextHref, moving, startMove]);
 
   const unreadCount = rows.filter((a) => !a.state?.is_read).length;
 
@@ -711,8 +741,54 @@ export function ArticleList({
           最後の行がタブの下に潜って押せなくなる。数はタブの min-h-12 と揃える。 */}
       <div
         ref={scrollRef}
+        /**
+         * 一覧のいちばん上から下へ引っぱると更新する。
+         *
+         * `preventDefault()` はしない（passive のままにする）。いちばん上に
+         * 居るときは下へのスクロール自体が起きないので、止める必要が無い。
+         * 行のスワイプ（左=既読 / 右=あとで）とはぶつからない——あちらは
+         * 横の移動が縦より大きいときだけ動く。ここはその逆だけを見る。
+         */
+        onTouchStart={(e) => {
+          if (refreshing) return;
+          // **触りはじめに上端に居るときだけ**受ける。途中から引いても始まらない。
+          if ((scrollRef.current?.scrollTop ?? 0) > 0) return;
+          pullFrom.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }}
+        onTouchMove={(e) => {
+          const from = pullFrom.current;
+          if (!from) return;
+          const dy = e.touches[0].clientY - from.y;
+          const dx = e.touches[0].clientX - from.x;
+          if (dy <= 0 || Math.abs(dx) > Math.abs(dy)) {
+            setPull(0);
+            return;
+          }
+          // 指より控えめに動かす。等倍だと一覧が画面から出て、壊れて見える。
+          setPull(Math.min(dy * 0.4, PULL_MAX));
+        }}
+        onTouchEnd={() => {
+          const reached = pull >= PULL_THRESHOLD;
+          pullFrom.current = null;
+          setPull(0);
+          if (reached) refresh();
+        }}
+        onTouchCancel={() => {
+          pullFrom.current = null;
+          setPull(0);
+        }}
         className="flex-1 overflow-y-auto thin-scroll pb-[calc(3rem+env(safe-area-inset-bottom))] md:pb-0"
       >
+        {/* 何が起きるかを指の下で見せる。滑るだけだと壊れて見える。 */}
+        {(pull > 0 || refreshing) && (
+          <p
+            role="status"
+            className="overflow-hidden text-center text-xs text-zinc-500 transition-[height]"
+            style={{ height: refreshing ? PULL_THRESHOLD : pull, lineHeight: `${refreshing ? PULL_THRESHOLD : Math.max(pull, 1)}px` }}
+          >
+            {refreshing ? '取りに行っています…' : pull >= PULL_THRESHOLD ? '離すと更新' : '引っぱって更新'}
+          </p>
+        )}
         {rows.length === 0 && (
           <p className="p-6 text-center text-sm text-zinc-500">
             {/* **「0件」と「引けなかった」を同じ文面にしないこと。**
@@ -830,6 +906,11 @@ export function ArticleList({
  * 10秒に伸ばしてある（8秒だと、件数を読んでから指を動かすには短い）。
  */
 const UNDO_MS = 10000;
+
+/** これ以上引いたら更新する。指の迷いで走らないくらいには深く。 */
+const PULL_THRESHOLD = 56;
+/** これ以上は動かさない。引っぱり続けても一覧が流れていかないように。 */
+const PULL_MAX = 80;
 
 function UndoBar({
   count,

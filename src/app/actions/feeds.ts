@@ -6,6 +6,7 @@ import { fetchFeed } from '@/lib/feeds/parse';
 import { discoverFeeds, type FeedCandidate } from '@/lib/feeds/discover';
 import { fanOutStates, ingestFeedItems } from '@/lib/feeds/ingest';
 import { relocateFeedUrl } from '@/lib/feeds/relocate';
+import { pollFeeds, type PollableFeed } from '@/lib/feeds/poll';
 import { looksLikeUrl, searchFeeds } from '@/lib/feeds/search';
 import { parseOpml } from '@/lib/feeds/opml';
 import { createClient } from '@/lib/supabase/server';
@@ -435,4 +436,59 @@ async function importOpmlImpl(formData: FormData) {
 
   revalidatePath('/settings');
   revalidatePath('/');
+}
+
+/**
+ * 画面から「いま取りに行く」（引っぱって更新）。
+ *
+ * 巡回は pg_cron が1時間毎に回しているので、**最悪59分ぶん古いものを見ている**。
+ * 朝に開いて「まだ来ていない」ときに、待つしかないのが不便だった。
+ *
+ * 中身は cron と同じ `pollFeeds`。**同じ処理をもう一組書かないこと**——
+ * 取り込みが分かれると「こちらから更新したときだけ本文抽出が積まれない」
+ * ような差が生まれ、しかも気づけない。
+ *
+ * ジョブを積むのは Secret キーからでないと RLS に弾かれる（jobs にポリシーが
+ * 1つも無い。docs/traps/jobs.md）。なので admin クライアントを使う。
+ */
+export async function refreshFeeds() {
+  return attempt(() => refreshFeedsImpl());
+}
+
+/** 1回で取りに行く本数。Server Action の実行時間に収める。 */
+const REFRESH_FEEDS = 8;
+/** ここを過ぎたら残りは次の巡回に任せる。 */
+const REFRESH_BUDGET_MS = 20_000;
+/** これより新しく取ったばかりなら、何もしない（連打で相手を叩かないため）。 */
+const REFRESH_COOLDOWN_MS = 2 * 60 * 1000;
+
+async function refreshFeedsImpl(): Promise<string> {
+  // ログインしていることだけ確かめる（巡回自体は全ユーザー共通の処理）。
+  const supabase = await createClient();
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error('ログインしてください');
+
+  const db = createAdminClient();
+  const { data: feeds, error } = await db.rpc('feeds_to_poll', { job_limit: REFRESH_FEEDS });
+  if (error) throw new Error(`フィードを選べませんでした: ${error.message}`);
+
+  const list = (feeds ?? []) as PollableFeed[];
+
+  /**
+   * **さっき取ったばかりなら何もしない。** `feeds_to_poll` は古い順に返すので、
+   * その先頭が「ついさっき」なら、全部が新しいということ。押すたびに相手の
+   * サーバーを叩きに行くのは、こちらの都合でしかない。
+   */
+  const oldest = list[0]?.last_fetched_at;
+  if (oldest && Date.now() - new Date(oldest).getTime() < REFRESH_COOLDOWN_MS) {
+    return 'さっき取りに行ったばかりです';
+  }
+
+  const r = await pollFeeds(db, list, REFRESH_BUDGET_MS);
+  revalidatePath('/');
+
+  if (r.newArticles === 0) {
+    return r.polled === 0 ? '新しい記事はありませんでした' : `${r.polled}本を見ましたが、新着はありません`;
+  }
+  return `新しい記事が${r.newArticles}件`;
 }
