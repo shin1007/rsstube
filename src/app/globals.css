@@ -32,6 +32,46 @@
   --text-3xl--line-height: 2.5rem;
 }
 
+/**
+ * 文字の大きさの倍率（設定 →「文字の大きさ」で 小/中/大）。
+ *
+ * **目盛りを上書きするだけで、クラスは1つも書き替えない。** 上の @theme が
+ * 出す `--text-*` を、同じ名前でここから計算し直す（後に書いたほうが勝つ）。
+ * `text-xs` も `text-3xl` も参照先は同じ変数なので、165か所の `text-xs` を
+ * 触らずに全部が動く——3回やり直したときの教訓（docs/traps/ui.md）。
+ *
+ * **`html` の font-size は動かさない。** そちらを動かすと rem で書いた余白や
+ * 幅（`p-3` も `w-96` も rem）まで一緒に伸びて、画面ごと拡大したのと同じになる。
+ * 変えたいのは文字の大きさであって、入る情報量ではない。
+ *
+ * 初期値の当て方は layout.tsx の小さなスクリプト、選ぶのは TextScale。
+ */
+:root {
+  --text-scale: 1;
+
+  --text-xs: calc(1rem * var(--text-scale));
+  --text-xs--line-height: calc(1.5rem * var(--text-scale));
+  --text-sm: calc(1.125rem * var(--text-scale));
+  --text-sm--line-height: calc(1.75rem * var(--text-scale));
+  --text-base: calc(1.25rem * var(--text-scale));
+  --text-base--line-height: calc(1.875rem * var(--text-scale));
+  --text-lg: calc(1.5rem * var(--text-scale));
+  --text-lg--line-height: calc(2rem * var(--text-scale));
+  --text-xl: calc(1.625rem * var(--text-scale));
+  --text-xl--line-height: calc(2.125rem * var(--text-scale));
+  --text-2xl: calc(1.875rem * var(--text-scale));
+  --text-2xl--line-height: calc(2.375rem * var(--text-scale));
+  --text-3xl: calc(2.25rem * var(--text-scale));
+  --text-3xl--line-height: calc(2.5rem * var(--text-scale));
+
+  /**
+   * 記事本文の実寸。**ここに置くのは、JSX に直書きすると倍率が効かないから。**
+   * 以前は `text-[19px]` を2か所に書いていて、目盛りを動かしたときに
+   * **いちばん長く見る文字だけが取り残された**（同じ壊れ方を一度している）。
+   */
+  --text-body: calc(19px * var(--text-scale));
+}
+
 /*
  * 常時ダークで固定する。朝晩に長時間スクロールする用途なので、
  * ライト/ダークを切り替えられるより、目に優しい一貫した見た目を優先する。
@@ -93,6 +133,7 @@ body {
 
 /* 記事本文。長文を読むので行間を広めに取る。 */
 .prose-article {
+  font-size: var(--text-body);
   line-height: 1.9;
   white-space: pre-wrap;
   word-break: break-word;
@@ -147,6 +188,7 @@ body {
  * 画像は横幅を超えさせない。超えると本文が横スクロールして読めなくなる。
  */
 .prose-rich {
+  font-size: var(--text-body);
   line-height: 1.9;
   word-break: break-word;
 }

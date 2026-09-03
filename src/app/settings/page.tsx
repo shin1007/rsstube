@@ -18,6 +18,7 @@ import { FeedHealth } from '@/components/FeedHealth';
 import { UnsubscribeButton } from '@/components/UnsubscribeButton';
 import { FolderSelect } from '@/components/FolderSelect';
 import { PasskeyManager, type PasskeyRow } from '@/components/PasskeyManager';
+import { TextScale } from '@/components/TextScale';
 import { PushToggle } from '@/components/PushToggle';
 import { SettingsForm, type SaveState } from '@/components/SettingsForm';
 import { UsageTable } from '@/components/UsageTable';
@@ -166,6 +167,13 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
         </div>
 
         {/* ---------------- パスキー ---------------- */}
+        {/* 読むことに直結するので上のほうに置く。
+            設定を開く動機のほとんどは「読みにくい」なので。 */}
+        <section>
+          <h2 className="mb-2 section-title">文字の大きさ</h2>
+          <TextScale />
+        </section>
+
         <section>
           <h2 className="mb-2 section-title">パスキー（指紋・顔・PINでログイン）</h2>
           <PasskeyManager passkeys={(passkeys ?? []) as PasskeyRow[]} />
