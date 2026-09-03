@@ -140,8 +140,8 @@ export function ArticleList({
   feeds = [],
   unread = new Map(),
   unplayed = 0,
-  folderId: serverFolderId,
-  feedId: serverFeedId,
+  folderId: propFolderId,
+  feedId: propFeedId,
 }: {
   articles: ArticleRow[];
   /** 検索そのものが失敗したか。0件と「引けなかった」を混ぜないため。 */
@@ -166,6 +166,8 @@ export function ArticleList({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const folderId = propFolderId ?? searchParams.get('folder') ?? undefined;
+  const feedId = propFeedId ?? searchParams.get('feed') ?? undefined;
   const [, startTransition] = useTransition();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -211,9 +213,6 @@ export function ArticleList({
     queuedMove.current -= dir;
     startMove(() => router.push(href));
   }, [moving, nextHref, prevHref, router]);
-
-  const folderId = searchParams.get('folder') ?? undefined;
-  const feedId = searchParams.get('feed') ?? undefined;
 
   /**
    * 継ぎ足したぶん。1ページ目はサーバー（page.tsx）が持っている。
