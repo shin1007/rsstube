@@ -1,8 +1,6 @@
 'use client';
 
 import { ActionFlash } from '@/components/ArticleActions';
-import { HelpTip } from '@/components/HelpTip';
-import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
 import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import {
   loadMoreArticles,
@@ -36,7 +34,7 @@ import {
 /**
  * 記事リスト。ここが「大量の記事を高速に捌く」中心。
  *
- * - 行にAIの要点と重要度を出し、開かずに判断できるようにする
+ * - 行にAIの要点を出し、開かずに判断できるようにする
  * - PC: j/k で移動、m 既読、s スター、l あとで、v 元記事、Shift+A 全既読、? でヘルプ
  * - スマホ: 左スワイプで既読、右スワイプであとで
  * - 下まで来たら続きを継ぎ足す（無限スクロール）
@@ -125,7 +123,6 @@ function Kbd({ children }: { children: React.ReactNode }) {
 export function ArticleList({
   articles,
   view,
-  sort,
   selectedId,
   search,
   searchFailed,
@@ -136,7 +133,6 @@ export function ArticleList({
   /** 検索そのものが失敗したか。0件と「引けなかった」を混ぜないため。 */
   searchFailed?: boolean;
   view: View;
-  sort: 'new' | 'important';
   selectedId?: string;
   search?: string;
   /**
@@ -235,7 +231,7 @@ export function ArticleList({
 
   // 絞り込みが変わったら継ぎ足しは全部捨てる。「未読の続き」を
   // 「スター」の一覧に混ぜてはいけない。
-  const queryKey = JSON.stringify([view, sort, folderId, feedId, search]);
+  const queryKey = JSON.stringify([view, folderId, feedId, search]);
   const [syncedKey, setSyncedKey] = useState(queryKey);
   if (queryKey !== syncedKey) {
     setSyncedKey(queryKey);
@@ -382,8 +378,7 @@ export function ArticleList({
     try {
       const r = await loadMoreArticles({
         view,
-        sort,
-        folderId,
+              folderId,
         feedId,
         search,
         offset: pages * PAGE_SIZE,
@@ -403,7 +398,7 @@ export function ArticleList({
       setLoading(false);
     }
     // set… も並べる理由は patch と同じ。
-  }, [done, pages, view, sort, folderId, feedId, search, setExtra, setPages, setDone, setLoading, setLoadError]);
+  }, [done, pages, view, folderId, feedId, search, setExtra, setPages, setDone, setLoading, setLoadError]);
 
   /**
    * 下端が見えたら続きを取る。
@@ -719,20 +714,6 @@ export function ArticleList({
             />
           </form>
 
-          <select
-            value={sort}
-            aria-label="並び順"
-            title={sort === 'important' ? IMPORTANCE_HELP : undefined}
-            onChange={(e) => pushParams((sp) => (sp.set('sort', e.target.value), sp.delete('article')))}
-            className="rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs"
-          >
-            <option value="new">新着順</option>
-            <option value="important">重要度順</option>
-          </select>
-
-          {/* 重要度で並べているときだけ、その点数が何なのかを引ける「?」を出す。
-              キーボードヘルプの ? と紛れないよう、説明する対象の隣に置く。 */}
-          {sort === 'important' && <HelpTip label="重要度とは" text={IMPORTANCE_HELP} />}
         </div>
       </header>
 
@@ -1014,7 +995,6 @@ function Row({
   const [releasing, setReleasing] = useState(false);
 
   const read = article.state?.is_read ?? false;
-  const importance = article.summary?.importance;
   // 訳した見出し（0023）。無ければ原題のまま。
   const heading = article.summary?.title_ja?.trim() || article.title;
 
@@ -1131,14 +1111,6 @@ function Row({
               </span>
             )}
           </h3>
-          {typeof importance === 'number' && importanceTier(importance).badge && (
-            <span
-              title={importanceTitle(importance)}
-              className={`shrink-0 rounded px-1.5 py-0.5 text-[13px] ${importanceTier(importance).className}`}
-            >
-              重要度 {importanceTier(importance).label}
-            </span>
-          )}
         </div>
 
         {/* AI要点。ここが読めれば記事を開かずに判断できる。 */}

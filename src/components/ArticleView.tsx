@@ -1,5 +1,3 @@
-import { HelpTip } from '@/components/HelpTip';
-import { IMPORTANCE_HELP, importanceTier, importanceTitle } from '@/lib/importance';
 import { requestSummary } from '@/app/actions/articles';
 import { ArticleActions } from '@/components/ArticleActions';
 import { ArticleNav } from '@/components/ArticleNav';
@@ -28,7 +26,7 @@ type ArticleDetail = {
   /** こちらへ入ってきた時刻。記事の日付（published_at）とはずれる。 */
   created_at: string | null;
   feeds: { id: string; title: string } | null;
-  summaries: { bullets: string[]; tags: string[]; importance: number; title_ja: string | null } | null;
+  summaries: { bullets: string[]; tags: string[]; title_ja: string | null } | null;
   article_states: {
     is_read: boolean;
     is_starred: boolean;
@@ -224,15 +222,6 @@ export function ArticleView({
               <section className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-3">
                 <div className="mb-2 flex items-center gap-2">
                   <span className="text-xs font-semibold text-zinc-400">AI要約</span>
-                  <span
-                    title={importanceTitle(a.summaries.importance)}
-                    className={`rounded px-1.5 py-0.5 text-[14px] ${importanceTier(a.summaries.importance).className}`}
-                  >
-                    重要度 {importanceTier(a.summaries.importance).label}
-                    <span className="ml-1 opacity-60">{a.summaries.importance}/100</span>
-                  </span>
-                  {/* 数字だけでは何の点数か分からない。押したときだけ基準を出す。 */}
-                  <HelpTip label="重要度とは" text={IMPORTANCE_HELP} />
                 </div>
                 <ul className="space-y-1">
                   {a.summaries.bullets.map((b, i) => (

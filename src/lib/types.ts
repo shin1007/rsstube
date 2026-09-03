@@ -59,7 +59,6 @@ export type ArticleRow = {
   summary: {
     bullets: string[];
     tags?: string[];
-    importance: number;
     title_ja: string | null;
   } | null;
   state: {
@@ -81,11 +80,7 @@ export type FeedRow = {
   last_fetched_at: string | null;
 };
 
-/**
- * weight はダイジェストの重み（0036）。設定画面だけが読むので、
- * 'id, name' しか引いていない呼び出し側のために省略可にしてある。
- */
-export type FolderRow = { id: string; name: string; weight?: number | null };
+export type FolderRow = { id: string; name: string };
 
 /**
  * URL から来た id が UUID の形をしているか。

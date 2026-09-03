@@ -7,7 +7,7 @@ import { PAGE_SIZE, asId, type ArticleRow, type View } from '@/lib/types';
  * 一覧用の記事取得。
  *
  * 記事・要約・状態を1クエリで取る。Supabase の埋め込み選択を使うので
- * N+1 にはならない。並び順は「新着順」か「重要度順」。
+ * N+1 にはならない。並び順は新着順だけ（重要度をやめたので、0037）。
  *
  * 記事とフィードは全ユーザー共通なので（0005）、「自分の記事」を切り出しているのは
  * article_states!inner のほう。状態行は購読時と巡回時にしか作られないため、
@@ -18,15 +18,13 @@ export type ArticleQuery = {
   view: View;
   folderId?: string;
   feedId?: string;
-  sort: 'new' | 'important';
   search?: string;
   /**
    * 何件目から返すか。無限スクロールの継ぎ足しで使う。
    *
    * 未読ビューでは読んだ記事が一覧から抜けるので、**続きを取っている間に
    * 位置がずれる**（既読にしたぶんだけ後ろが繰り上がる）。ここでは直さない。
-   * 受け取る側が id で重複を落とすこと。DB 側で位置を凍らせようとすると
-   * カーソル用の一意な列が要るが、重要度順は同点が並ぶので一意にならない。
+   * 受け取る側が id で重複を落とすこと。
    */
   offset?: number;
 };
@@ -40,7 +38,7 @@ type RawRow = {
   extracted_at: string | null;
   created_at: string | null;
   feeds: { id: string; title: string; subscriptions?: unknown } | null;
-  summaries: { bullets: string[]; importance: number; title_ja: string | null } | null;
+  summaries: { bullets: string[]; title_ja: string | null } | null;
   article_states: {
     is_read: boolean;
     is_starred: boolean;
@@ -88,7 +86,7 @@ async function subscribedIdsFor(query: ArticleQuery): Promise<string[]> {
  */
 const LIST_SELECT = `id, title, url, published_at, excerpt, extracted_at, created_at,
    feeds!inner (id, title),
-   summaries (bullets, importance, title_ja),
+   summaries (bullets, title_ja),
    article_states!inner (is_read, is_starred, read_later, exported_at)`;
 
 /**
@@ -108,7 +106,7 @@ const LIST_SELECT = `id, title, url, published_at, excerpt, extracted_at, create
  * 内部結合にすると1件も残らない。
  */
 const ID_SELECT = `id, published_at,
-   summaries (importance),
+   summaries (id),
    article_states!inner (is_read, is_starred, read_later)`;
 
 /**
@@ -186,11 +184,7 @@ async function run(select: string, query: ArticleQuery, limit: number) {
   /**
    * **最後に id で並べること（同着の決着）。**
    *
-   * articles.importance は summaries.importance の複製（0007）。埋め込んだ
-   * summaries 側を order しても親の記事順は変わらないので、並べ替えは必ず
-   * articles 側の列で行う。要約がまだ無い記事は null になり末尾に回る。
-   *
-   * そして日時だけでは順番が決まらない。実データで**243件が同じ日時**を持ち
+   * 日時だけでは順番が決まらない。実データで**243件が同じ日時**を持ち
    * （45組、最大18件が同時刻。自治体や省庁は同じ時刻でまとめて出す）、
    * その中の並びは Postgres の気分次第になる。決まらないと2つ壊れる:
    *   - **無限スクロールで記事が重複・欠落する。** offset で継ぎ足すので、
@@ -198,14 +192,9 @@ async function run(select: string, query: ArticleQuery, limit: number) {
    *   - **「次の記事」が戻ったり飛んだりする。** 前後は毎回この並びから数え直す
    * 実行計画が変われば並びも変わるので、いま安定して見えるのは偶然。
    */
-  if (query.sort === 'important') {
-    q = q
-      .order('importance', { ascending: false, nullsFirst: false })
-      .order('published_at', { ascending: false, nullsFirst: false });
-  } else {
-    q = q.order('published_at', { ascending: false, nullsFirst: false });
-  }
-  q = q.order('id', { ascending: false });
+  q = q
+    .order('published_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: false });
 
   const { data, error } = await q;
   if (error) throw error;
@@ -306,7 +295,7 @@ export async function getArticle(id: string) {
     .select(
       `id, title, url, author, published_at, excerpt, content_text, content_html, content_ok, extracted_at, extract_fail, created_at,
        feeds (id, title),
-       summaries (bullets, tags, importance, title_ja),
+       summaries (bullets, tags, title_ja),
        article_states (is_read, is_starred, read_later, exported_at)`,
     )
     .eq('id', id)

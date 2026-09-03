@@ -96,7 +96,7 @@ export function HelpTip({ label, text }: { label: string; text: string }) {
         onClick={toggle}
         // 見た目は16pxの丸のままで、**当たり判定だけ 36px に広げる**（before の
         // 透明な枠）。16×16 は指で狙える大きさではないし、WCAG 2.5.8 の下限
-        // （24×24）にも届いていなかった。44 まで広げないのは、隣（重要度バッジ・
+        // （24×24）にも届いていなかった。44 まで広げないのは、隣（
         // 並び順の select）に被って、そちらへの指を奪うため。
         className="relative grid size-4 shrink-0 place-items-center rounded-full border border-zinc-700 text-[13px] leading-none text-zinc-500 before:absolute before:-inset-2.5 before:content-[''] hover:border-zinc-500 hover:text-zinc-300"
       >

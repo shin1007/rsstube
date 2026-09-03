@@ -1,13 +1,14 @@
 /**
  * 毎朝ダイジェストに載せる記事の選抜。
  *
- * 重要度順に上から取るだけだと、たまたま当たりの多いフォルダ（技術ニュースなど）で
- * 全部埋まる。「今日の全体像」が欲しいのが目的なので、フォルダごとに上限を設けて
- * ばらけさせ、それでも枠が余ったら上限を外して重要度順に埋める。
+ * **重要度は使わない**（0037）。以前は AI の 0〜100 で順位を付けていたが、
+ * 重要度は記事の属性ではなく読み手との関係で決まるもので、記事に1つの数値として
+ * 持たせること自体が誤りだった。代わりに**新しい順**で取る。
  *
- * 重要度そのものは全ユーザー共通（0005）で、基準も読み手を見ていない一般的な
- * ニュース価値でしかない。そこに**フォルダごとの重み**（0036）を掛けたものを
- * 順位に使う。素の点数は共通のまま、順位だけが人ごとに変わる。
+ * 新しい順だけで上から取ると、更新の速いフォルダ（官公庁の新着など）で全部が
+ * 埋まる。「今日の全体像」が欲しいのが目的なので、フォルダごとに上限を設けて
+ * ばらけさせ、それでも枠が余ったら上限を外して埋める。この偏り対策は重要度とは
+ * 関係なく要るので、重要度をやめても残してある。
  *
  * DB を触らない純粋な関数にしてあるのは、ここが唯一「音声の中身」を決める場所で、
  * 実データを流さずに挙動を固定しておきたいため。
@@ -15,32 +16,12 @@
 
 export type DigestCandidate = {
   id: string;
-  /** 0-100。要約がまだ無い記事は null。全ユーザー共通の素の点数。 */
-  importance: number | null;
   /** 購読のフォルダ。未分類は null。 */
   folderId: string | null;
   publishedAt: string | null;
-  /**
-   * フォルダの重み（%）。100 が素通し、0 は出さない。
-   * 未分類のフィードは重みの置き場が無いので、省略＝100 として扱う。
-   */
-  weight?: number | null;
+  /** 取り込んだ時刻。publishedAt が無い・当てにならないときの控え。 */
+  createdAt?: string | null;
 };
-
-/** 要約がまだ付いていない記事の扱う重要度。既定値(50)より下に置いて後回しにする。 */
-const NO_SUMMARY_IMPORTANCE = 30;
-
-/** 重みの既定。フォルダに入っていない記事と、列がまだ無いときの値。 */
-const DEFAULT_WEIGHT = 100;
-
-/**
- * 順位に使う点数。素の重要度にフォルダの重みを掛けたもの。
- * 下見（`?dry=1`）で「なぜこれが選ばれたか」を出すために公開している。
- */
-export function effectiveScore(c: DigestCandidate): number {
-  const base = c.importance ?? NO_SUMMARY_IMPORTANCE;
-  return (base * weightOf(c)) / 100;
-}
 
 /**
  * 呼び出し側が付けた余分な項目（タイトルなど）を落とさずに返せるよう、
@@ -52,27 +33,13 @@ export function pickDigestArticles<T extends DigestCandidate>(
 ): T[] {
   if (count <= 0) return [];
 
-  /**
-   * **重み 0 は掛け算ではなく除外で扱う。**
-   *
-   * 掛けるだけだと点数が 0 になって最後尾に回るが、下の「枠が余ったら埋め戻す」
-   * を通って結局載る。設定画面には「ダイジェストに出さない」と書くので、
-   * 他に候補が無い日だけ載るのでは表示が嘘になる。
-   */
-  const eligible = candidates.filter((c) => weightOf(c) > 0);
-
-  // 重み込みの点数が同じなら新しいものを優先。
-  const ranked = [...eligible].sort((a, b) => {
-    const diff = effectiveScore(b) - effectiveScore(a);
-    if (diff !== 0) return diff;
-    return time(b) - time(a);
-  });
+  // 新しい順。同時刻が並ぶことは珍しくない（自治体や省庁は同じ時刻でまとめて
+  // 出す）ので、最後に id で決着を付けて並びを固定する。付けないと、実行計画が
+  // 変わるたびに選ばれる記事が変わり、同じ日を作り直しても再現しない。
+  const ranked = [...candidates].sort((a, b) => time(b) - time(a) || cmp(b.id, a.id));
 
   // 1フォルダで全体の1/3を超えないようにする。件数が少ないときは
   // ceil で最低1件は通るので、フォルダが1つしか無くても空にはならない。
-  //
-  // 重みを上げたフォルダにもこの上限は効く。重みは「同じ枠の中で先に取る」
-  // ためのもので、枠そのものを増やすと全体像を配るという目的が崩れる。
   const perFolderMax = Math.max(1, Math.ceil(count / 3));
   const perFolder = new Map<string, number>();
   const picked: T[] = [];
@@ -90,26 +57,31 @@ export function pickDigestArticles<T extends DigestCandidate>(
     picked.push(c);
   }
 
-  // 上限のせいで枠が余ったら、はみ出したぶんから重要度順に埋め戻す。
+  // 上限のせいで枠が余ったら、はみ出したぶんから新しい順に埋め戻す。
   // 偏りを避けるのは「他に選べるものがあるとき」だけでよい。
   for (const c of overflow) {
     if (picked.length >= count) break;
     picked.push(c);
   }
 
-  // 最後にもう一度重要度順へ。埋め戻しで順番が崩れているため。
-  return picked.sort((a, b) => effectiveScore(b) - effectiveScore(a) || time(b) - time(a));
+  // 最後にもう一度新しい順へ。埋め戻しで順番が崩れているため。
+  return picked.sort((a, b) => time(b) - time(a) || cmp(b.id, a.id));
 }
 
-function weightOf(c: DigestCandidate): number {
-  const w = c.weight;
-  // null と undefined は「未設定」。0 は意味のある値なので ?? では潰さない。
-  if (typeof w !== 'number' || Number.isNaN(w)) return DEFAULT_WEIGHT;
-  return Math.max(0, w);
-}
-
+/**
+ * 並びに使う時刻。`published_at` を先に見て、無ければ取り込んだ時刻を使う。
+ * 何日も前の日付で流れてくるフィードがあるが、選抜の母数は既に「過去24時間に
+ * 取り込んだぶん」に絞ってあるので、ここで古い日付が混ざっても最後尾に回るだけ。
+ */
 function time(c: DigestCandidate): number {
-  if (!c.publishedAt) return 0;
-  const t = new Date(c.publishedAt).getTime();
-  return Number.isNaN(t) ? 0 : t;
+  for (const value of [c.publishedAt, c.createdAt]) {
+    if (!value) continue;
+    const t = new Date(value).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  return 0;
+}
+
+function cmp(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
