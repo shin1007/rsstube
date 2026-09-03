@@ -48,15 +48,15 @@ export default async function ExportsPage() {
       <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-8">
       <div className="mx-auto max-w-2xl space-y-4 pb-24">
         <div className="flex items-center gap-3">
-          <Link href="/" className="text-sm text-zinc-400">
+          <Link href="/" prefetch={true} className="text-sm text-zinc-400">
             ← 一覧
           </Link>
           <h1 className="text-xl font-bold">書き出し</h1>
           {/* スマホには下部タブしか無いので、二次画面どうしを相互に張っておく。 */}
-          <Link href="/library" className="ml-auto text-xs text-zinc-500 hover:text-zinc-200">
+          <Link href="/library" prefetch={true} className="ml-auto text-xs text-zinc-500 hover:text-zinc-200">
             アーカイブ
           </Link>
-          <Link href="/settings" className="text-xs text-zinc-500 hover:text-zinc-200">
+          <Link href="/settings" prefetch={true} className="text-xs text-zinc-500 hover:text-zinc-200">
             設定
           </Link>
         </div>

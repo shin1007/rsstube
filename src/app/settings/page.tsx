@@ -135,20 +135,20 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
         */}
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-sm text-zinc-400">
+            <Link href="/" prefetch={true} className="text-sm text-zinc-400">
               ← 一覧
             </Link>
             <h1 className="text-xl font-bold">設定</h1>
           </div>
           {/* スマホには下部タブしか無いので、二次画面どうしを相互に張っておく。 */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <Link href="/library" className="text-xs text-zinc-500 hover:text-zinc-200">
+            <Link href="/library" prefetch={true} className="text-xs text-zinc-500 hover:text-zinc-200">
               アーカイブ
             </Link>
-            <Link href="/exports" className="text-xs text-zinc-500 hover:text-zinc-200">
+            <Link href="/exports" prefetch={true} className="text-xs text-zinc-500 hover:text-zinc-200">
               書き出し
             </Link>
-            <Link href="/account/password" className="text-xs text-zinc-500 hover:text-zinc-200">
+            <Link href="/account/password" prefetch={true} className="text-xs text-zinc-500 hover:text-zinc-200">
               パスワード
             </Link>
             {/*

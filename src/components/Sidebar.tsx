@@ -90,6 +90,7 @@ export function SidebarContent({
             <Link
               key={v}
               href={link({ view: v })}
+              prefetch={true}
               onClick={onNavigate}
               className={`block rounded px-2 py-1.5 text-sm transition ${
                 active && view === v && !folderId && !feedId
@@ -109,6 +110,7 @@ export function SidebarContent({
               <div key={folder.id}>
                 <Link
                   href={link({ view, folder: folder.id })}
+                  prefetch={true}
                   onClick={onNavigate}
                   className={`flex items-center justify-between rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${
                     folderId === folder.id
@@ -242,6 +244,7 @@ function FeedLink({
   return (
     <Link
       href={href}
+      prefetch={true}
       onClick={onClick}
       title={feed.last_error ?? undefined}
       className={`flex items-center justify-between rounded px-2 py-1 text-sm transition ${
