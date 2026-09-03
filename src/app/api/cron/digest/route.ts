@@ -1,4 +1,4 @@
-import { pickDigestArticles, type DigestCandidate } from '@/lib/digest/select';
+import { effectiveScore, pickDigestArticles, type DigestCandidate } from '@/lib/digest/select';
 import { createExportFor } from '@/lib/export/create';
 import { sendToUser } from '@/lib/push/send';
 import { authorizeCron, createAdminClient } from '@/lib/supabase/admin';
@@ -41,6 +41,9 @@ const TIME_ZONE = 'Asia/Tokyo';
 /** 選抜に使う項目＋下見で出すタイトル。 */
 type Candidate = DigestCandidate & { title: string };
 
+/** フォルダに入っていない記事の重み。列の default と揃えること（0036）。 */
+const DEFAULT_WEIGHT = 100;
+
 type Result = {
   userId: string;
   status: 'created' | 'skipped';
@@ -50,8 +53,16 @@ type Result = {
   articles?: number;
   /** 通知を送れた端末数。鍵が未設定・未登録なら 0。 */
   pushed?: number;
-  /** dry=1 のときだけ。選ばれた記事の中身を目で見るため。 */
-  preview?: { title: string; importance: number | null; folder: string | null }[];
+  /** dry=1 のときだけ。選ばれた記事の中身と、選ばれた理由を目で見るため。 */
+  preview?: {
+    title: string;
+    importance: number | null;
+    folder: string | null;
+    /** フォルダの重み(%)。未分類は 100。 */
+    weight: number;
+    /** 実際に順位を決めた点数（重要度 × 重み）。 */
+    score: number;
+  }[];
 };
 
 export async function POST(request: Request) {
@@ -117,14 +128,17 @@ export async function POST(request: Request) {
       }
     }
 
-    // フォルダは購読ごとの持ち物（0005）。偏りを避ける判定に使う。
+    // フォルダは購読ごとの持ち物（0005）。偏りを避ける判定と、重み付けに使う。
     const folderByFeed = new Map<string, string | null>(
       (subs ?? [])
         .filter((s) => s.user_id === userId)
         .map((s) => [s.feed_id as string, (s.folder_id as string | null) ?? null]),
     );
 
-    const candidates = await loadCandidates(db, userId, folderByFeed);
+    // 重要度は全ユーザー共通なので、人ごとの好みはここで掛ける（0036）。
+    const foldersById = await loadFolders(db, userId);
+
+    const candidates = await loadCandidates(db, userId, folderByFeed, foldersById);
     const picked = pickDigestArticles(candidates, count);
 
     if (picked.length === 0) {
@@ -133,7 +147,6 @@ export async function POST(request: Request) {
     }
 
     if (dry) {
-      const folderNames = await loadFolderNames(db, userId);
       results.push({
         userId,
         status: 'skipped',
@@ -141,7 +154,9 @@ export async function POST(request: Request) {
         preview: picked.map((c) => ({
           title: c.title,
           importance: c.importance,
-          folder: c.folderId ? (folderNames.get(c.folderId) ?? null) : null,
+          folder: c.folderId ? (foldersById.get(c.folderId)?.name ?? null) : null,
+          weight: c.weight ?? DEFAULT_WEIGHT,
+          score: Math.round(effectiveScore(c)),
         })),
       });
       continue;
@@ -198,6 +213,7 @@ async function loadCandidates(
   db: SupabaseClient,
   userId: string,
   folderByFeed: Map<string, string | null>,
+  foldersById: Map<string, Folder>,
 ): Promise<Candidate[]> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -224,22 +240,31 @@ async function loadCandidates(
     feed_id: string;
     published_at: string | null;
     importance: number | null;
-  }[]).map((r) => ({
-    id: r.id,
-    title: r.title,
-    importance: r.importance,
-    folderId: folderByFeed.get(r.feed_id) ?? null,
-    publishedAt: r.published_at,
-  }));
+  }[]).map((r) => {
+    const folderId = folderByFeed.get(r.feed_id) ?? null;
+    return {
+      id: r.id,
+      title: r.title,
+      importance: r.importance,
+      folderId,
+      // 未分類のフィードには重みの置き場が無いので素通し。
+      weight: folderId ? (foldersById.get(folderId)?.weight ?? DEFAULT_WEIGHT) : DEFAULT_WEIGHT,
+      publishedAt: r.published_at,
+    };
+  });
 }
 
-/** dry=1 の下見でフォルダ名を出すためだけの引き当て。 */
-async function loadFolderNames(
-  db: SupabaseClient,
-  userId: string,
-): Promise<Map<string, string>> {
-  const { data } = await db.from('folders').select('id, name').eq('user_id', userId);
-  return new Map((data ?? []).map((f) => [f.id as string, f.name as string]));
+type Folder = { name: string; weight: number };
+
+/** 重み付けと、dry=1 の下見のためのフォルダ引き当て。 */
+async function loadFolders(db: SupabaseClient, userId: string): Promise<Map<string, Folder>> {
+  const { data } = await db.from('folders').select('id, name, weight').eq('user_id', userId);
+  return new Map(
+    (data ?? []).map((f) => [
+      f.id as string,
+      { name: f.name as string, weight: (f.weight as number | null) ?? DEFAULT_WEIGHT },
+    ]),
+  );
 }
 
 /**

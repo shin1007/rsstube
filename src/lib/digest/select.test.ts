@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { pickDigestArticles, type DigestCandidate } from './select';
+import { effectiveScore, pickDigestArticles, type DigestCandidate } from './select';
 
 const a = (
   id: string,
   importance: number | null,
   folderId: string | null = null,
   publishedAt: string | null = null,
-): DigestCandidate => ({ id, importance, folderId, publishedAt });
+  weight: number | null = null,
+): DigestCandidate => ({ id, importance, folderId, publishedAt, weight });
 
 describe('pickDigestArticles', () => {
   it('重要度の高い順に選ぶ', () => {
@@ -55,5 +56,43 @@ describe('pickDigestArticles', () => {
 
   it('件数が0なら何も選ばない', () => {
     expect(pickDigestArticles([a('x', 90)], 0)).toEqual([]);
+  });
+
+  it('フォルダの重みで順位が入れ替わる', () => {
+    // 素の重要度は tech のほうが上でも、重みを半分にすれば life が先に来る。
+    const picked = pickDigestArticles(
+      [a('t', 80, 'tech', null, 50), a('l', 50, 'life', null, 100)],
+      1,
+    );
+    expect(picked.map((c) => c.id)).toEqual(['l']);
+  });
+
+  it('重みが未設定なら素の重要度のまま', () => {
+    const picked = pickDigestArticles([a('t', 80, 'tech'), a('l', 50, 'life')], 1);
+    expect(picked.map((c) => c.id)).toEqual(['t']);
+  });
+
+  it('重み0のフォルダは、他に候補が無くても出さない', () => {
+    // 掛け算だけで済ませると、枠の埋め戻しを通って結局載ってしまう。
+    expect(pickDigestArticles([a('mute', 99, 'ads', null, 0)], 8)).toEqual([]);
+  });
+
+  it('重みを上げてもフォルダの上限は超えない', () => {
+    const candidates = [
+      a('t1', 90, 'tech', null, 200),
+      a('t2', 89, 'tech', null, 200),
+      a('t3', 88, 'tech', null, 200),
+      a('n1', 40, 'news'),
+    ];
+    const picked = pickDigestArticles(candidates, 3);
+    // 上限は ceil(3/3) = 1 件。残りは他のフォルダが尽きてから入る。
+    expect(picked.map((c) => c.id)).toEqual(['t1', 't2', 'n1']);
+  });
+
+  it('effectiveScore は重みを掛けた点数を返す', () => {
+    expect(effectiveScore(a('x', 80, 'f', null, 150))).toBe(120);
+    expect(effectiveScore(a('x', 80, 'f'))).toBe(80);
+    // 要約がまだ無い記事は 30 として扱う。
+    expect(effectiveScore(a('x', null, 'f', null, 200))).toBe(60);
   });
 });

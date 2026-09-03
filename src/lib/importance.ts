@@ -43,3 +43,28 @@ export function importanceTier(score: number): ImportanceTier {
 export function importanceTitle(score: number): string {
   return `重要度 ${importanceTier(score).label}（${score}／100）— ${IMPORTANCE_HELP}`;
 }
+
+/**
+ * フォルダの重み（0036）。
+ *
+ * 上の基準は「一般的なニュース価値」であって、読み手が誰かを見ていない。
+ * 要約は全ユーザー共通（0005）なので重要度も記事に1つしか無く、AI 側では
+ * 読み手ごとに付け直せない。そこで**掛け算だけを人ごとに持つ**。
+ *
+ * 効くのは毎朝ダイジェストの選抜だけ。一覧の並べ替えには効かない
+ * （DB 側で order して offset で継ぎ足しているため。docs/traps/db.md）。
+ */
+export const DEFAULT_FOLDER_WEIGHT = 100;
+
+export const FOLDER_WEIGHTS: { value: number; label: string }[] = [
+  { value: 0, label: '出さない' },
+  { value: 50, label: '低め' },
+  { value: DEFAULT_FOLDER_WEIGHT, label: '標準' },
+  { value: 150, label: '高め' },
+  { value: 200, label: '最優先' },
+];
+
+/** 保存済みの値がどの選択肢にも当たらないとき（手で入れた・既定が変わった）の表示。 */
+export function folderWeightLabel(weight: number): string {
+  return FOLDER_WEIGHTS.find((w) => w.value === weight)?.label ?? `${weight}%`;
+}
