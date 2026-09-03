@@ -220,6 +220,12 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
           selectedId={openId}
           search={search}
           searchFailed={searchFailed}
+          folders={(folders ?? []) as FolderRow[]}
+          feeds={(feeds ?? []) as FeedRow[]}
+          unread={counts}
+          unplayed={unplayed}
+          folderId={folderId}
+          feedId={feedId}
           // ← → で前後の記事へ移るためだけに渡す。下のボタンと同じ行き先を使う
           // ——一覧から数え直すと、開いた記事が一覧に居ないときに動かなくなる。
           prevHref={prevId ? linkTo(prevId) : undefined}

@@ -11,7 +11,15 @@ import {
   setStarred,
 } from '@/app/actions/articles';
 import { refreshFeeds } from '@/app/actions/feeds';
-import { PAGE_SIZE, VIEW_LABELS, type ArticleRow, type View } from '@/lib/types';
+import { SidebarContent } from '@/components/Sidebar';
+import {
+  PAGE_SIZE,
+  VIEW_LABELS,
+  type ArticleRow,
+  type FeedRow,
+  type FolderRow,
+  type View,
+} from '@/lib/types';
 import { prefetchFull } from '@/lib/prefetch';
 import { useNeighbours } from '@/lib/trail';
 import {
@@ -128,6 +136,12 @@ export function ArticleList({
   searchFailed,
   prevHref: serverPrev,
   nextHref: serverNext,
+  folders = [],
+  feeds = [],
+  unread = new Map(),
+  unplayed = 0,
+  folderId: serverFolderId,
+  feedId: serverFeedId,
 }: {
   articles: ArticleRow[];
   /** 検索そのものが失敗したか。0件と「引けなかった」を混ぜないため。 */
@@ -142,10 +156,18 @@ export function ArticleList({
    */
   prevHref?: string;
   nextHref?: string;
+  /** モバイルのフィード／フォルダ切り替えドロワー用データ */
+  folders?: FolderRow[];
+  feeds?: FeedRow[];
+  unread?: Map<string, number>;
+  unplayed?: number;
+  folderId?: string;
+  feedId?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // 来た道があればそちらへ戻す（lib/trail.ts）。下のボタン・スワイプと同じ行き先。
   const { prevHref, nextHref } = useNeighbours(selectedId, serverPrev, serverNext);
@@ -647,6 +669,14 @@ export function ArticleList({
       <header className="border-b border-zinc-800 px-3 py-2">
         {/* どのビューを見ているかを常に出す。スマホでは下部タブしか手がかりが無かった。 */}
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="md:hidden rounded border border-zinc-700 bg-zinc-800/80 px-2 py-0.5 text-xs text-zinc-300 hover:text-zinc-100 hover:bg-zinc-700 active:scale-95 transition"
+            aria-label="フィード・フォルダ一覧を開く"
+          >
+            フィード
+          </button>
           <h2 className="section-title shrink-0 whitespace-nowrap">{VIEW_LABELS[view]}</h2>
           <span className="whitespace-nowrap text-xs text-zinc-500">
             {/* まだ続きがあるなら「+」を付ける。確定した数字として出すと、
@@ -875,6 +905,49 @@ export function ArticleList({
       {flash && !undoIds && <ActionFlash text={flash} onDismiss={() => setFlash(null)} />}
 
       {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
+
+      {/* スマホ用フィード・フォルダ切り替えドロワー */}
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex md:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="フィード・フォルダ一覧"
+        >
+          {/* 背景の暗幕。タップで閉じる */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+            onClick={() => setDrawerOpen(false)}
+          />
+
+          {/* ドロワー本体 */}
+          <div className="relative w-72 max-w-[85vw] h-full bg-zinc-950 border-r border-zinc-800 flex flex-col z-10 shadow-2xl">
+            <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800 bg-zinc-900/50">
+              <span className="text-xs font-semibold text-zinc-300">フィード・フォルダ</span>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="rounded p-1 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 active:scale-95 transition"
+                aria-label="閉じる"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 flex flex-col">
+              <SidebarContent
+                folders={folders}
+                feeds={feeds}
+                unread={unread}
+                view={view}
+                folderId={folderId}
+                feedId={feedId}
+                unplayed={unplayed}
+                onNavigate={() => setDrawerOpen(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

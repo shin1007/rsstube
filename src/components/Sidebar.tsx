@@ -3,7 +3,7 @@ import type { FeedRow, FolderRow, View } from "@/lib/types";
 import { VIEW_LABELS } from "@/lib/types";
 
 /**
- * フォルダとフィードの一覧。PCでのみ表示する（スマホは下部タブで代替）。
+ * フォルダとフィードの一覧。PCでのみ表示する（スマホは下部タブおよびドロワーで代替）。
  */
 
 /** 下端に常駐する画面への導線。フィードとは別の見た目にしてある（下の注記）。 */
@@ -13,7 +13,8 @@ const NAV = [
   { href: '/exports', label: '書き出し・朝のダイジェスト' },
   { href: '/settings', label: '設定・フィード管理' },
 ];
-export function Sidebar({
+
+export function SidebarContent({
   folders,
   feeds,
   unread,
@@ -22,6 +23,7 @@ export function Sidebar({
   feedId,
   unplayed = 0,
   active = true,
+  onNavigate,
 }: {
   folders: FolderRow[];
   feeds: FeedRow[];
@@ -29,20 +31,9 @@ export function Sidebar({
   view: View;
   folderId?: string;
   feedId?: string;
-  /** 並び順は絞り込みを変えても保つ。フォルダを移るたびに戻ると使いにくい。 */
-  /**
-   * まだ聴いていない音声の数。0 ならバッジを出さない。
-   *
-   * フィードの未読数と違って色を付ける。音声は待って出来上がるものなので、
-   * 「増えた」ことに気づけないと、出来ているのに何日も開かれないままになる。
-   */
   unplayed?: number;
-  /**
-   * いま一覧を見ているか。設定などの二次画面では false にして、どこも
-   * 選択中にしない。false にしないと、設定を開いている間ずっと「未読」が
-   * 光ったままになり、どこにいるのか分からなくなる。
-   */
   active?: boolean;
+  onNavigate?: () => void;
 }) {
   const feedsByFolder = new Map<string, FeedRow[]>();
   for (const feed of feeds) {
@@ -85,12 +76,9 @@ export function Sidebar({
   };
 
   return (
-    // スクロールするのは真ん中だけ。以前は nav 全体を overflow-y-auto にしていたので、
-    // mt-auto の下端リンク（設定など）がフィードの下に埋もれ、18本ぶんスクロールしないと
-    // 辿り着けなかった。見出しと下端リンクは常に見えている必要がある。
-    <nav className="hidden md:flex md:w-60 md:shrink-0 flex-col border-r border-zinc-800 min-h-0">
+    <>
       <div className="shrink-0 p-3 border-b border-zinc-800">
-        <Link href="/" className="font-bold">
+        <Link href="/" onClick={onNavigate} className="font-bold">
           RSSTube
         </Link>
       </div>
@@ -102,6 +90,7 @@ export function Sidebar({
             <Link
               key={v}
               href={link({ view: v })}
+              onClick={onNavigate}
               className={`block rounded px-2 py-1.5 text-sm ${
                 active && view === v && !folderId && !feedId
                   ? "bg-zinc-800 text-zinc-100"
@@ -120,6 +109,7 @@ export function Sidebar({
               <div key={folder.id}>
                 <Link
                   href={link({ view, folder: folder.id })}
+                  onClick={onNavigate}
                   className={`flex items-center justify-between rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${
                     folderId === folder.id
                       ? "text-zinc-100"
@@ -138,6 +128,7 @@ export function Sidebar({
                       key={feed.id}
                       feed={feed}
                       href={link({ view, feed: feed.id })}
+                      onClick={onNavigate}
                       active={feedId === feed.id}
                       count={unread.get(feed.id) ?? 0}
                     />
@@ -158,6 +149,7 @@ export function Sidebar({
                   key={feed.id}
                   feed={feed}
                   href={link({ view, feed: feed.id })}
+                  onClick={onNavigate}
                   active={feedId === feed.id}
                   count={unread.get(feed.id) ?? 0}
                 />
@@ -170,7 +162,7 @@ export function Sidebar({
           {feeds.length === 0 && (
             <p className="px-2 py-1 text-xs text-zinc-600">
               購読中のフィードがありません（
-              <Link href="/settings" className="underline hover:text-zinc-400">
+              <Link href="/settings" onClick={onNavigate} className="underline hover:text-zinc-400">
                 設定
               </Link>
               から追加できます）
@@ -197,6 +189,7 @@ export function Sidebar({
           <Link
             key={href}
             href={href}
+            onClick={onNavigate}
             className="flex items-center rounded px-1 py-1.5 text-xs font-medium tracking-wide text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
           >
             <span>{label}</span>
@@ -211,6 +204,23 @@ export function Sidebar({
           </Link>
         ))}
       </div>
+    </>
+  );
+}
+
+export function Sidebar(props: {
+  folders: FolderRow[];
+  feeds: FeedRow[];
+  unread: Map<string, number>;
+  view: View;
+  folderId?: string;
+  feedId?: string;
+  unplayed?: number;
+  active?: boolean;
+}) {
+  return (
+    <nav className="hidden md:flex md:w-60 md:shrink-0 flex-col border-r border-zinc-800 min-h-0">
+      <SidebarContent {...props} />
     </nav>
   );
 }
@@ -220,15 +230,18 @@ function FeedLink({
   href,
   active,
   count,
+  onClick,
 }: {
   feed: FeedRow;
   href: string;
   active: boolean;
   count: number;
+  onClick?: () => void;
 }) {
   return (
     <Link
       href={href}
+      onClick={onClick}
       title={feed.last_error ?? undefined}
       className={`flex items-center justify-between rounded px-2 py-1 text-sm ${
         active ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"
@@ -245,3 +258,4 @@ function FeedLink({
     </Link>
   );
 }
+
