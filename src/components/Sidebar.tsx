@@ -189,6 +189,7 @@ export function SidebarContent({
           <Link
             key={href}
             href={href}
+            prefetch={true}
             onClick={onNavigate}
             className="flex items-center rounded px-1 py-1.5 text-xs font-medium tracking-wide text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
           >

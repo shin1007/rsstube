@@ -44,6 +44,7 @@ export function BottomTabs({
         <Link
           key={tab.label}
           href={tab.href}
+          prefetch={true}
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           className={`flex min-h-12 flex-1 items-center justify-center text-center text-xs transition ${
             tab.isActive
