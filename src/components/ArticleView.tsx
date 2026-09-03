@@ -7,6 +7,7 @@ import { ActionForm } from '@/components/ActionForm';
 import { MarkReadOnView } from '@/components/MarkReadOnView';
 import { MediaButton } from '@/components/MediaButton';
 import { ShareButton } from '@/components/ShareButton';
+import { ArticleMobileMenu } from '@/components/ArticleMobileMenu';
 import Link from 'next/link';
 
 type ArticleDetail = {
@@ -111,26 +112,12 @@ export function ArticleView({
         6つのボタンが入らなくなって起きた。
         狭い画面では記号だけ（← / ★ / ◷ / ▤ / ♪ / ↗）にし、どのボタンにも
         whitespace-nowrap と shrink-0 を付けてある。**意味は aria-label が持つ**ので、
-        読み上げには記号ではなく、いつもと同じ言葉が渡る。
-        記号にして空いたぶんは上下の余白ではなく**指の当たり判定（px-3）**に回す。
-      */}
       {/*
-        **スマホではこの帯を画面の下に出す**（`order`）。上に置いていたときは、
-        OS の時計と同じ高さに並ぶうえ、片手で持つと親指がいちばん届かない場所に
-        操作が全部集まっていた。読むのは上、触るのは下。
-        PC では今までどおり本文の上（`md:order-none`）——マウスなら距離は問題にならず、
-        本文の持ち物であることが上にあるほうが分かる。
+        PC用操作バー（本文の上）。
+        スマホでは右下のフローティングメニュー（ArticleMobileMenu）にまとめ、
+        画面下端や上端の操作帯による表示面積の圧迫を解消する。
       */}
-      <header className="order-2 flex flex-nowrap items-center gap-1 overflow-x-auto border-t border-zinc-800 px-2 md:order-none md:gap-1 md:border-t-0 md:border-b md:px-3 md:py-1">
-        {/* スマホでリストへ戻る導線。PCではリストが常に見えているので不要。 */}
-        <Link
-          href={backHref}
-          aria-label="一覧へ戻る"
-          className="bar-button md:hidden shrink-0 whitespace-nowrap rounded text-xs text-zinc-400"
-        >
-          ←
-        </Link>
-
+      <header className="hidden md:flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-zinc-800 px-3 py-1">
         <ArticleActions
           articleId={a.id}
           starred={Boolean(state?.is_starred)}
@@ -151,29 +138,37 @@ export function ArticleView({
           aria-label="元記事を開く"
           className="bar-button ml-auto shrink-0 whitespace-nowrap rounded text-xs text-zinc-500 hover:text-zinc-100 md:px-2 md:py-1 md:text-sm"
         >
-          <span className="md:hidden">↗</span>
-          <span className="hidden md:inline">元記事 ↗</span>
+          <span>元記事 ↗</span>
         </a>
       </header>
 
+      {/* スマホ用の右下ハンバーガー型フローティングメニュー */}
+      <ArticleMobileMenu
+        articleId={a.id}
+        title={a.summaries?.title_ja?.trim() || a.title}
+        url={a.url}
+        starred={Boolean(state?.is_starred)}
+        readLater={Boolean(state?.read_later)}
+        exported={Boolean(state?.exported_at)}
+      />
+
       {/* 指で横に払うと前後の記事へ移る。スマホには一覧へ戻る以外の道が無かった。 */}
       <ArticleSwipe articleId={a.id} prevHref={prevHref} nextHref={nextHref}>
-        {/* 下の余白は 24（96px）あったが、あれは下部タブを避けるためのもので、
-            記事を開いている間はそのタブが消えている。下に前後の帯が付いた今は
-            本文の終わりに画面半分の空白ができるだけなので詰める。
-
-            **key に記事の id を入れて、スクロールを頭に戻す。** 記事は
-            `?article=` の付け替えで開くので、React から見ると同じ位置の同じ
-            div のままで、DOM ごと使い回される＝ scrollTop が前の記事のまま
-            残る。長い記事を下まで読んでから「次の記事」を押すと、次の記事の
-            途中から始まって、題も要約も画面の上に無い（読み進めるほど症状が
-            重くなるので、いちばん困るときに起きる）。key を変えれば React が
-            作り直すので、必ず先頭から出る。 */}
         <div
           key={a.id}
-          className="flex-1 overflow-y-auto thin-scroll px-4 py-5 md:px-8 pb-10 md:pb-8"
+          className="flex-1 overflow-y-auto thin-scroll px-4 py-4 md:px-8 pb-10 md:pb-8"
         >
           <div className="mx-auto max-w-2xl">
+            {/* スマホで一覧へ戻るリンク */}
+            <div className="mb-3 md:hidden">
+              <Link
+                href={backHref}
+                className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900/80 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-100 active:bg-zinc-800"
+              >
+                <span>←</span>
+                <span>一覧へ戻る</span>
+              </Link>
+            </div>
             <p className="text-xs text-zinc-500">
               {a.feeds?.title}
               {a.author && ` / ${a.author}`}
