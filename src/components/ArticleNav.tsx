@@ -86,11 +86,11 @@ export function ArticleNav({
    * 「バーの下端」に見える（空白ではなく地の色）。nav に色を敷くのはそのため
    * ——透明のままだと、そこだけ本文の背景が覗いて「余った隙間」に見える。
    */
-  const cell = 'flex flex-1 items-center justify-center text-center py-2.5';
+  const cell = 'flex flex-1 items-center justify-center text-center py-2.5 select-none no-callout touch-manipulation';
 
   return (
     <nav
-      className="relative flex shrink-0 items-stretch border-t border-zinc-800 bg-zinc-900/90 text-xs md:bg-transparent"
+      className="relative flex shrink-0 items-stretch border-t border-zinc-800 bg-zinc-900/90 text-xs md:bg-transparent select-none no-callout"
     >
       {/*
         端に来たことを伝える。押しても何も起きないのと、端であることは別物。

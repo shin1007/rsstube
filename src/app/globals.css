@@ -194,6 +194,15 @@ body {
   justify-content: center;
   min-width: 2.75rem;
   min-height: 2.75rem;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+/* スマホでの長押しプレビュー（3D Touch / Haptic Touch）や文字選択メニューの抑制 */
+.no-callout {
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 @media (width >= 48rem) {

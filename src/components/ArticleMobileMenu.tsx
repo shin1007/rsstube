@@ -168,7 +168,7 @@ export function ArticleMobileMenu({
       )}
 
       {/* 右下のフローティングハンバーガーメニュー */}
-      <div ref={menuRef} className="fixed right-4 bottom-16 z-30 md:hidden flex flex-col items-end">
+      <div ref={menuRef} className="fixed right-4 bottom-16 z-30 md:hidden flex flex-col items-end select-none no-callout">
         {/* メニュー展開時のポップアップ */}
         {open && (
           <div className="mb-2 w-48 rounded-xl border border-zinc-800 bg-zinc-900/95 p-1.5 shadow-2xl backdrop-blur-md flex flex-col gap-0.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
@@ -245,7 +245,7 @@ export function ArticleMobileMenu({
           type="button"
           onClick={() => setOpen(!open)}
           aria-label={open ? 'メニューを閉じる' : '記事のメニューを開く'}
-          className={`size-12 rounded-full border shadow-xl flex items-center justify-center transition-all duration-200 active:scale-90 cursor-pointer ${
+          className={`size-12 rounded-full border shadow-xl flex items-center justify-center transition-all duration-200 active:scale-90 cursor-pointer select-none no-callout touch-manipulation ${
             open
               ? 'border-zinc-600 bg-zinc-800 text-zinc-100 rotate-90'
               : 'border-[var(--color-accent-border)] bg-zinc-900/90 text-zinc-200 hover:text-white backdrop-blur-md hover:bg-zinc-800'

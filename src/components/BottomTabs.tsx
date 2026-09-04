@@ -39,14 +39,14 @@ export function BottomTabs({
   ];
 
   return (
-    <nav className="md:hidden fixed inset-x-0 bottom-0 z-10 flex border-t border-zinc-800 bg-zinc-950">
+    <nav className="md:hidden fixed inset-x-0 bottom-0 z-10 flex border-t border-zinc-800 bg-zinc-950 select-none no-callout">
       {tabs.map((tab) => (
         <Link
           key={tab.label}
           href={tab.href}
           prefetch={true}
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-          className={`flex min-h-12 flex-1 items-center justify-center text-center text-xs transition ${
+          className={`flex min-h-12 flex-1 items-center justify-center text-center text-xs transition touch-manipulation select-none no-callout ${
             tab.isActive
               ? 'text-[var(--color-accent-text)] font-semibold border-t-2 border-[var(--color-accent)] -mt-px bg-[var(--color-accent-subtle)]'
               : 'text-zinc-400 hover:text-zinc-200'
