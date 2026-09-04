@@ -148,6 +148,11 @@
  * 常時ダークで固定する。朝晩に長時間スクロールする用途なので、
  * ライト/ダークを切り替えられるより、目に優しい一貫した見た目を優先する。
  */
+html {
+  height: 100%;
+  height: -webkit-fill-available;
+}
+
 body {
   font-family:
     system-ui,
@@ -160,19 +165,8 @@ body {
   font-size: var(--text-base);
   /* スマホでスワイプ操作したときに、行き過ぎのバウンスが出ないように。 */
   overscroll-behavior-y: none;
-  /**
-   * OS の時計やアンテナの下に潜らせない。
-   *
-   * ホーム画面から起動したときは `viewportFit: cover` ＋
-   * `statusBarStyle: black-translucent`（layout.tsx）で、**画面のいちばん上から
-   * こちらの描画が始まる**。切り欠きの下まで背景を伸ばすための設定だが、
-   * 背景だけでなく中身も潜るので、いちばん上の帯が時計と重なって押せなかった。
-   * ブラウザのタブで開いている間は inset が 0 なので、何も変わらない。
-   *
-   * body は `h-dvh`＋border-box なので、この padding のぶんだけ中身が縮む
-   * ——各画面の `flex-1 overflow-y-auto` が自分から譲るので、個別の手当ては要らない。
-   */
-  padding-top: env(safe-area-inset-top);
+  min-height: 100%;
+  min-height: -webkit-fill-available;
 }
 
 /**

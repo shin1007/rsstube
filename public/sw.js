@@ -15,7 +15,7 @@
  * 中身を変えたら CACHE の版を上げること。古い版は activate で消える。
  */
 
-const CACHE = 'rsstube-shell-v2';
+const CACHE = 'rsstube-shell-v3';
 /**
  * `/_next/static/` の中身だけを入れる置き場。
  *

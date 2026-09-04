@@ -18,20 +18,16 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: 'RSSTube',
-    // 背景が暗いので、ステータスバーも本文に溶かす。
-    statusBarStyle: 'black-translucent',
+    // iPhone SE 等でステータスバーとコンテンツが重なって下部に隙間ができるのを防ぐ
+    statusBarStyle: 'default',
   },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  // maximumScale は入れない。入力欄をタップしたときの自動ズームを止める目的で
-  // よく使われるが、ピンチズームまで殺してしまう（WCAG 1.4.4 違反）。
-  // 自動ズームは globals.css で入力欄を16px以上にすることで防いでいる。
   themeColor: '#0b0d10',
-  // ホーム画面から起動したときに、切り欠きの下まで背景を伸ばす。
-  viewportFit: 'cover',
+  viewportFit: 'auto',
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
