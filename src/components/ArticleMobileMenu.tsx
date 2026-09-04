@@ -168,7 +168,7 @@ export function ArticleMobileMenu({
       )}
 
       {/* 右下のフローティングハンバーガーメニュー */}
-      <div ref={menuRef} className="fixed right-4 bottom-16 z-30 md:hidden flex flex-col items-end select-none no-callout">
+      <div ref={menuRef} className="fixed right-4 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 md:hidden flex flex-col items-end select-none no-callout">
         {/* メニュー展開時のポップアップ */}
         {open && (
           <div className="mb-2 w-48 rounded-xl border border-zinc-800 bg-zinc-900/95 p-1.5 shadow-2xl backdrop-blur-md flex flex-col gap-0.5 animate-in fade-in slide-in-from-bottom-2 duration-150">

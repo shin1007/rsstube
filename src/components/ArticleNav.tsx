@@ -90,7 +90,7 @@ export function ArticleNav({
 
   return (
     <nav
-      className="relative flex shrink-0 items-stretch border-t border-zinc-800 bg-zinc-900/90 text-xs md:bg-transparent select-none no-callout"
+      className="fixed inset-x-0 bottom-0 z-20 flex md:relative md:inset-auto md:z-auto shrink-0 items-stretch border-t border-zinc-800 bg-zinc-950 text-xs md:bg-transparent select-none no-callout"
     >
       {/*
         端に来たことを伝える。押しても何も起きないのと、端であることは別物。
