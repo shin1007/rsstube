@@ -210,8 +210,8 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
 
       {/* 記事リスト。スマホでは記事を選んでいる間は隠す。 */}
       <div
-        className={`w-full md:w-96 md:shrink-0 border-r border-zinc-800 min-h-0 ${
-          openId ? 'hidden md:block' : 'block'
+        className={`w-full md:w-96 md:shrink-0 border-r border-zinc-800 min-h-0 h-full ${
+          openId ? 'hidden md:flex md:flex-col' : 'flex flex-col'
         }`}
       >
         <ArticleList
