@@ -1,8 +1,8 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 test.describe('Article Mobile View & Bottom Navigation Layout', () => {
   test('verifies mobile menu button and bottom nav position on mobile viewport', async ({ page, isMobile }) => {
-    // 画面サイズ設定（Mobile Chrome の場合 393 x 851）
+    // 画面サイズ設定
     await page.goto('/api/debug/article');
 
     // 1. 本文が正常に描画されているか
@@ -25,7 +25,19 @@ test.describe('Article Mobile View & Bottom Navigation Layout', () => {
     expect(navBottom).toBeLessThanOrEqual(viewportHeight + 1);
     expect(navBottom).toBeGreaterThanOrEqual(viewportHeight - 10);
 
-    // 4. スマホ用フローティングメニューボタン (ArticleMobileMenu) の検証
+    // 4. ボタンの高さが十分（44px以上）あり、文字が見切れていない（上下マージンが確保されている）こと
+    expect(navBox!.height).toBeGreaterThanOrEqual(44);
+
+    const prevLink = nav.locator('a, button').filter({ hasText: '前の記事' }).first();
+    await expect(prevLink).toBeVisible();
+    const prevBox = await prevLink.boundingBox();
+    expect(prevBox).not.toBeNull();
+    expect(prevBox!.height).toBeGreaterThanOrEqual(44);
+
+    // ボタンの下端が画面下端にめり込んでいないこと
+    expect(prevBox!.y + prevBox!.height).toBeLessThanOrEqual(viewportHeight + 1);
+
+    // 5. スマホ用フローティングメニューボタン (ArticleMobileMenu) の検証
     if (isMobile) {
       const fabButton = page.getByRole('button', { name: '記事のメニューを開く' });
       await expect(fabButton).toBeVisible();
