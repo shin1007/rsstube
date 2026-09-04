@@ -67,7 +67,11 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         自分の `overflow-y-auto` でスクロールする。新しい画面を足すときは
         **ルート要素に overflow-y-auto を付けること**（付けないと溢れが切れる）。
       */}
-      <body className="h-dvh overflow-hidden flex flex-col bg-zinc-950 text-zinc-100">
+      {/*
+        高さは `fixed inset-0` で画面の四隅に確実に密着させる。
+        PWA（スタンドアローン）で 100dvh が過小評価されて下に隙間ができるのを防ぐ。
+      */}
+      <body className="fixed inset-0 overflow-hidden flex flex-col bg-zinc-950 text-zinc-100">
 
         {/*
           下部プレイヤーは**ここ**に置く。
