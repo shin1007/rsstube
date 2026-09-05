@@ -1,5 +1,6 @@
 'use server';
 
+import { currentUser } from '@/lib/auth/session';
 import { attempt } from '@/lib/actions/result';
 
 import { sendToUser, pushConfigured } from '@/lib/push/send';
@@ -25,13 +26,13 @@ export async function savePushSubscription(input: PushSubscriptionInput) {
 
 async function savePushSubscriptionImpl(input: PushSubscriptionInput): Promise<void> {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) throw new Error('未ログインです');
+  const user = await currentUser(supabase);
+  if (!user) throw new Error('未ログインです');
 
   const { error } = await supabase.from('push_subscriptions').upsert(
     {
       endpoint: input.endpoint,
-      user_id: auth.user.id,
+      user_id: user.id,
       p256dh: input.p256dh,
       auth: input.auth,
     },
@@ -48,8 +49,8 @@ export async function removePushSubscription(endpoint: string) {
 
 async function removePushSubscriptionImpl(endpoint: string): Promise<void> {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) throw new Error('未ログインです');
+  const user = await currentUser(supabase);
+  if (!user) throw new Error('未ログインです');
 
   const { error } = await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
   if (error) throw error;
@@ -69,14 +70,14 @@ export async function sendTestPush() {
 
 async function sendTestPushImpl(): Promise<string> {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) throw new Error('未ログインです');
+  const user = await currentUser(supabase);
+  if (!user) throw new Error('未ログインです');
 
   if (!pushConfigured()) {
     throw new Error('VAPID の鍵が設定されていません（.env の VAPID_* を確認してください）');
   }
 
-  const result = await sendToUser(supabase, auth.user.id, {
+  const result = await sendToUser(supabase, user.id, {
     title: 'RSSTube',
     body: 'テスト通知です。これが見えていれば、朝のダイジェストも届きます。',
     url: '/exports',

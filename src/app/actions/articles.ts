@@ -1,6 +1,7 @@
 'use server';
 
 import { attempt } from '@/lib/actions/result';
+import { currentUser } from '@/lib/auth/session';
 import { listArticles } from '@/lib/articles';
 import { PAGE_SIZE, type ArticleRow, type View } from '@/lib/types';
 
@@ -51,9 +52,9 @@ export async function signOut() {
 
 async function client() {
   const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) throw new Error('未ログインです');
-  return { supabase, userId: data.user.id };
+  const user = await currentUser(supabase);
+  if (!user) throw new Error('未ログインです');
+  return { supabase, userId: user.id };
 }
 
 /**

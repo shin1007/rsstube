@@ -1,5 +1,6 @@
 'use server';
 
+import { currentUser } from '@/lib/auth/session';
 import { requestMedia, retryMedia, type MediaTarget, type RetryFrom } from '@/lib/media/create';
 import { getPlayable, type MediaSource, type PlayableSegment } from '@/lib/media/list';
 import { createClient } from '@/lib/supabase/server';
@@ -24,8 +25,8 @@ export type MediaRequestResult =
 
 export async function requestArticleMedia(articleId: string): Promise<MediaRequestResult> {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return { ok: false, message: '未ログインです' };
+  const user = await currentUser(supabase);
+  if (!user) return { ok: false, message: '未ログインです' };
 
   const { data: article } = await supabase
     .from('articles')
@@ -34,13 +35,13 @@ export async function requestArticleMedia(articleId: string): Promise<MediaReque
     .maybeSingle();
   if (!article) return { ok: false, message: '記事が見つかりません' };
 
-  return run(supabase, auth.user.id, { kind: 'article', articleId }, article.title);
+  return run(supabase, user.id, { kind: 'article', articleId }, article.title);
 }
 
 export async function requestDigestMedia(digestId: string): Promise<MediaRequestResult> {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return { ok: false, message: '未ログインです' };
+  const user = await currentUser(supabase);
+  if (!user) return { ok: false, message: '未ログインです' };
 
   const { data: digest } = await supabase
     .from('digests')
@@ -49,7 +50,7 @@ export async function requestDigestMedia(digestId: string): Promise<MediaRequest
     .maybeSingle();
   if (!digest) return { ok: false, message: 'ダイジェストが見つかりません' };
 
-  return run(supabase, auth.user.id, { kind: 'digest', digestId }, `ダイジェスト ${digest.date}`);
+  return run(supabase, user.id, { kind: 'digest', digestId }, `ダイジェスト ${digest.date}`);
 }
 
 async function run(
@@ -96,8 +97,8 @@ async function run(
  */
 export async function retryMediaAction(mediaId: string): Promise<MediaRequestResult> {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return { ok: false, message: '未ログインです' };
+  const user = await currentUser(supabase);
+  if (!user) return { ok: false, message: '未ログインです' };
 
   const { data: media } = await supabase
     .from('media')

@@ -1,3 +1,4 @@
+import { currentUser } from '@/lib/auth/session';
 import { AppShell } from '@/components/AppShell';
 import { VOICE_MODE_LABELS, type VoiceMode } from '@/lib/ai/script';
 import { DEFAULT_VOICE_A, DEFAULT_VOICE_B, TTS_VOICES, normalizeVoice } from '@/lib/ai/tts';
@@ -88,12 +89,12 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
   async function saveSettings(_prev: SaveState, formData: FormData): Promise<SaveState> {
     'use server';
     const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) return { ok: false, message: '未ログインです' };
+    const user = await currentUser(supabase);
+    if (!user) return { ok: false, message: '未ログインです' };
 
     const { error } = await supabase.from('settings').upsert(
       {
-        user_id: data.user.id,
+        user_id: user.id,
         notebooklm_prompt: String(formData.get('notebooklm_prompt') ?? ''),
         digest_count: Number(formData.get('digest_count') ?? DEFAULT_DIGEST_COUNT),
         digest_hour: Number(formData.get('digest_hour') ?? DEFAULT_DIGEST_HOUR),

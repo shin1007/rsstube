@@ -1,6 +1,7 @@
 'use server';
 
 import { attempt } from '@/lib/actions/result';
+import { currentUser } from '@/lib/auth/session';
 
 import { fetchFeed } from '@/lib/feeds/parse';
 import { discoverFeeds, type FeedCandidate } from '@/lib/feeds/discover';
@@ -17,9 +18,9 @@ import { revalidatePath } from 'next/cache';
 
 async function client() {
   const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) throw new Error('未ログインです');
-  return { supabase, userId: data.user.id };
+  const user = await currentUser(supabase);
+  if (!user) throw new Error('未ログインです');
+  return { supabase, userId: user.id };
 }
 
 /** フォルダ名からIDを引く。無ければ作る。OPML取り込みで使う。 */
