@@ -70,24 +70,36 @@ type Row = {
   } | null;
 };
 
-export async function listSubscribedFeeds(): Promise<SubscribedFeed[]> {
+/**
+ * 本文の取れ具合はフィードの列ではないので、別に数えて足す。
+ *
+ * **記事を運んできて JS で数えない**（0020 で未読件数を SQL に移したのと同じ）。
+ * 欲しいのはフィード18本ぶんの数字2つで、記事は4600件ある。
+ *
+ * **ただし、要る画面でだけ数えること。** `feed_content_stats()` は直近60日の
+ * 記事を全部数える集計で、実測でサーバー側50msかかる。以前はここで無条件に、
+ * しかも購読の取得の**後ろで** await していた——`listSubscribedFeeds()` は
+ * サイドバー（AppShell）が持っているので、**設定を開いていないときも
+ * 全ページの遷移にこの1往復がまるごと乗っていた**。数字を使うのは
+ * `/settings` の FeedHealth だけなので、そこだけが `{ stats: true }` を渡す。
+ * 渡すときも直列にしない（互いに要らないので並べて投げる）。
+ */
+export async function listSubscribedFeeds(
+  options: { stats?: boolean } = {},
+): Promise<SubscribedFeed[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from('subscriptions')
-    .select(
-      `folder_id, title,
+  const [{ data, error }, { data: stats }] = await Promise.all([
+    supabase
+      .from('subscriptions')
+      .select(
+        `folder_id, title,
        feeds!inner (id, title, url, site_url, error_count, last_error, last_fetched_at, last_article_at, created_at)`,
-    );
+      ),
+    options.stats ? supabase.rpc('feed_content_stats') : Promise.resolve({ data: null }),
+  ]);
   if (error) throw error;
 
-  /**
-   * 本文の取れ具合はフィードの列ではないので、別に数えて足す。
-   *
-   * **記事を運んできて JS で数えない**（0020 で未読件数を SQL に移したのと同じ）。
-   * 欲しいのはフィード18本ぶんの数字2つで、記事は4600件ある。
-   */
-  const { data: stats } = await supabase.rpc('feed_content_stats');
   const byFeed = new Map(
     ((stats ?? []) as { feed_id: string; ingested: number; extracted: number; unreadable: number; undated: number }[]).map((s) => [
       s.feed_id,
