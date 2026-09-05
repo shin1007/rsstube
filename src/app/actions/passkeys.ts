@@ -1,5 +1,6 @@
 'use server';
 
+import { currentUser } from '@/lib/auth/session';
 import { attempt } from '@/lib/actions/result';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -18,8 +19,8 @@ export async function deletePasskey(id: string) {
 
 async function deletePasskeyImpl(id: string): Promise<void> {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) throw new Error('未ログインです');
+  const user = await currentUser(supabase);
+  if (!user) throw new Error('未ログインです');
 
   // 消すのはログイン中のユーザーとして。他人の鍵は RLS が弾く（0034）。
   const { error } = await supabase.from('passkeys').delete().eq('id', id);

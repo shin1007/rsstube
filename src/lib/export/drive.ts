@@ -230,32 +230,37 @@ export async function driveStatus(userId: string): Promise<{
   /** 環境変数から来ているか。画面では「設定画面の値が優先される」と書き分ける。 */
   fromEnv: boolean;
 }> {
-  const oauth = await googleOAuth();
+  /**
+   * **app_config は1回しか読まないこと。** 以前は `googleOAuth()` で読んで、
+   * その直後に `storedClientId()` で**同じ行をもう一度**読んでいた。しかも
+   * 直列で、後ろに google_accounts が続く。設定画面を開くたびに、同じ1行を
+   * 取りに2往復していたことになる。
+   */
+  const db = createAdminClient();
+  const [{ data: config }, { data }] = await Promise.all([
+    db.from('app_config').select('google_client_id, google_client_secret').maybeSingle(),
+    db.from('google_accounts').select('email').eq('user_id', userId).maybeSingle(),
+  ]);
+
+  const clientId = config?.google_client_id || process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = config?.google_client_secret || process.env.GOOGLE_CLIENT_SECRET;
+  const oauth = clientId && clientSecret ? { clientId, clientSecret } : null;
+
   const configured = Boolean(oauth);
+  // 環境変数から来ているか＝設定画面に保存された値が無く、env と一致するとき。
   const fromEnv = Boolean(
-    oauth && oauth.clientId === process.env.GOOGLE_CLIENT_ID && !(await storedClientId()),
+    oauth && oauth.clientId === process.env.GOOGLE_CLIENT_ID && !config?.google_client_id,
   );
 
   if (!configured) return { connected: false, configured, fromEnv };
-
-  const db = createAdminClient();
-  const { data } = await db
-    .from('google_accounts')
-    .select('email')
-    .eq('user_id', userId)
-    .maybeSingle();
 
   return data
     ? { connected: true, email: data.email ?? undefined, configured, clientId: oauth?.clientId, fromEnv }
     : { connected: false, configured, clientId: oauth?.clientId, fromEnv };
 }
 
-/** app_config に入っている client_id（無ければ null）。 */
-async function storedClientId(): Promise<string | null> {
-  const db = createAdminClient();
-  const { data } = await db.from('app_config').select('google_client_id').maybeSingle();
-  return data?.google_client_id ?? null;
-}
+// storedClientId() は落とした。driveStatus() が app_config を1回読むついでに
+// 同じ値を持っているので、同じ行をもう一度取りに行く理由が無い。
 
 /**
  * 認証情報を保存する。設定画面から呼ばれる。

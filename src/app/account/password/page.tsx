@@ -1,3 +1,4 @@
+import { currentUser } from '@/lib/auth/session';
 import { PasswordField } from '@/components/PasswordField';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
@@ -25,8 +26,8 @@ export default async function PasswordPage({ searchParams }: PageProps<'/account
   const error = typeof params.error === 'string' ? params.error : null;
 
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) redirect('/login');
+  const user = await currentUser(supabase);
+  if (!user) redirect('/login');
 
   async function save(formData: FormData) {
     'use server';
@@ -65,7 +66,7 @@ export default async function PasswordPage({ searchParams }: PageProps<'/account
         </div>
 
         <p className="text-xs text-zinc-500">
-          {auth.user.email} のパスワードを決めます。次からはこのパスワードでログインします。
+          {user.email} のパスワードを決めます。次からはこのパスワードでログインします。
         </p>
 
         {done ? (

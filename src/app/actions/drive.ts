@@ -1,6 +1,7 @@
 'use server';
 
 import { attempt } from '@/lib/actions/result';
+import { currentUser } from '@/lib/auth/session';
 
 import { driveStatus, saveGoogleOAuth, uploadToDrive } from '@/lib/export/drive';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -11,9 +12,9 @@ import { revalidatePath } from 'next/cache';
 
 async function me() {
   const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) throw new Error('未ログインです');
-  return { supabase, userId: data.user.id };
+  const user = await currentUser(supabase);
+  if (!user) throw new Error('未ログインです');
+  return { supabase, userId: user.id };
 }
 
 export async function getDriveStatus() {

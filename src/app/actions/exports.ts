@@ -1,5 +1,6 @@
 'use server';
 
+import { currentUser } from '@/lib/auth/session';
 import { attempt } from '@/lib/actions/result';
 
 import { createExportFor, type ExportResult } from '@/lib/export/create';
@@ -30,10 +31,10 @@ async function createExportImpl(
   title?: string,
 ): Promise<ExportResult> {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) throw new Error('未ログインです');
+  const user = await currentUser(supabase);
+  if (!user) throw new Error('未ログインです');
 
-  const result = await createExportFor(supabase, auth.user.id, articleIds, kind, title);
+  const result = await createExportFor(supabase, user.id, articleIds, kind, title);
 
   revalidatePath('/');
   revalidatePath('/exports');
@@ -70,13 +71,13 @@ export async function exportReadLater() {
 
 async function exportReadLaterImpl(): Promise<ExportResult> {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) throw new Error('未ログインです');
+  const user = await currentUser(supabase);
+  if (!user) throw new Error('未ログインです');
 
   const { data, error } = await supabase
     .from('article_states')
     .select('article_id')
-    .eq('user_id', auth.user.id)
+    .eq('user_id', user.id)
     .eq('read_later', true)
     // 一度書き出したものは含めない。
     .is('exported_at', null)
