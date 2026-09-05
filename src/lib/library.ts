@@ -40,17 +40,9 @@ type RawRow = {
   author: string | null;
   published_at: string | null;
   excerpt: string | null;
-  content_ok: boolean;
-  extracted_at: string | null;
-  created_at: string | null;
   feeds: { id: string; title: string } | null;
   summaries: { bullets: string[]; tags: string[]; title_ja: string | null } | null;
-  article_states: {
-    is_read: boolean;
-    is_starred: boolean;
-    read_later: boolean;
-    exported_at: string | null;
-  } | null;
+  article_states: { is_starred: boolean; exported_at: string | null } | null;
 };
 
 export async function searchLibrary(
@@ -66,11 +58,16 @@ export async function searchLibrary(
 
   let q = supabase
     .from('articles')
+    /**
+     * **行に出していない列は取らない**（reader の一覧と同じ。perf.md）。
+     * `content_ok` `extracted_at` `created_at` `is_read` `read_later` は
+     * `/library` のどこにも出ないのに、40件ぶん毎回運んでいた。
+     */
     .select(
-      `id, title, url, author, published_at, excerpt, content_ok, extracted_at, created_at,
+      `id, title, url, author, published_at, excerpt,
        feeds!inner (id, title),
        ${summaryJoin} (bullets, tags, title_ja),
-       article_states!inner (is_read, is_starred, read_later, exported_at)`,
+       article_states!inner (is_starred, exported_at)`,
     )
     // 状態行があるもの＝自分が購読しているフィードの記事（0005 以降の切り出し方）。
     // もう1件多く取って「次のページがあるか」を判定する。
@@ -113,10 +110,13 @@ export async function searchLibrary(
       url: r.url,
       author: r.author,
       published_at: r.published_at,
-      excerpt: r.excerpt,
-      content_ok: r.content_ok,
-      extracted_at: r.extracted_at,
-      created_at: r.created_at,
+      /**
+       * **要点があるときは抜粋を運ばない。** 行に出るのはどちらか片方で、
+       * 要点があればそちらが勝つ。抜粋は日本語で150字ほどあり、
+       * 1行あたりでいちばん重い列なのに、ほとんどの行では出ない
+       * （reader の一覧と同じ。lib/articles.ts の listArticles）。
+       */
+      excerpt: (r.summaries?.bullets?.length ?? 0) > 0 ? null : r.excerpt,
       feed: r.feeds ? { id: r.feeds.id, title: r.feeds.title } : null,
       summary: r.summaries ?? null,
       state: r.article_states ?? null,
@@ -130,27 +130,22 @@ export async function searchLibrary(
  *
  * 直近の要約から拾って多い順に並べる。タグは要約のたびに Gemini が付けるので
  * 語彙が発散しやすく、全期間から集めると使わないタグで埋まる。
+ *
+ * **数えるのは DB 側**（0038 の `recent_tags()`）。
+ *
+ * 以前は直近500件の `summaries.tags` を**アプリまで運んで**（実測 42KB・
+ * サーバー側75ms）JS で数えていた。欲しいのは24語とその件数だけなので、
+ * 出す量の百倍以上を毎回 `/library` の遷移に乗せていたことになる
+ * （0020 で未読件数を SQL に移したのと同じ形の無駄）。
  */
 export async function listTags(limit = 24): Promise<{ tag: string; count: number }[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from('articles')
-    .select('summaries!inner (tags), article_states!inner (is_read)')
-    .order('published_at', { ascending: false, nullsFirst: false })
-    .limit(500);
-
+  const { data, error } = await supabase.rpc('recent_tags', { p_scan: 500, p_limit: limit });
   if (error) throw error;
 
-  const counts = new Map<string, number>();
-  for (const row of (data ?? []) as unknown as { summaries: { tags: string[] } | null }[]) {
-    for (const tag of row.summaries?.tags ?? []) {
-      counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    }
-  }
-
-  return [...counts.entries()]
-    .map(([tag, count]) => ({ tag, count }))
-    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
-    .slice(0, limit);
+  return ((data ?? []) as { tag: string; uses: number }[]).map((r) => ({
+    tag: r.tag,
+    count: Number(r.uses),
+  }));
 }

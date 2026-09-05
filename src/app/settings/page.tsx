@@ -51,7 +51,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
 
   const [feeds, { data: folders }, { data: settings }, usage, pipeline, drive, { data: passkeys }] =
     await Promise.all([
-      listSubscribedFeeds(),
+      listSubscribedFeeds({ stats: true }),
       // 並び順はサイドバーと揃える（sort_order → 名前）。
       supabase.from('folders').select('id, name').order('sort_order').order('name'),
       supabase.from('settings').select('*').maybeSingle(),

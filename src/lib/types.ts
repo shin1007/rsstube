@@ -34,8 +34,10 @@ export type ArticleRow = {
   /**
    * 本文抽出を試みた時刻。null は「まだ取りに行っていない」（0014）。
    * content_ok の false だけでは、失敗したのか順番待ちなのかが分からない。
+   *
+   * リーダーの行でしか見ないので `?`。アーカイブは運ばない。
    */
-  extracted_at: string | null;
+  extracted_at?: string | null;
   /**
    * こちらに入ってきた時刻（巡回で取り込んだとき）。
    *
@@ -43,7 +45,7 @@ export type ArticleRow = {
    * なった時刻とはずれる。省庁のように「日付は同じで、出てくるのは数日後」という
    * 出し方も普通にあるので、並び順と手元に来た順が食い違って見える。
    */
-  created_at: string | null;
+  created_at?: string | null;
   feed: { id: string; title: string } | null;
   /**
    * 要約。title_ja は設定言語での見出し（0023）。一覧では原題より
@@ -61,10 +63,18 @@ export type ArticleRow = {
     tags?: string[];
     title_ja: string | null;
   } | null;
+  /**
+   * 既読・スター・あとで・書き出し済み。
+   *
+   * `is_read` と `read_later` はリーダーの一覧でしか見ないので `?`
+   * ——アーカイブは運ばない。**運ばないものを false で埋めないこと。**
+   * 「知っていて未読」と「そもそも運んでいない」は別の意味で、埋めると
+   * 区別が消える（ui.md の「まだ何も無い状態を実在する値と同じにしない」）。
+   */
   state: {
-    is_read: boolean;
+    is_read?: boolean;
     is_starred: boolean;
-    read_later: boolean;
+    read_later?: boolean;
     exported_at: string | null;
   } | null;
 };

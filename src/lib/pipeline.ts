@@ -20,29 +20,32 @@ export type PipelineStatus = {
   pendingSummary: number;
 };
 
-/** 自分が購読している記事だけを数える（記事自体は全ユーザー共通なので）。 */
-const SELECT = 'id, article_states!inner (is_read), summaries (article_id)';
-
+/**
+ * 数えるのは DB 側（0038 の `pipeline_status()`）。
+ *
+ * 以前はここから `count: 'exact'` の問い合わせを3本投げていた。並べて投げては
+ * いたが、**3本とも articles ⋈ article_states を丸ごと数える同じ走査**で、
+ * 違うのは filter だけ。いちばん遅い1本しか効かないので（perf.md）、
+ * 待ち時間はそのまま最遅の127msだった。1本にまとめれば走査も1回で済む。
+ *
+ * 自分が購読している記事だけを数えるのは関数の中でやっている
+ * （記事自体は全ユーザー共通なので、article_states が切り出しを兼ねる）。
+ */
 export async function pipelineStatus(): Promise<PipelineStatus> {
   const supabase = await createClient();
 
-  const [pending, failed, unsummarized] = await Promise.all([
-    supabase.from('articles').select(SELECT, { count: 'exact', head: true }).is('extracted_at', null),
-    supabase
-      .from('articles')
-      .select(SELECT, { count: 'exact', head: true })
-      .not('extracted_at', 'is', null)
-      .eq('content_ok', false),
-    supabase
-      .from('articles')
-      .select(SELECT, { count: 'exact', head: true })
-      .not('extracted_at', 'is', null)
-      .is('summaries', null),
-  ]);
+  const { data, error } = await supabase.rpc('pipeline_status').maybeSingle();
+  if (error) throw error;
+
+  const row = data as {
+    pending_extract: number;
+    failed_extract: number;
+    pending_summary: number;
+  } | null;
 
   return {
-    pendingExtract: pending.count ?? 0,
-    failedExtract: failed.count ?? 0,
-    pendingSummary: unsummarized.count ?? 0,
+    pendingExtract: Number(row?.pending_extract ?? 0),
+    failedExtract: Number(row?.failed_extract ?? 0),
+    pendingSummary: Number(row?.pending_summary ?? 0),
   };
 }

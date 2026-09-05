@@ -124,40 +124,61 @@ export async function getPlayable(id: string): Promise<{
 } | null> {
   const supabase = await createClient();
 
-  const { data: media } = await supabase
-    .from('media')
-    .select('id, title, status, slides, cover_path, kind, article_id, digest_id')
-    .eq('id', id)
-    .maybeSingle();
+  /**
+   * **要らない順番待ちを作らないこと。** 以前はここが1本の直列だった——
+   * media → セグメント → 署名 → 表紙の署名 → もとの記事、と最大5往復が
+   * 数珠つなぎで、再生画面を開くたびにその合計が待ち時間になっていた。
+   *
+   * 実際に前を待つ必要があるのは署名（セグメントの path が要る）と
+   * もとの記事（media の kind / digest_id が要る）だけ。
+   */
+  const [{ data: media }, { data: rows }] = await Promise.all([
+    supabase
+      .from('media')
+      .select('id, title, status, slides, cover_path, kind, article_id, digest_id')
+      .eq('id', id)
+      .maybeSingle(),
+    supabase
+      .from('media_segments')
+      .select('idx, slide_idx, text, audio_path, duration_sec')
+      .eq('media_id', id)
+      .order('idx'),
+  ]);
   if (!media) return null;
-
-  const { data: rows } = await supabase
-    .from('media_segments')
-    .select('idx, slide_idx, text, audio_path, duration_sec')
-    .eq('media_id', id)
-    .order('idx');
 
   const all = rows ?? [];
   const ready = all.filter((r) => r.audio_path);
 
-  // 署名は1本ぶんまとめて発行する（セグメントごとに往復すると遅い）。
-  const { data: signed } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrls(ready.map((r) => r.audio_path as string), SIGN_TTL_SEC);
+  /**
+   * 署名は1回で全部発行する（セグメントごとに往復すると遅い）。
+   * **表紙も同じ1回に入れる**——別のバケットではないので、分けて呼ぶ理由は無い。
+   */
+  const paths = ready.map((r) => r.audio_path as string);
+  if (media.cover_path) paths.push(media.cover_path as string);
 
-  const urlByPath = new Map((signed ?? []).map((s) => [s.path ?? '', s.signedUrl]));
+  const [{ data: signed }, sources] = await Promise.all([
+    paths.length > 0
+      ? supabase.storage.from(BUCKET).createSignedUrls(paths, SIGN_TTL_SEC)
+      : Promise.resolve({ data: [] }),
+    loadSources(supabase, media),
+  ]);
 
-  // 表紙も同じバケットなので、セグメントと一緒に署名する。
+  const urlByPath = new Map(
+    ((signed ?? []) as { path: string | null; signedUrl: string }[]).map((s) => [
+      s.path ?? '',
+      s.signedUrl,
+    ]),
+  );
+
   const coverUrl = media.cover_path
-    ? ((await supabase.storage.from(BUCKET).createSignedUrl(media.cover_path, SIGN_TTL_SEC)).data
-        ?.signedUrl ?? null)
+    ? (urlByPath.get(media.cover_path as string) ?? null)
     : null;
 
   return {
     title: media.title,
     status: media.status,
     coverUrl,
-    sources: await loadSources(supabase, media),
+    sources,
     doneSegments: ready.length,
     totalSegments: all.length,
     slides: (media.slides ?? []) as Slide[],
