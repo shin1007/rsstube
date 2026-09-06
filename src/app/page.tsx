@@ -1,3 +1,4 @@
+import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
@@ -20,6 +21,20 @@ import { PAGE_SIZE, asId, type View } from '@/lib/types';
 const VIEWS: View[] = ['unread', 'starred', 'later', 'all', 'unsummarized'];
 
 async function ReaderContent({ searchParams }: { searchParams: PageProps<'/'>['searchParams'] }) {
+  /**
+   * **ここから先は「要求が来てから」。**
+   *
+   * `<Suspense>` の中に置いただけでは足りない。prerender は境界の中へも
+   * 入っていき、**最初に「いま」に依るものを踏んだところで落ちる**
+   * ——ここでは supabase-js がトークンの期限を見るのに使う `Date.now()` で、
+   * dev の検証が `Route "/": ... unstable value Date.now()` と教えてくれた。
+   * cookies() を読むより先に踏むので、順番待ちでは避けられない。
+   *
+   * `connection()` は「ここから下は要求ごと」の印。これを置くと prerender は
+   * ここで止まり、枠（サイドバー・下部タブ）だけが静的なぶんとして残る。
+   */
+  await connection();
+
   const params = await searchParams;
 
   const view = (VIEWS as string[]).includes(String(params.view))
