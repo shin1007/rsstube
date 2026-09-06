@@ -1,27 +1,33 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import type { View } from '@/lib/types';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 /**
  * スマホ用の下部タブ。PCではサイドバーがあるので出さない。
  * 記事を開いている間は本文の邪魔になるので隠す。
+ *
+ * **どのタブが選ばれているか・隠すかどうかは URL から読む**（props で
+ * 受け取らない）。渡していた頃は「URL に依存する部品」だったので、
+ * Cache Components の App Shell に入れられず、押すたびにサーバーの返事を
+ * 待ってから出ていた——スマホでは**この帯が唯一の行き先**なので、
+ * そこが待つのはいちばん困る。`useSearchParams()` は画面の中の移動なら
+ * 同期で解決する（Sidebar と同じ理由）。
  */
 export function BottomTabs({
-  view,
-  hidden,
   unplayed = 0,
 }: {
-  view?: View;
-  hidden: boolean;
-  /** まだ聴いていない音声の数。0 ならバッジを出さない。 */
+  /** まだ聴いていない音声の数。0 ならバッジを出さない。セッションのもの。 */
   unplayed?: number;
 }) {
   const pathname = usePathname();
-  if (hidden) return null;
+  const searchParams = useSearchParams();
 
   const isMain = pathname === '/';
+  const view = searchParams.get('view') ?? 'unread';
+
+  // 記事を開いている間は隠す（本文の邪魔になる）。
+  if (isMain && searchParams.get('article')) return null;
 
   const tabs: {
     href: string;

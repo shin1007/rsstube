@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
+import { SidebarFallback } from '@/components/SidebarFallback';
 import { shellData } from '@/lib/shell';
 
 /**
@@ -12,34 +14,35 @@ import { shellData } from '@/lib/shell';
  *
  * スマホでは今までどおりサイドバーは出ない（Sidebar が `hidden md:flex`）。
  * 代わりに下部タブを出して、二次画面からも他へ移れるようにする。
- *
- * 要るものは `shellData()` が**1往復で**返す。以前はここで4本を並べて
- * 投げていたが、全ページで通るところなので往復ぶんが常時かかっていた。
  */
-export async function AppShell({ children }: { children: React.ReactNode }) {
-  const { folders, feeds, unread, unplayed } = await shellData();
-
+export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden">
       {/*
-        二次画面なので、どのビューも「開いている」状態にはしない。
-        view に unread を渡しているが folderId/feedId が無いので、
-        リンク先だけが正しく組み上がり、選択の強調は出ない……のではなく
-        出てしまうため、あえて一覧側と同じ扱いにはしない。
+        サイドバーは**セッションのもの**（フォルダ・購読・未読件数）なので、
+        `shellData()` の `"use cache: private"` に乗って App Shell に入る
+        ——押した瞬間に出る側。中身が来るまでの間だけ枠を出す。
       */}
-      <Sidebar
-        folders={folders}
-        feeds={feeds}
-        unread={unread}
-        unplayed={unplayed}
-        view="unread"
-        active={false}
-      />
+      <Suspense fallback={<SidebarFallback />}>
+        <ShellSidebar />
+      </Suspense>
 
       {children}
 
       {/* 二次画面では記事を開いていないので、常に出す。 */}
-      <BottomTabs hidden={false} unplayed={unplayed} />
+      <Suspense fallback={null}>
+        <ShellTabs />
+      </Suspense>
     </div>
   );
+}
+
+async function ShellSidebar() {
+  const { folders, feeds, unread, unplayed } = await shellData();
+  return <Sidebar folders={folders} feeds={feeds} unread={unread} unplayed={unplayed} />;
+}
+
+async function ShellTabs() {
+  const { unplayed } = await shellData();
+  return <BottomTabs unplayed={unplayed} />;
 }
