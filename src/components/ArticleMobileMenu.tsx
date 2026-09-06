@@ -167,11 +167,21 @@ export function ArticleMobileMenu({
         <ExportDialog result={exportResult} onClose={() => setExportResult(null)} />
       )}
 
-      {/* 右下のフローティングハンバーガーメニュー */}
-      <div ref={menuRef} className="fixed right-4 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 md:hidden flex flex-col items-end select-none no-callout">
+      {/*
+        記事のメニュー。**下の帯（ArticleNav）の中に置く。**
+
+        以前は本文の上に浮かせていた（`fixed right-4 bottom-…`）。押しやすい位置では
+        あるが、**読んでいる行の右端に常に被る**——スクロールしても付いて回るので、
+        1行の右13%が常に隠れた状態で読むことになっていた。帯の中に入れれば
+        指の届く場所は変わらないまま、本文には一切かからない。
+
+        popup は上へ開く（`bottom-full`）。親（帯）が画面の下端に固定されているので、
+        下へ開くと画面の外に出る。
+      */}
+      <div ref={menuRef} className="relative flex flex-col items-end select-none no-callout">
         {/* メニュー展開時のポップアップ */}
         {open && (
-          <div className="mb-2 w-48 rounded-xl border border-zinc-800 bg-zinc-900/95 p-1.5 shadow-2xl backdrop-blur-md flex flex-col gap-0.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <div className="absolute bottom-full right-0 z-40 mb-2 w-48 rounded-xl border border-zinc-800 bg-zinc-900/95 p-1.5 shadow-2xl backdrop-blur-md flex flex-col gap-0.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
             {/* スター */}
             <button
               type="button"
@@ -245,7 +255,7 @@ export function ArticleMobileMenu({
           type="button"
           onClick={() => setOpen(!open)}
           aria-label={open ? 'メニューを閉じる' : '記事のメニューを開く'}
-          className={`size-12 rounded-full border shadow-xl flex items-center justify-center transition-all duration-200 active:scale-90 cursor-pointer select-none no-callout touch-manipulation ${
+          className={`size-10 rounded-full border flex items-center justify-center transition-all duration-200 active:scale-90 cursor-pointer select-none no-callout touch-manipulation ${
             open
               ? 'border-zinc-600 bg-zinc-800 text-zinc-100 rotate-90'
               : 'border-[var(--color-accent-border)] bg-zinc-900/90 text-zinc-200 hover:text-white backdrop-blur-md hover:bg-zinc-800'
