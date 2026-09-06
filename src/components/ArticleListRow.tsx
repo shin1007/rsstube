@@ -212,10 +212,13 @@ export const ArticleListRow = memo(function ArticleListRow({
           </p>
         )}
 
-        <div className="mt-1.5 flex items-center gap-2 text-[14px] text-zinc-600">
-          <span className="truncate">{article.feed?.title}</span>
+        {/* **1行に収める。** 折り返すと「取得」と時刻が上下に割れて、行の高さが
+            記事ごとに変わる（実測。PCの一覧で見出しの左端が揃わなくなる）。
+            縮めてよいのは情報源の名前だけで、日付と時刻は縮めない。 */}
+        <div className="mt-1.5 flex items-center gap-2 overflow-hidden text-[14px] text-zinc-600">
+          <span className="min-w-0 truncate">{article.feed?.title}</span>
           {article.published_at && (
-            <time dateTime={article.published_at}>
+            <time dateTime={article.published_at} className="shrink-0 whitespace-nowrap">
               {new Date(article.published_at).toLocaleDateString('ja-JP', {
                 timeZone: JST,
                 month: 'numeric',
@@ -229,7 +232,7 @@ export const ArticleListRow = memo(function ArticleListRow({
             <time
               dateTime={article.created_at}
               title={`取得 ${new Date(article.created_at).toLocaleString('ja-JP', { timeZone: JST })}`}
-              className="text-zinc-700"
+              className="shrink-0 whitespace-nowrap text-zinc-700"
             >
               取得{formatFetched(article.created_at, article.published_at)}
             </time>

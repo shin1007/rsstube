@@ -162,28 +162,51 @@ export function ArticleView({
                 <span>一覧へ戻る</span>
               </Link>
             </div>
-            <p className="text-xs text-zinc-500">
-              {a.feeds?.title}
-              {a.author && ` / ${a.author}`}
-              {a.published_at &&
-                ` / ${new Date(a.published_at).toLocaleString('ja-JP', {
-                  // **時間帯を渡すこと。** サーバーで文字にしているので、
-                  // 渡さないと Vercel（UTC）で9時間ずれる（lib/datetime.ts）。
-                  timeZone: JST,
-                  year: 'numeric',
-                  month: 'numeric',
-                  day: 'numeric',
-                })}`}
-              {/* 記事の日付の隣に、こちらへ入ってきた時刻。日付は書き手が打ったもので、
-                  実際に読めるようになった時刻とはずれる（省庁は特に）。 */}
+            {/*
+              **情報源は行を分けて、押せるようにする。**
+
+              以前はここが1行で「情報源 / 著者 / 日付 · N分 · 取得 hh:mm」だった。
+              情報源の名前は長いものが多く（実データで最長34字）、スマホでは
+              必ず2行に折り返して、**日付と読む長さが行の途中に散っていた**。
+              名前だけを1行目に出して省略記号で切り、残りを2行目にまとめる。
+
+              名前を押すと、その情報源の記事だけの一覧へ移る。「この続きをもっと」は
+              読んだ直後にいちばん起きることなのに、そこへ行く手が
+              サイドバー（PC）かドロワー（スマホ）しか無かった。
+              飛んだ先では一覧の上に絞り込みの名札が出る（ArticleList）。
+            */}
+            {a.feeds && (
+              <Link
+                href={`/?view=all&feed=${a.feeds.id}`}
+                className="block truncate text-xs text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline"
+                title={`${a.feeds.title} の記事だけを見る`}
+              >
+                {a.feeds.title}
+              </Link>
+            )}
+            <p className="mt-0.5 text-xs text-zinc-600">
+              {a.author && <span>{a.author}</span>}
+              {a.published_at && (
+                <span>
+                  {a.author && ' · '}
+                  {new Date(a.published_at).toLocaleString('ja-JP', {
+                    // **時間帯を渡すこと。** サーバーで文字にしているので、
+                    // 渡さないと Vercel（UTC）で9時間ずれる（lib/datetime.ts）。
+                    timeZone: JST,
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric',
+                  })}
+                </span>
+              )}
               {/* **読み終わるのにどれくらいか。** 要点3つで「読むかどうか」は
                   決まるが、「いま読める長さか（3分か15分か）」は分からなかった。
                   日本語はおよそ500字/分。本文が無い記事には出さない。 */}
-              {readingMinutes !== null && (
-                <span className="text-zinc-600">{` · ${readingMinutes}分`}</span>
-              )}
+              {readingMinutes !== null && <span>{` · ${readingMinutes}分`}</span>}
+              {/* 記事の日付の隣に、こちらへ入ってきた時刻。日付は書き手が打ったもので、
+                  実際に読めるようになった時刻とはずれる（省庁は特に）。 */}
               {a.created_at && (
-                <span className="text-zinc-600">
+                <span>
                   {' · 取得 '}
                   {new Date(a.created_at).toLocaleString('ja-JP', {
                     timeZone: JST,
