@@ -261,3 +261,5 @@ PR を出したまま止めると、マージのためだけにもう一往復�
 - Partial Prefetching では `<Link prefetch={true}>` を並べない。
 - サーバーで日時を文字にするときは時間帯を渡す。
 - 速くするために入れたものは、壊れたら戻す（Cache Components を丸ごと戻した話）。
+- サーバーとブラウザで時間帯が違うと、hydration が食い違う（#418 の正体）。
+- iPhone の不具合は WebKit で見ること（幅を変えるのと engine を変えるのは別）。

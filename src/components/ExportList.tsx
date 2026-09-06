@@ -1,5 +1,6 @@
 'use client';
 
+import { JST } from '@/lib/datetime';
 import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import { getExport } from '@/app/actions/exports';
 import { ExportDialog } from '@/components/ExportDialog';
@@ -106,6 +107,9 @@ function formatDateTime(iso: string): string {
   return Number.isNaN(d.getTime())
     ? iso
     : d.toLocaleString('ja-JP', {
+        // 最初の1枚はサーバーでも描かれる。時間帯を渡さないと
+        // サーバー（UTC）とブラウザ（日本時間）で別の文字になる。
+        timeZone: JST,
         month: 'numeric',
         day: 'numeric',
         hour: '2-digit',
