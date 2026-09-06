@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { AppShellSkeleton, PageSkeleton } from '@/components/Skeleton';
+import { AppShellSkeleton, Bar, PageSkeleton } from '@/components/Skeleton';
 import { JST } from '@/lib/datetime';
 import { currentUser } from '@/lib/auth/session';
 import { AppShell } from '@/components/AppShell';
@@ -69,14 +69,12 @@ async function Settings({ searchParams }: PageProps<'/settings'>) {
     ? ((await searchParams).drive as string)
     : undefined;
 
-  const [feeds, { data: folders }, { data: settings }, usage, pipeline, drive, { data: passkeys }] =
+  const [feeds, { data: folders }, { data: settings }, drive, { data: passkeys }] =
     await Promise.all([
       listSubscribedFeeds({ stats: true }),
       // 並び順はサイドバーと揃える（sort_order → 名前）。
       supabase.from('folders').select('id, name').order('sort_order').order('name'),
       supabase.from('settings').select('*').maybeSingle(),
-      recentUsage(),
-      pipelineStatus(),
       getDriveStatus(),
       // 自分のぶんしか返らない（RLS）。公開鍵そのものは画面に要らない。
       supabase
@@ -379,35 +377,18 @@ async function Settings({ searchParams }: PageProps<'/settings'>) {
           </SettingsForm>
         </section>
 
-        {/* ---------------- 取り込みの進み具合 ---------------- */}
-        <section>
-          <h2 className="mb-2 section-title">取り込みの進み具合</h2>
-          <p className="mb-2 text-xs text-zinc-500">
-            記事は「本文を取りに行く → 要約する」の順に処理されます。フィードを増やした
-            直後はここに溜まりますが、5分ごとに少しずつ減っていきます。
-          </p>
-          <ul className="space-y-1 text-xs">
-            <li className="text-zinc-400">
-              本文の順番待ち: <span className="text-zinc-200">{pipeline.pendingExtract}件</span>
-              <span className="ml-1 text-zinc-600">（待てば減ります）</span>
-            </li>
-            <li className="text-zinc-400">
-              要約の順番待ち: <span className="text-zinc-200">{pipeline.pendingSummary}件</span>
-            </li>
-            <li className={pipeline.failedExtract > 0 ? 'text-amber-500' : 'text-zinc-400'}>
-              本文を取れなかった記事: {pipeline.failedExtract}件
-              <span className="ml-1 text-zinc-600">
-                （ペイウォールやアクセス制限。RSSの抜粋から要約します）
-              </span>
-            </li>
-          </ul>
-        </section>
+        {/*
+          ---------------- 取り込みの進み具合と使用量 ----------------
 
-        {/* ---------------- 使用量 ---------------- */}
-        <section>
-          <h2 className="mb-2 section-title">AI の使用量（直近7日）</h2>
-          <UsageTable usage={usage} />
-        </section>
+          **この2つだけ、あとから流す。** どちらも「様子を見る」ための数字で、
+          設定を変えに来た人がまず見るものではない。それでいて `pipeline_status()` は
+          この画面でいちばん遅い問い合わせだった（他は往復の下限＋5〜15ms なのに
+          対して＋70ms）。上に並べて待つと、フィードの追加も朝の時刻も
+          その70msぶん遅れて出る。
+        */}
+        <Suspense fallback={<DiagnosticsSkeleton />}>
+          <Diagnostics />
+        </Suspense>
 
         {/* ---------------- 通知 ---------------- */}
         <section>
@@ -597,5 +578,60 @@ async function Settings({ searchParams }: PageProps<'/settings'>) {
         </div>
       </main>
     </AppShell>
+  );
+}
+
+/** 取り込みの進み具合と AI の使用量。**設定の本体より後に流す**（上の注記）。 */
+async function Diagnostics() {
+  const [pipeline, usage] = await Promise.all([pipelineStatus(), recentUsage()]);
+
+  return (
+    <>
+      <section>
+        <h2 className="mb-2 section-title">取り込みの進み具合</h2>
+        <p className="mb-2 text-xs text-zinc-500">
+          記事は「本文を取りに行く → 要約する」の順に処理されます。フィードを増やした
+          直後はここに溜まりますが、5分ごとに少しずつ減っていきます。
+        </p>
+        <ul className="space-y-1 text-xs">
+          <li className="text-zinc-400">
+            本文の順番待ち: <span className="text-zinc-200">{pipeline.pendingExtract}件</span>
+            <span className="ml-1 text-zinc-600">（待てば減ります）</span>
+          </li>
+          <li className="text-zinc-400">
+            要約の順番待ち: <span className="text-zinc-200">{pipeline.pendingSummary}件</span>
+          </li>
+          <li className={pipeline.failedExtract > 0 ? 'text-amber-500' : 'text-zinc-400'}>
+            本文を取れなかった記事: {pipeline.failedExtract}件
+            <span className="ml-1 text-zinc-600">
+              （ペイウォールやアクセス制限。RSSの抜粋から要約します）
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 className="mb-2 section-title">AI の使用量（直近7日）</h2>
+        <UsageTable usage={usage} />
+      </section>
+    </>
+  );
+}
+
+/** 上の2節ぶんの場所取り。見出しは出す——出さないと節そのものが消えたように見える。 */
+function DiagnosticsSkeleton() {
+  return (
+    <>
+      <section aria-busy="true">
+        <h2 className="mb-2 section-title">取り込みの進み具合</h2>
+        <Bar className="h-3 w-2/3" />
+        <Bar className="mt-2 h-3 w-1/2" />
+        <Bar className="mt-2 h-3 w-3/5" />
+      </section>
+      <section aria-busy="true">
+        <h2 className="mb-2 section-title">AI の使用量（直近7日）</h2>
+        <Bar className="h-16 w-full" />
+      </section>
+    </>
   );
 }
