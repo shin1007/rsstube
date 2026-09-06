@@ -128,7 +128,7 @@ const LIST_SELECT = `id, title, url, published_at, excerpt, extracted_at, create
    article_states!inner (is_read, is_starred, read_later, exported_at)`;
 
 /**
- * 前後の記事を出すためだけの、id しか要らないぶん。件数を数えるのにも使う。
+ * 前後の記事を出すためだけの、id しか要らないぶん。
  *
  * 埋め込みを落とせないのは、絞り込み（未読・スター・フォルダ）が
  * 埋め込んだ表の列を見るため。!inner が無いと条件そのものが書けない。
@@ -211,7 +211,21 @@ function applyFilters<T>(q: T, query: ArticleQuery, searchIds?: string[]): T {
  * select を変数で渡しているので supabase-js の型推論は効かない。
  * 呼び出し側が形を知っているので、そちらで受け直すこと。
  */
-async function run(select: string, query: ArticleQuery, limit: number) {
+async function run(
+  select: string,
+  query: ArticleQuery,
+  limit: number,
+  /**
+   * 総数も一緒に返してもらうか。**1ページ目でだけ true にすること。**
+   *
+   * `count: 'exact'` を付けると、範囲が総数を追い越したときに PostgREST が
+   * 416（PGRST103 `Requested range not satisfiable`）で落ちる。付けない同じ
+   * 問い合わせは 200 と空配列で返る（実測: offset=5000 で 416 / 0件）。
+   * 無限スクロールの継ぎ足しは終わりを「返ってきた数が1ページに満たないこと」で
+   * 見ているので、ここで投げると一覧の末尾に「読み込めませんでした」が出る。
+   */
+  withCount = false,
+) {
   const supabase = await createClient();
 
   // 購読しているフィードだけに絞る。空の in は「1件も無い」で、
@@ -225,7 +239,7 @@ async function run(select: string, query: ArticleQuery, limit: number) {
   let q = applyFilters(
     supabase
       .from('articles')
-      .select(select)
+      .select(select, withCount ? { count: 'exact' } : undefined)
       .in('feed_id', feedIds)
       .range(query.offset ?? 0, (query.offset ?? 0) + limit - 1),
     query,
@@ -247,15 +261,37 @@ async function run(select: string, query: ArticleQuery, limit: number) {
     .order('published_at', { ascending: false, nullsFirst: false })
     .order('id', { ascending: false });
 
-  const { data, error } = await q;
+  const { data, count, error } = await q;
   if (error) throw error;
-  return data ?? [];
+  return { rows: data ?? [], total: count ?? null };
 }
 
-export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
-  const data = await run(LIST_SELECT, query, PAGE_SIZE);
+/**
+ * 一覧1ページぶんと、いまの絞り込みの総数。
+ *
+ * **総数は一覧と同じ1回で受け取る**（`count: 'exact'`）。以前は
+ * `countArticles()` を別に投げていて、`Promise.all` で並べてはいたものの
+ * **その1本が毎回いちばん遅かった**（実測・手元から: 一覧 79ms に対して
+ * 件数だけの `head: true` が 112ms。「すべて」でも 120ms 対 128ms）。
+ * 同じ問い合わせに載せると増える時間は誤差の範囲だった（79→79ms、120→116ms）
+ * ——PostgREST が数えるのに払っていたのは走査ではなく、問い合わせを
+ * もう1本組み立てて往復するほうだったということ（docs/traps/perf.md の
+ * 「exact count は DB が数えるより一桁高い」と同じ話）。
+ *
+ * 総数が要るのは1ページ目だけ（「あと何件」の表示）。継ぎ足しでは頼まない
+ * ——範囲が総数を追い越すと 416 になるため（`run()` の withCount）。
+ */
+export type ArticlePage = {
+  articles: ArticleRow[];
+  /** いまの絞り込みの総数。頼んでいないとき（継ぎ足し）は null。 */
+  total: number | null;
+};
 
-  return (data as unknown as RawRow[]).map((r) => {
+export async function listArticles(query: ArticleQuery): Promise<ArticlePage> {
+  const offset = query.offset ?? 0;
+  const { rows, total } = await run(LIST_SELECT, query, PAGE_SIZE, offset === 0);
+
+  const articles = (rows as unknown as RawRow[]).map((r) => {
     // 行は先頭3つしか出さない。4つ目から先は運ぶだけ無駄になる。
     const bullets = r.summaries?.bullets?.slice(0, 3) ?? [];
 
@@ -280,6 +316,8 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
       state: r.article_states ?? null,
     };
   });
+
+  return { articles, total };
 }
 
 /**
@@ -300,41 +338,25 @@ const NEIGHBOUR_SCAN = 600;
  * もう居ない。id では引っかからないが、日付なら「居たはずの場所」が分かる。
  */
 /**
- * いまの絞り込みに何件あるか。**「あと何件」を出すためだけのもの。**
+ * 「あと何件」の総数は `listArticles()` が一覧と同じ1回で返す。
  *
- * 行は1件も運ばない（`head: true`）ので、返ってくるのは数だけ。
- * 一覧の取得とは**並行して**投げること（page.tsx の Promise.all）。
- * 直列にすると、そのぶんがまるごと画面遷移の待ち時間に乗る。
+ * 以前ここに `countArticles()`（`count: 'exact', head: true`）があった。
+ * 別に投げていた理由は「行を1件も運ばないから安い」だったが、実測すると
+ * **一覧そのものより遅い1本**だった（79ms 対 112ms）。数える走査ではなく、
+ * PostgREST がもう1本組み立てて往復するぶんを払っていたため。
+ * **同じことを数える口を2つ持たないこと**——絞り込みがずれると
+ * 「あと12件」と出しておきながら3件目で終わる形で表に出る。
  *
- * 以前ここを数えなかったのは「未読ビューでは読むそばから変わるから」だった。
- * 変わるのはそのとおりだが、**読み手が知りたいのは正確な在庫ではなく
- * 「まだ続くのか、もう終わりか」**で、1件ずれても用は足りる。
- * 数が無いほうが困る——終わりが見えないまま押し続けることになる。
+ * 以前ここを数えなかった時期の判断（未読ビューでは読むそばから変わるから）は
+ * 変えていない: 読み手が知りたいのは正確な在庫ではなく「まだ続くのか」で、
+ * 1件ずれても用は足りる。数が無いほうが困る。
  */
-export async function countArticles(query: ArticleQuery): Promise<number | null> {
-  const supabase = await createClient();
-  const [feedIds, searchIds] = await Promise.all([
-    subscribedIdsFor(query),
-    searchIdsIfAny(query),
-  ]);
-
-  const { count, error } = await applyFilters(
-    supabase
-      .from('articles')
-      .select(ID_SELECT, { count: 'exact', head: true })
-      .in('feed_id', feedIds),
-    query,
-    searchIds,
-  );
-  if (error) throw error;
-  return count;
-}
 
 export type ArticleSlot = { id: string; published_at: string | null };
 
 export async function listArticleIds(query: ArticleQuery): Promise<ArticleSlot[]> {
-  const data = await run(ID_SELECT, { ...query, offset: 0 }, NEIGHBOUR_SCAN);
-  return (data as unknown as ArticleSlot[]).map((r) => ({
+  const { rows } = await run(ID_SELECT, { ...query, offset: 0 }, NEIGHBOUR_SCAN);
+  return (rows as unknown as ArticleSlot[]).map((r) => ({
     id: r.id,
     published_at: r.published_at,
   }));

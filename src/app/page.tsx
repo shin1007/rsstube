@@ -3,7 +3,7 @@ import { ArticleView } from '@/components/ArticleView';
 import { AppBadge } from '@/components/AppBadge';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
-import { countArticles, getArticle, listArticleIds, listArticles } from '@/lib/articles';
+import { getArticle, listArticleIds, listArticles } from '@/lib/articles';
 import { shellData } from '@/lib/shell';
 import { PAGE_SIZE, asId, type View } from '@/lib/types';
 
@@ -55,14 +55,20 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
 
   // サイドバーと下部タブが要るもの（フォルダ・購読フィード・未読件数・未聴数）は
   // shellData() が1往復で返す。以前はここに4本並んでいた（0039）。
-  const [shell, [articles, searchFailed], picked, [total]] = await Promise.all([
+  //
+  // 「あと何件」の総数も listArticles() が同じ1回で返す。以前はここに
+  // countArticles() が並んでいたが、並べても**その1本がいちばん遅い**ので
+  // 待ち時間はそのまま乗っていた（lib/articles.ts）。
+  const [shell, [page, searchFailed], picked] = await Promise.all([
     shellData(),
-    searchable(() => listArticles({ view, folderId, feedId, search }), []),
+    searchable(() => listArticles({ view, folderId, feedId, search }), {
+      articles: [],
+      total: null,
+    }),
     selectedId ? getArticle(selectedId) : Promise.resolve(null),
-    // 「あと何件」を出すためだけの数。**並べて投げること**——直列にすると
-    // そのぶんが画面遷移の待ち時間にまるごと乗る（docs/traps/perf.md）。
-    searchable(() => countArticles({ view, folderId, feedId, search }), null),
   ] as const);
+
+  const { articles, total } = page;
 
   const { folders, feeds, unread: counts, unplayed } = shell;
 
