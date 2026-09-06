@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import { AppShellSkeleton, PageSkeleton } from '@/components/Skeleton';
 import { AppShell } from '@/components/AppShell';
 import { ExportList, type ExportSummary } from '@/components/ExportList';
 import { createClient } from '@/lib/supabase/server';
@@ -15,7 +17,23 @@ export const dynamic = 'force-dynamic';
 /** 一覧に出す件数。溜まっても遡って使うのは直近だけ。 */
 const LIMIT = 50;
 
-export default async function ExportsPage() {
+/**
+ * **枠だけを先に流すための入れ子。ここは `async` にしないこと。**
+ *
+ * 本体が最初の `await` を返すまで、React は `<html>` も `<head>` も出せない
+ * ——ブラウザが CSS と JS を落とし始められるのがそこからになる
+ * （docs/traps/perf.md「最初の `await` が終わるまで `<head>` すら出ない」）。
+ * fallback は `components/Skeleton.tsx`。
+ */
+export default function ExportsPage() {
+  return (
+    <Suspense fallback={<AppShellSkeleton><PageSkeleton rows={6} /></AppShellSkeleton>}>
+      <Exports />
+    </Suspense>
+  );
+}
+
+async function Exports() {
   const supabase = await createClient();
 
   const [{ data }, { data: digests }] = await Promise.all([

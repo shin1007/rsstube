@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import { AppShellSkeleton, PageSkeleton } from '@/components/Skeleton';
 import { JST } from '@/lib/datetime';
 import { AppShell } from '@/components/AppShell';
 import { LIBRARY_PAGE_SIZE, listTags, searchLibrary } from '@/lib/library';
@@ -21,7 +23,23 @@ const RANGES: { label: string; days?: number }[] = [
   { label: '7日', days: 7 },
 ];
 
-export default async function LibraryPage({ searchParams }: PageProps<'/library'>) {
+/**
+ * **枠だけを先に流すための入れ子。ここは `async` にしないこと。**
+ *
+ * 本体が最初の `await` を返すまで、React は `<html>` も `<head>` も出せない
+ * ——ブラウザが CSS と JS を落とし始められるのがそこからになる
+ * （docs/traps/perf.md「最初の `await` が終わるまで `<head>` すら出ない」）。
+ * fallback は `components/Skeleton.tsx`。
+ */
+export default function LibraryPage(props: PageProps<'/library'>) {
+  return (
+    <Suspense fallback={<AppShellSkeleton><PageSkeleton rows={6} tall /></AppShellSkeleton>}>
+      <Library {...props} />
+    </Suspense>
+  );
+}
+
+async function Library({ searchParams }: PageProps<'/library'>) {
   const params = await searchParams;
 
   const q = typeof params.q === 'string' ? params.q : '';

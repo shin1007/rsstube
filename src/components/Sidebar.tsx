@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LinkPending } from "@/components/NavProgress";
 import type { FeedRow, FolderRow, View } from "@/lib/types";
 import { VIEW_LABELS } from "@/lib/types";
 
@@ -99,6 +100,7 @@ export function SidebarContent({
               }`}
             >
               {VIEW_LABELS[v]}
+              <LinkPending />
             </Link>
           ))}
         </div>
@@ -204,6 +206,7 @@ export function SidebarContent({
                 {unplayed}
               </span>
             )}
+            <LinkPending />
           </Link>
         ))}
       </div>
@@ -261,6 +264,7 @@ function FeedLink({
       {count > 0 && (
         <span className="ml-2 shrink-0 text-xs text-zinc-500">{count}</span>
       )}
+      <LinkPending />
     </Link>
   );
 }
