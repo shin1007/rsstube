@@ -1,4 +1,4 @@
-import { cacheLife } from 'next/cache';
+import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import type { FeedRow, FolderRow } from '@/lib/types';
 
@@ -11,17 +11,9 @@ import type { FeedRow, FolderRow } from '@/lib/types';
  * しかかからない（0039 のコメント）。つまり削れるのは実行時間ではなく、
  * HTTP の往復と問い合わせの組み立てを3回ぶん。全ページで通るので常時効く。
  *
- * **`"use cache: private"` にしてある。** これが付いていると、この結果は
- * Cache Components の App Shell（＝リンクを押した瞬間に出せるぶん）に入る。
- * ログインが要るアプリでも使えるのは、**結果がブラウザの中にしか置かれない**
- * から——サーバーには残らないので、他人のサイドバーが混ざる余地が無い。
- *
- * `stale` は 30 秒。Next が受け付ける下限で、これ以上短くはできない
- * （先読みしたものが使えなくなるため）。未読の数がその間だけ古くなりうるが、
- * **スター・あとで・手で付けた既読は Server Action が `revalidatePath` を
- * 呼ぶので、その場でブラウザのキャッシュごと捨てられる**（＝すぐ新しくなる）。
- * 残るのは「開いた拍子の既読」だけで、そこはもともと1件ぶん遅れる仕様
- * （docs/traps/perf.md）。
+ * `cache()` で包んであるのは、1リクエストの中で AppShell と
+ * ページ本体の両方から呼ばれても1回で済ませるため。リクエストをまたいでは
+ * 残らないので、購読やフォルダを変えた直後から効く。
  */
 
 export type ShellData = {
@@ -40,10 +32,7 @@ type RawShell = {
   unplayed: number;
 };
 
-export async function shellData(): Promise<ShellData> {
-  'use cache: private';
-  cacheLife({ stale: 30 });
-
+export const shellData = cache(async (): Promise<ShellData> => {
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc('shell_data');
@@ -61,4 +50,4 @@ export async function shellData(): Promise<ShellData> {
     unread: new Map(Object.entries(raw.unread ?? {}).map(([id, n]) => [id, Number(n)])),
     unplayed: Number(raw.unplayed ?? 0),
   };
-}
+});

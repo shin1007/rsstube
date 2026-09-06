@@ -17,6 +17,8 @@ import { type NextRequest } from 'next/server';
  * 他人の id を入れても行が取れずに 404 になる。
  */
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /** Storage の署名URLの寿命。落とすだけなので短くてよい。 */
 const SIGN_TTL_SEC = 300;

@@ -1,3 +1,5 @@
+import { JST } from '@/lib/datetime';
+
 /**
  * NotebookLM に渡すための Markdown を組み立てる。
  *
@@ -6,8 +8,6 @@
  * 各記事に出典URLを必ず入れておくと、音声概要の中で
  * 「どの記事の話か」が保たれやすい。
  */
-
-import { JST } from '@/lib/datetime';
 
 export type ExportArticle = {
   title: string;

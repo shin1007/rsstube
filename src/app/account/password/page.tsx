@@ -15,6 +15,8 @@ import { redirect } from 'next/navigation';
  * どちらもセッションがある前提。無ければ proxy が /login へ返す。
  */
 
+export const dynamic = 'force-dynamic';
+
 /** ログイン画面と揃えること。 */
 const MIN_PASSWORD = 8;
 
@@ -109,9 +111,3 @@ export default async function PasswordPage({ searchParams }: PageProps<'/account
     </main>
   );
 }
-
-/**
- * まだ「押した瞬間に枠が出る」形に直していないので、ブロックを許す。
- * 直したら消すこと（docs/traps/perf.md）。
- */
-export const instant = false;

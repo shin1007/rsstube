@@ -1,33 +1,27 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import type { View } from '@/lib/types';
 
 /**
  * スマホ用の下部タブ。PCではサイドバーがあるので出さない。
  * 記事を開いている間は本文の邪魔になるので隠す。
- *
- * **どのタブが選ばれているか・隠すかどうかは URL から読む**（props で
- * 受け取らない）。渡していた頃は「URL に依存する部品」だったので、
- * Cache Components の App Shell に入れられず、押すたびにサーバーの返事を
- * 待ってから出ていた——スマホでは**この帯が唯一の行き先**なので、
- * そこが待つのはいちばん困る。`useSearchParams()` は画面の中の移動なら
- * 同期で解決する（Sidebar と同じ理由）。
  */
 export function BottomTabs({
+  view,
+  hidden,
   unplayed = 0,
 }: {
-  /** まだ聴いていない音声の数。0 ならバッジを出さない。セッションのもの。 */
+  view?: View;
+  hidden: boolean;
+  /** まだ聴いていない音声の数。0 ならバッジを出さない。 */
   unplayed?: number;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  if (hidden) return null;
 
   const isMain = pathname === '/';
-  const view = searchParams.get('view') ?? 'unread';
-
-  // 記事を開いている間は隠す（本文の邪魔になる）。
-  if (isMain && searchParams.get('article')) return null;
 
   const tabs: {
     href: string;
@@ -50,7 +44,7 @@ export function BottomTabs({
         <Link
           key={tab.label}
           href={tab.href}
-         
+          prefetch={true}
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           className={`flex min-h-12 flex-1 items-center justify-center text-center text-xs transition touch-manipulation select-none no-callout ${
             tab.isActive

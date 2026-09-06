@@ -13,6 +13,8 @@ import { notFound } from 'next/navigation';
  * ロック画面からは MediaSession で操作できる）。プレイヤーを2つ作らない。
  */
 
+export const dynamic = 'force-dynamic';
+
 export default async function WatchPage({ params }: PageProps<'/watch/[id]'>) {
   const { id } = await params;
   const media = await getPlayable(id);
@@ -81,9 +83,3 @@ export default async function WatchPage({ params }: PageProps<'/watch/[id]'>) {
     </div>
   );
 }
-
-/**
- * まだ「押した瞬間に枠が出る」形に直していないので、ブロックを許す。
- * 直したら消すこと（docs/traps/perf.md）。
- */
-export const instant = false;

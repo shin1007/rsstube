@@ -12,6 +12,8 @@ import { createClient } from '@/lib/supabase/server';
  * ポリシーを1つも作っていないので、本人のセッションからは触れない（意図的）。
  */
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 

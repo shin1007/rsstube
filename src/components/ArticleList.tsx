@@ -933,11 +933,13 @@ export function ArticleList({
               </button>
             </div>
             <div className="flex-1 min-h-0 flex flex-col">
-              {/* 選んでいる場所は SidebarContent が URL から読む（props で渡さない）。 */}
               <SidebarContent
                 folders={folders}
                 feeds={feeds}
                 unread={unread}
+                view={view}
+                folderId={folderId}
+                feedId={feedId}
                 unplayed={unplayed}
                 onNavigate={() => setDrawerOpen(false)}
               />
