@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { LinkPending } from '@/components/NavProgress';
 import type { View } from '@/lib/types';
 
 /**
@@ -67,6 +68,8 @@ export function BottomTabs({
               </span>
             ) : null}
           </span>
+          {/* 押してから画面が変わるまで、上端に帯を出す。 */}
+          <LinkPending />
         </Link>
       ))}
     </nav>

@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import { WatchSkeleton } from '@/components/Skeleton';
 import { MediaRetryButton } from '@/components/MediaRetryButton';
 import { Player } from '@/components/Player';
 import { SourceLinks } from '@/components/SourceLinks';
@@ -15,7 +17,23 @@ import { notFound } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-export default async function WatchPage({ params }: PageProps<'/watch/[id]'>) {
+/**
+ * **枠だけを先に流すための入れ子。ここは `async` にしないこと。**
+ *
+ * 本体が最初の `await` を返すまで、React は `<html>` も `<head>` も出せない
+ * ——ブラウザが CSS と JS を落とし始められるのがそこからになる
+ * （docs/traps/perf.md「最初の `await` が終わるまで `<head>` すら出ない」）。
+ * fallback は `components/Skeleton.tsx`。
+ */
+export default function WatchPage(props: PageProps<'/watch/[id]'>) {
+  return (
+    <Suspense fallback={<WatchSkeleton />}>
+      <Watch {...props} />
+    </Suspense>
+  );
+}
+
+async function Watch({ params }: PageProps<'/watch/[id]'>) {
   const { id } = await params;
   const media = await getPlayable(id);
   if (!media) notFound();

@@ -4,7 +4,7 @@ import { ArticleView } from '@/components/ArticleView';
 import { AppBadge } from '@/components/AppBadge';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
-import { ReaderSkeleton } from '@/components/ReaderSkeleton';
+import { ReaderSkeleton } from '@/components/Skeleton';
 import { getArticle, listArticleIds, listArticles } from '@/lib/articles';
 import { shellData } from '@/lib/shell';
 import { PAGE_SIZE, asId, type View } from '@/lib/types';

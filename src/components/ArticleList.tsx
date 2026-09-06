@@ -29,6 +29,7 @@ import {
   type View,
 } from '@/lib/types';
 import { prefetchFull } from '@/lib/prefetch';
+import { TopProgress } from '@/components/NavProgress';
 import { useNeighbours } from '@/lib/trail';
 import {
   readMarksServerSnapshot,
@@ -284,9 +285,16 @@ export function ArticleList({
     [searchParams],
   );
 
+  /**
+   * **押したことが分かるようにする。** 遷移は 250〜380ms かかり、そのあいだ
+   * 画面は押す前のまま（React は新しい中身が揃うまで今の画面を出したままにする）。
+   * 骨組みに差し替えると読んでいたものが消えるので、上端の帯だけ出す。
+   */
+  const [navigating, startNav] = useTransition();
+
   const pushParams = useCallback(
     (mutate: (sp: URLSearchParams) => void) => {
-      router.push(hrefWith(mutate));
+      startNav(() => router.push(hrefWith(mutate)));
     },
     [router, hrefWith],
   );
@@ -621,6 +629,10 @@ export function ArticleList({
 
   return (
     <div className="relative flex flex-col h-full min-h-0">
+      {/* 一覧を押した／検索した／記事を開いた、が受け付けられたことを見せる。
+          ← → での移動（moving）も同じ帯で出す。 */}
+      <TopProgress show={navigating || moving} />
+
       <header className="border-b border-zinc-800 px-3 py-2">
         {/* どのビューを見ているかを常に出す。スマホでは下部タブしか手がかりが無かった。 */}
         <div className="flex items-center gap-2">

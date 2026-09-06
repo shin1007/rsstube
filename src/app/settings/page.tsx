@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import { AppShellSkeleton, PageSkeleton } from '@/components/Skeleton';
 import { JST } from '@/lib/datetime';
 import { currentUser } from '@/lib/auth/session';
 import { AppShell } from '@/components/AppShell';
@@ -44,7 +46,23 @@ import type { FeedRow, FolderRow } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SettingsPage({ searchParams }: PageProps<'/settings'>) {
+/**
+ * **枠だけを先に流すための入れ子。ここは `async` にしないこと。**
+ *
+ * 本体が最初の `await` を返すまで、React は `<html>` も `<head>` も出せない
+ * ——ブラウザが CSS と JS を落とし始められるのがそこからになる
+ * （docs/traps/perf.md「最初の `await` が終わるまで `<head>` すら出ない」）。
+ * fallback は `components/Skeleton.tsx`。
+ */
+export default function SettingsPage(props: PageProps<'/settings'>) {
+  return (
+    <Suspense fallback={<AppShellSkeleton><PageSkeleton rows={7} tall /></AppShellSkeleton>}>
+      <Settings {...props} />
+    </Suspense>
+  );
+}
+
+async function Settings({ searchParams }: PageProps<'/settings'>) {
   const supabase = await createClient();
   // OAuth から戻ってきたときの結果（?drive=connected など）。
   const notice = typeof (await searchParams).drive === 'string'

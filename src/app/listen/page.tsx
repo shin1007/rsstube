@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import { AppShellSkeleton, PageSkeleton } from '@/components/Skeleton';
 import { AppShell } from '@/components/AppShell';
 import { MediaRetryButton } from '@/components/MediaRetryButton';
 import { PlayButton } from '@/components/Playback';
@@ -28,7 +30,23 @@ const STATUS_LABEL: Record<string, string> = {
   failed: '失敗',
 };
 
-export default async function ListenPage() {
+/**
+ * **枠だけを先に流すための入れ子。ここは `async` にしないこと。**
+ *
+ * 本体が最初の `await` を返すまで、React は `<html>` も `<head>` も出せない
+ * ——ブラウザが CSS と JS を落とし始められるのがそこからになる
+ * （docs/traps/perf.md「最初の `await` が終わるまで `<head>` すら出ない」）。
+ * fallback は `components/Skeleton.tsx`。
+ */
+export default function ListenPage() {
+  return (
+    <Suspense fallback={<AppShellSkeleton><PageSkeleton rows={5} /></AppShellSkeleton>}>
+      <Listen />
+    </Suspense>
+  );
+}
+
+async function Listen() {
   const media = await listMedia();
 
   return (
