@@ -627,6 +627,33 @@ export function ArticleList({
 
   const unreadCount = rows.filter((a) => !a.state?.is_read).length;
 
+  /**
+   * **いま何の中を見ているのかを、一覧の側に出す**（docs/usability.md の2）。
+   *
+   * フィードやフォルダで絞ると、一覧の見出しはビュー名（未読・すべて…）しか
+   * 出しておらず、**0件だったときに「どこにも無い」のか「この情報源に無い」のかが
+   * 区別できなかった**。サイドバーの選択で分かるのはPCだけで、スマホには
+   * 手がかりが一つも無い（ドロワーは閉じている）。
+   *
+   * 名前が引けないことがある——購読を解除した直後や、URL を直接叩いたとき。
+   * そのときは何も出さない。id をそのまま出しても読めないし、
+   * 「まだ何も無い」と「実在しない」を同じ見た目にしないため（traps/ui.md）。
+   */
+  const scope = feedId
+    ? { kind: '情報源' as const, name: feeds.find((f) => f.id === feedId)?.title }
+    : folderId
+      ? { kind: 'フォルダ' as const, name: folders.find((f) => f.id === folderId)?.name }
+      : null;
+  const scopeName = scope?.name?.trim() || undefined;
+
+  /** 絞り込みを外す。記事の選択も外す——別の情報源の記事が開いたままになるので。 */
+  const clearScope = () =>
+    pushParams((sp) => {
+      sp.delete('feed');
+      sp.delete('folder');
+      sp.delete('article');
+    });
+
   return (
     <div className="relative flex flex-col h-full min-h-0">
       {/* 一覧を押した／検索した／記事を開いた、が受け付けられたことを見せる。
@@ -684,6 +711,27 @@ export function ArticleList({
             </button>
           )}
         </div>
+
+        {/*
+          絞り込んでいるときだけ、その名前を出す。**押せば外せる**ようにしてある
+          ——スマホでは、いま外す手がドロワーを開き直すことしか無かった。
+          行を1つ増やすのは絞り込んでいる間だけ。
+        */}
+        {scopeName && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="shrink-0 text-xs text-zinc-500">{scope?.kind}</span>
+            <button
+              type="button"
+              onClick={clearScope}
+              title="この絞り込みを外す"
+              className="flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)] px-2.5 py-0.5 text-xs text-[var(--color-accent-text)] hover:brightness-110 active:scale-95 transition cursor-pointer"
+            >
+              <span className="truncate">{scopeName}</span>
+              <span aria-hidden className="shrink-0 text-zinc-400">✕</span>
+              <span className="sr-only">この絞り込みを外す</span>
+            </button>
+          </div>
+        )}
 
         <div className="mt-2 flex items-center gap-2">
           {/* 検索はサーバ側に前からあったが、入力欄が無くて使えなかった。 */}
@@ -768,20 +816,45 @@ export function ArticleList({
           </p>
         )}
         {rows.length === 0 && (
-          <p className="p-6 text-center text-sm text-zinc-500">
+          <div className="p-6 text-center text-sm text-zinc-500">
             {/* **「0件」と「引けなかった」を同じ文面にしないこと。**
                 前者は探し方を変える話、後者は語を短くする・記号を外す話で、
-                次にやることが違う。 */}
-            {searchFailed
-              ? `「${search}」では検索できませんでした。語を短くするか、記号を減らして試してください`
-              : search
-              ? `「${search}」に一致する記事はありません`
-              : view === 'unread'
-                ? '未読はありません'
-                : view === 'unsummarized'
-                  ? '要約が付いていない記事はありません'
-                  : '記事がありません'}
-          </p>
+                次にやることが違う。
+                **どこを探した結果なのかも書く**——絞り込んでいると、
+                「どこにも無い」と「この情報源に無い」が同じ文面になっていた。 */}
+            <p>
+              {searchFailed
+                ? `「${search}」では検索できませんでした。語を短くするか、記号を減らして試してください`
+                : search
+                  ? `「${search}」に一致する記事はありません${scopeName ? `（${scopeName} の中）` : ''}`
+                  : view === 'unread'
+                    ? scopeName
+                      ? `${scopeName} に未読はありません`
+                      : '未読はありません'
+                    : view === 'unsummarized'
+                      ? '要約が付いていない記事はありません'
+                      : scopeName
+                        ? `${scopeName} に記事はありません`
+                        : '記事がありません'}
+            </p>
+
+            {/* **0件で終わらせない。** 空の一覧はそれ自体が行き止まりで、
+                スマホには次に押すものが何も無かった。広げる先は1つだけ出す
+                ——選ばせると、それ自体が考えることになる。 */}
+            {!searchFailed && scopeName && (
+              <button
+                type="button"
+                onClick={search ? clearScope : () => pushParams((sp) => sp.set('view', 'all'))}
+                className="mt-3 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100 active:scale-95 transition cursor-pointer"
+              >
+                {search
+                  ? '絞り込みを外して探す'
+                  : view === 'all'
+                    ? 'すべての情報源を見る'
+                    : `${scopeName} のすべてを見る`}
+              </button>
+            )}
+          </div>
         )}
 
         {rows.map((article, i) => (
