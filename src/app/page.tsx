@@ -1,8 +1,10 @@
+import { Suspense } from 'react';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
 import { AppBadge } from '@/components/AppBadge';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
+import { ReaderSkeleton } from '@/components/ReaderSkeleton';
 import { getArticle, listArticleIds, listArticles } from '@/lib/articles';
 import { shellData } from '@/lib/shell';
 import { PAGE_SIZE, asId, type View } from '@/lib/types';
@@ -19,7 +21,31 @@ export const dynamic = 'force-dynamic';
 
 const VIEWS: View[] = ['unread', 'starred', 'later', 'all', 'unsummarized'];
 
-export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
+/**
+ * **枠だけを先に流すための入れ子。ここは `async` にしないこと。**
+ *
+ * ページ本体が最初の `await` を返すまで、React は `<html>` も `<head>` も
+ * 出せない。以前はページ全体が1つの async 関数だったので、本番の実測で
+ * `</head>` が届くのが 472ms ——**ブラウザが CSS と JS を落とし始められるのが
+ * そこから**だった。ホーム画面から起動して真っ暗なあいだ、通信は何もしていない。
+ *
+ * 本体を `<Suspense>` に入れると `<head>` と枠が先に出るので、DB を待つ時間と
+ * CSS/JS の取得が重なる。`searchParams` の await も境界の中に入っている必要が
+ * あるので、Promise のまま渡す（ここで await すると元に戻る）。
+ *
+ * **画面遷移の見え方は変わらない。** 遷移は transition の中で起きるので、
+ * React は新しい中身が揃うまで今の画面を出したままにする。fallback が挟まるのは
+ * この境界が新しく生まれるとき＝最初の1枚だけ。
+ */
+export default function ReaderPage(props: PageProps<'/'>) {
+  return (
+    <Suspense fallback={<ReaderSkeleton />}>
+      <Reader {...props} />
+    </Suspense>
+  );
+}
+
+async function Reader({ searchParams }: PageProps<'/'>) {
   const params = await searchParams;
 
   const view = (VIEWS as string[]).includes(String(params.view))
