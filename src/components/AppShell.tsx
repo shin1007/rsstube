@@ -1,10 +1,6 @@
-import { listSubscribedFeeds } from '@/lib/subscriptions';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
-import { unreadCounts } from '@/lib/articles';
-import { unplayedMediaCount } from '@/lib/media/list';
-import { createClient } from '@/lib/supabase/server';
-import type { FeedRow, FolderRow } from '@/lib/types';
+import { shellData } from '@/lib/shell';
 
 /**
  * 二次画面（設定・書き出し・アーカイブ・聴く）の外枠。
@@ -16,16 +12,12 @@ import type { FeedRow, FolderRow } from '@/lib/types';
  *
  * スマホでは今までどおりサイドバーは出ない（Sidebar が `hidden md:flex`）。
  * 代わりに下部タブを出して、二次画面からも他へ移れるようにする。
+ *
+ * 要るものは `shellData()` が**1往復で**返す。以前はここで4本を並べて
+ * 投げていたが、全ページで通るところなので往復ぶんが常時かかっていた。
  */
 export async function AppShell({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-
-  const [{ data: folders }, feeds, counts, unplayed] = await Promise.all([
-    supabase.from('folders').select('id, name').order('sort_order').order('name'),
-    listSubscribedFeeds(),
-    unreadCounts(),
-    unplayedMediaCount(),
-  ]);
+  const { folders, feeds, unread, unplayed } = await shellData();
 
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden">
@@ -36,9 +28,9 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         出てしまうため、あえて一覧側と同じ扱いにはしない。
       */}
       <Sidebar
-        folders={(folders ?? []) as FolderRow[]}
-        feeds={(feeds ?? []) as FeedRow[]}
-        unread={counts}
+        folders={folders}
+        feeds={feeds}
+        unread={unread}
         unplayed={unplayed}
         view="unread"
         active={false}

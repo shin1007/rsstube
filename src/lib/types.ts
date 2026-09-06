@@ -4,8 +4,19 @@
  * types に置いてあるのは、クライアント側（ArticleList）にも同じ数が要るため。
  * lib/articles.ts に置いたままにすると、そこから next/headers を引いているので
  * クライアントコンポーネントにサーバ専用のコードが混ざる。
+ *
+ * **60 から 30 に下げた**（2026-09-06）。1ページ目は**画面遷移のたびに丸ごと
+ * 組み直される**（記事は `?article=` の付け替えで開くため）ので、ここは
+ * 「一度に何件読めるか」ではなく「1タップごとに何件ぶん組み立てるか」の数。
+ * 本番の実測で「すべて」ビューは 332ms → 428ms と、60行ぶんで約96ms 増えていた。
+ * **効いているのは転送ではない**——線を通るのは brotli 後の26KBで、
+ * 増えているのはサーバーが組んで直列化する時間のほう。
+ *
+ * 下げても読み進みは変わらない。足りなくなれば無限スクロールが継ぎ足すし、
+ * 未読は普段この数に届かない（実測59件）ので、体感が変わるのは
+ * 「すべて」を眺めるときだけ。
  */
-export const PAGE_SIZE = 60;
+export const PAGE_SIZE = 30;
 
 /**
  * 一覧の1行。**リーダーの一覧（/）と アーカイブ（/library）で運ぶ列が違う。**
@@ -79,15 +90,23 @@ export type ArticleRow = {
   } | null;
 };
 
+/**
+ * サイドバーに出すフィード。**出しているものだけ**を必須にしてある。
+ *
+ * サイドバーは全ページに出る＝**遷移のたびに全フィードぶんが運ばれる**ので、
+ * ここに列を足すとその費用も常時かかる。`site_url` と `last_fetched_at` は
+ * 設定画面でしか使わないので `?`（`shell_data()` は返さない）。
+ * 足すときは「サイドバーのどこに出るか」を先に決めること。
+ */
 export type FeedRow = {
   id: string;
   title: string;
   url: string;
-  site_url: string | null;
+  site_url?: string | null;
   folder_id: string | null;
   error_count: number;
   last_error: string | null;
-  last_fetched_at: string | null;
+  last_fetched_at?: string | null;
 };
 
 export type FolderRow = { id: string; name: string };
