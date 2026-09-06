@@ -1,5 +1,6 @@
 'use client';
 
+import { JST } from '@/lib/datetime';
 import { ActionFlash } from '@/components/ArticleActions';
 import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import {
@@ -109,14 +110,22 @@ type StatePatch = Partial<typeof EMPTY_STATE>;
  * 一覧に日付が2つ並ぶと、どちらが記事の日付なのか分からなくなる。知りたいのは
  * たいてい「ずれているかどうか」なので、ずれている日だけ日付が出れば足りる。
  */
+/**
+ * **時間帯を必ず渡すこと。ここは hydration が食い違う場所だった。**
+ *
+ * このファイルは 'use client' だが、**最初の1枚はサーバーでも描かれる**。
+ * 時間帯を渡さないと、サーバー（Vercel は UTC）とブラウザ（日本時間）で
+ * 別の文字になり、React が hydration の食い違い（#418）として弾く。
+ * 本番のコンソールに出続けていたのはこれ。
+ */
 export function formatFetched(fetched: string, published: string | null): string {
   const at = new Date(fetched);
-  const sameDay =
-    published && new Date(published).toLocaleDateString('ja-JP') === at.toLocaleDateString('ja-JP');
+  const day = (d: Date) => d.toLocaleDateString('ja-JP', { timeZone: JST });
+  const sameDay = published && day(new Date(published)) === day(at);
 
   return sameDay
-    ? at.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
-    : at.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+    ? at.toLocaleTimeString('ja-JP', { timeZone: JST, hour: '2-digit', minute: '2-digit' })
+    : at.toLocaleDateString('ja-JP', { timeZone: JST, month: 'numeric', day: 'numeric' });
 }
 
 /** キーの見た目。文字だけだと本文に紛れて、押せる文字だと分からない。 */
@@ -1216,6 +1225,7 @@ function Row({
           {article.published_at && (
             <time dateTime={article.published_at}>
               {new Date(article.published_at).toLocaleDateString('ja-JP', {
+                timeZone: JST,
                 month: 'numeric',
                 day: 'numeric',
               })}
@@ -1226,7 +1236,7 @@ function Row({
           {article.created_at && (
             <time
               dateTime={article.created_at}
-              title={`取得 ${new Date(article.created_at).toLocaleString('ja-JP')}`}
+              title={`取得 ${new Date(article.created_at).toLocaleString('ja-JP', { timeZone: JST })}`}
               className="text-zinc-700"
             >
               取得{formatFetched(article.created_at, article.published_at)}

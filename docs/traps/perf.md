@@ -240,3 +240,21 @@ proxy · 遷移 · 運ぶ量 を触るときに読む。索引は `CLAUDE.md` �
     怪しいが、確かめられていない
   - **日時の時間帯の直しだけは残した**（あれは Cache Components とは無関係の、
     本番だけ9時間ずれていた実害）
+
+- **サーバーとブラウザで時間帯が違うと、hydration が食い違う。**
+  `'use client'` のファイルでも**最初の1枚はサーバーで描かれる**。
+  `ArticleList` の「取得」時刻は `toLocaleString('ja-JP')` に時間帯を
+  渡していなかったので、**サーバー（Vercel は UTC）と手元のブラウザ
+  （日本時間）で別の文字**になり、React が食い違いとして弾いていた
+  ——本番のコンソールにずっと出ていた `Minified React error #418` の正体。
+  手元で `next start` するとサーバーも日本時間なので**一致してしまい、
+  再現しない**。`TZ=UTC npm start` で本番と同じ条件になる。
+  時間帯を渡したらエラーは0件になった（WebKit・iPhone 13 の見立てで確認）。
+  **クライアントで出すぶんは時間帯を渡さなくてよい、は誤り**——
+  SSR がある限り、サーバーとブラウザの両方で同じ文字にならないといけない。
+
+- **iPhone の不具合は WebKit で見ること。** Playwright の chromium しか
+  入れていなかったので、スマホ幅にしても engine は Chromium のままだった。
+  `npx playwright install webkit` を toolbox で1回入れておく。
+  `devices['iPhone 13']` と合わせると、`pageerror` が本物の Safari と
+  同じ形で拾える。**幅を変えることと、engine を変えることは別。**

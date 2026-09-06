@@ -1,5 +1,6 @@
 'use client';
 
+import { JST } from '@/lib/datetime';
 import { deletePasskey } from '@/app/actions/passkeys';
 import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import { usePasskeySupport } from '@/components/usePasskeySupport';
@@ -168,5 +169,5 @@ function readableError(e: unknown): string {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+  return new Date(iso).toLocaleDateString('ja-JP', { timeZone: JST, month: 'numeric', day: 'numeric' });
 }
