@@ -156,3 +156,31 @@ export function WatchSkeleton() {
     </div>
   );
 }
+
+/**
+ * 本文の側（`/` の右ペイン）。**スマホでは出さない**——記事を開いていない
+ * ときの本文ペインは `hidden md:flex` で畳まれているので、ここで出すと
+ * 一覧の上に骨組みが被る。
+ */
+export function ArticlePaneSkeleton() {
+  return (
+    <div className="hidden md:block h-full overflow-hidden p-8" aria-busy="true" aria-label="読み込み中">
+      <div className="mx-auto max-w-2xl">
+        <Bar className="h-3 w-1/3" />
+        <Bar className="mt-3 h-8 w-11/12" />
+        <Bar className="mt-2 h-8 w-2/3" />
+        <div className="mt-6 rounded-lg border border-zinc-800 p-4">
+          <Bar className="h-3 w-16" />
+          <Bar className="mt-3 h-4 w-full" />
+          <Bar className="mt-2 h-4 w-5/6" />
+          <Bar className="mt-2 h-4 w-3/4" />
+        </div>
+        <div className="mt-6 space-y-2.5">
+          {Array.from({ length: 8 }, (_, i) => (
+            <Bar key={i} className={i % 3 === 2 ? 'h-4 w-2/3' : 'h-4 w-full'} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

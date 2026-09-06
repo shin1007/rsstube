@@ -4,7 +4,7 @@ import { ArticleView } from '@/components/ArticleView';
 import { AppBadge } from '@/components/AppBadge';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
-import { ReaderSkeleton } from '@/components/Skeleton';
+import { ArticlePaneSkeleton, ReaderSkeleton } from '@/components/Skeleton';
 import { getArticle, listArticleIds, listArticles } from '@/lib/articles';
 import { shellData } from '@/lib/shell';
 import { PAGE_SIZE, asId, type View } from '@/lib/types';
@@ -130,7 +130,17 @@ async function Reader({ searchParams }: PageProps<'/'>) {
   const openId = selectedId && picked ? selectedId : undefined;
 
   const previewId = openId ?? articles[0]?.id;
-  const selected = openId ? picked : previewId ? await getArticle(previewId) : null;
+
+  /**
+   * **先頭記事の本文は、一覧を出してから取りに行く**（下の `<Suspense>`）。
+   *
+   * 押して開いた記事（`openId`）は上の `Promise.all` で一覧と同時に取れている。
+   * 一方「何も選んでいないときに先頭を出す」ぶんは、**一覧が返ってこないと
+   * どれを取るか決まらない**ので、ここで待つと往復が一列に足される。
+   * スマホでは本文ペインが `hidden md:flex` で畳まれていて**そもそも見えない**
+   * のに、その1往復を毎回払っていた。
+   */
+  const selected = openId ? picked : null;
 
   // 記事を開いていても、戻り先と前後の記事は「今の絞り込み」を保った URL にする。
   // ここを / にしてしまうと、フォルダや検索を選んだ状態が戻るたびに消える。
@@ -266,13 +276,26 @@ async function Reader({ searchParams }: PageProps<'/'>) {
 
       {/* 本文。スマホでは記事を選んだときだけ出す。 */}
       <div className={`flex-1 min-w-0 min-h-0 h-full ${openId ? 'flex flex-col' : 'hidden md:flex md:flex-col'}`}>
-        <ArticleView
-          article={selected}
-          backHref={linkTo()}
-          prevHref={prevId ? linkTo(prevId) : undefined}
-          nextHref={nextId ? linkTo(nextId) : undefined}
-          remaining={remaining}
-        />
+        {openId ? (
+          <ArticleView
+            article={selected}
+            backHref={linkTo()}
+            prevHref={prevId ? linkTo(prevId) : undefined}
+            nextHref={nextId ? linkTo(nextId) : undefined}
+            remaining={remaining}
+          />
+        ) : (
+          /* 何も選んでいないときの先頭記事。一覧を止めずに、あとから流す。 */
+          <Suspense fallback={<ArticlePaneSkeleton />}>
+            <PreviewPane
+              id={previewId}
+              backHref={linkTo()}
+              prevHref={prevId ? linkTo(prevId) : undefined}
+              nextHref={nextId ? linkTo(nextId) : undefined}
+              remaining={remaining}
+            />
+          </Suspense>
+        )}
       </div>
 
       {/* ホーム画面のアイコンに未読の数を出す。サイドバーと同じ値。 */}
@@ -280,5 +303,37 @@ async function Reader({ searchParams }: PageProps<'/'>) {
 
       <BottomTabs view={view} hidden={Boolean(openId)} unplayed={unplayed} />
     </div>
+  );
+}
+
+/**
+ * 何も選んでいないときに出す先頭記事。**別に流すためだけに分けてある。**
+ *
+ * ここで待つ1往復は、一覧が返ってこないと行き先が決まらないので前倒しできない。
+ * 境界の中に入れておけば、一覧はその往復を待たずに出せる。スマホでは本文ペインが
+ * 畳まれていて見えないので、届くのが遅れても影響しない。
+ */
+async function PreviewPane({
+  id,
+  backHref,
+  prevHref,
+  nextHref,
+  remaining,
+}: {
+  id?: string;
+  backHref: string;
+  prevHref?: string;
+  nextHref?: string;
+  remaining?: number;
+}) {
+  const article = id ? await getArticle(id) : null;
+  return (
+    <ArticleView
+      article={article}
+      backHref={backHref}
+      prevHref={prevHref}
+      nextHref={nextHref}
+      remaining={remaining}
+    />
   );
 }
