@@ -19,18 +19,6 @@ import { VIEW_LABELS } from "@/lib/types";
  * `useSearchParams()` は**画面の中の移動では同期で解決する**（ルータが URL を
  * もう持っているため）ので、URL から読めば強調も待たずに付く。
  * 直接開いたときだけ prerender で一度止まるが、そこは Suspense が受ける。
- *
- * **リンクに `prefetch={true}` を付けないこと。** Partial Prefetching では、
- * 既定の `<Link>` が取るのは**ルートごとに1つの App Shell**（何本リンクが
- * あっても1回）。`prefetch={true}` はそこに「そのリンクの URL ぶん」を足す
- * 指定で、**見えているリンク1本につきサーバーが1回起きる**。ここには
- * フィードとフォルダで20本前後並ぶので、付けると画面を開くたびに
- * 20回叩くことになる。飛び先はどれも同じ `/` で、違うのは searchParams
- * だけなのに。
- *
- * 以前は付けるのが正しかった（`router.prefetch` の既定が動的ルートで
- * 何もしなかったため。docs/traps/perf.md）。**Partial Prefetching を入れた
- * 時点でその前提が変わっている。**
  */
 
 /** 下端に常駐する画面への導線。フィードとは別の見た目にしてある（下の注記）。 */
@@ -125,7 +113,7 @@ export function SidebarContent({
             <Link
               key={v}
               href={link({ view: v })}
-             
+              prefetch={true}
               onClick={onNavigate}
               className={`block rounded px-2 py-1.5 text-sm transition ${
                 active && view === v && !folderId && !feedId
@@ -145,7 +133,7 @@ export function SidebarContent({
               <div key={folder.id}>
                 <Link
                   href={link({ view, folder: folder.id })}
-                 
+                  prefetch={true}
                   onClick={onNavigate}
                   className={`flex items-center justify-between rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${
                     folderId === folder.id
@@ -226,7 +214,7 @@ export function SidebarContent({
           <Link
             key={href}
             href={href}
-           
+            prefetch={true}
             onClick={onNavigate}
             className="flex items-center rounded px-1 py-1.5 text-xs font-medium tracking-wide text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
           >
@@ -275,7 +263,7 @@ function FeedLink({
   return (
     <Link
       href={href}
-     
+      prefetch={true}
       onClick={onClick}
       title={feed.last_error ?? undefined}
       className={`flex items-center justify-between rounded px-2 py-1 text-sm transition ${
