@@ -20,6 +20,8 @@ import { cookies } from 'next/headers';
  * api/passkeys を外してあるのはそのため。
  */
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   const { rpID, origin } = relyingParty(request);

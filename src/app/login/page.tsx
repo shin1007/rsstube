@@ -168,9 +168,3 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
     </main>
   );
 }
-
-/**
- * まだ「押した瞬間に枠が出る」形に直していないので、ブロックを許す。
- * 直したら消すこと（docs/traps/perf.md）。
- */
-export const instant = false;

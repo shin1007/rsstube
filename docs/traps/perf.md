@@ -219,3 +219,24 @@ proxy · 遷移 · 運ぶ量 を触るときに読む。索引は `CLAUDE.md` �
   ——時間帯の無い `toLocaleString` は prerender では答えが決まらないので、
   同期IOとして弾かれた。集めてあるのは `lib/datetime.ts` の `JST`。
   ブラウザ側で出しているところは読む人の時計でよいので渡さない。
+
+- **速くするために入れたものは、壊れたら戻す。**（2026-09-06。Cache Components）
+  `cacheComponents` + `partialPrefetching` を入れて、押した瞬間にサイドバーが
+  出るところまで行った（本番のブラウザで実測 12〜26ms）。ところが**実機の
+  iPhone で「画面を出せませんでした」**——error.tsx に落ちた。こちらの手では
+  再現しなかった: サーバーが返す HTML は正常、curl も 200、Chromium は
+  スマホ幅でも通る。出ていた手掛かりは本番のコンソールの React #418
+  （hydration の文字の食い違い）だけで、それも Chromium では復帰していた。
+  **毎朝読むアプリなので、原因の分からない不具合を抱えたまま置かない。**
+  丸ごと戻した。速さは前の日の値（押してから250〜380ms）に戻るが、
+  そこは動いている。
+  次に入れ直すときの持ち帰り:
+  - **Chromium だけで確かめない。** iPhone は WebKit で、手元には入っていない
+    （`npx playwright install webkit` が要る）。ここを揃えるまで、
+    この種の作り替えは「確かめた」と言えない
+  - `Date.now()` の prerender エラー（supabase-js がトークンの期限を見る）を
+    `connection()` で潰したら、**本番だけ React #441** で落ちた。手元の
+    本番ビルドでは出ない。`connection()` と runtime prefetch の組み合わせが
+    怪しいが、確かめられていない
+  - **日時の時間帯の直しだけは残した**（あれは Cache Components とは無関係の、
+    本番だけ9時間ずれていた実害）

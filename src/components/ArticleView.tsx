@@ -167,7 +167,7 @@ export function ArticleView({
               {a.author && ` / ${a.author}`}
               {a.published_at &&
                 ` / ${new Date(a.published_at).toLocaleString('ja-JP', {
-                  // **時間帯を渡すこと。** ここはサーバーで文字にしているので、
+                  // **時間帯を渡すこと。** サーバーで文字にしているので、
                   // 渡さないと Vercel（UTC）で9時間ずれる（lib/datetime.ts）。
                   timeZone: JST,
                   year: 'numeric',

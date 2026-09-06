@@ -1,10 +1,8 @@
-import { Suspense } from 'react';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
 import { AppBadge } from '@/components/AppBadge';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
-import { SidebarFallback } from '@/components/SidebarFallback';
 import { countArticles, getArticle, listArticleIds, listArticles } from '@/lib/articles';
 import { shellData } from '@/lib/shell';
 import { PAGE_SIZE, asId, type View } from '@/lib/types';
@@ -17,9 +15,11 @@ import { PAGE_SIZE, asId, type View } from '@/lib/types';
  *         それ以外はリストを出す。下部にタブを置く。
  */
 
+export const dynamic = 'force-dynamic';
+
 const VIEWS: View[] = ['unread', 'starred', 'later', 'all', 'unsummarized'];
 
-async function ReaderContent({ searchParams }: { searchParams: PageProps<'/'>['searchParams'] }) {
+export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   const params = await searchParams;
 
   const view = (VIEWS as string[]).includes(String(params.view))
@@ -194,7 +194,19 @@ async function ReaderContent({ searchParams }: { searchParams: PageProps<'/'>['s
   }
 
   return (
-    <>
+    // 高さの確定は layout.tsx の body（h-dvh）が持つ。ここに h-dvh を足しても
+    // flex-basis が height に勝つので効かない（実測で確認済み）。
+    <div className="flex-1 flex min-h-0 overflow-hidden">
+      <Sidebar
+        folders={folders}
+        feeds={feeds}
+        unread={counts}
+        unplayed={unplayed}
+        view={view}
+        folderId={folderId}
+        feedId={feedId}
+      />
+
       {/* 記事リスト。スマホでは記事を選んでいる間は隠す。 */}
       <div
         className={`w-full md:w-96 md:shrink-0 border-r border-zinc-800 min-h-0 h-full ${
@@ -231,48 +243,10 @@ async function ReaderContent({ searchParams }: { searchParams: PageProps<'/'>['s
         />
       </div>
 
-    </>
-  );
-}
-
-/**
- * サイドバー・下部タブ・ホーム画面のバッジ。**セッションのものだけ**でできている。
- *
- * ここを URL から切り離してあるので、`shellData()` の `"use cache: private"` に
- * 乗って App Shell に入る——つまり**リンクを押した瞬間に出る**。
- * 一覧と本文は URL 次第なので、下の `<Suspense>` の中で後から流れてくる。
- */
-async function ReaderShell() {
-  const { folders, feeds, unread, unplayed } = await shellData();
-
-  return (
-    <>
-      <Sidebar folders={folders} feeds={feeds} unread={unread} unplayed={unplayed} />
       {/* ホーム画面のアイコンに未読の数を出す。サイドバーと同じ値。 */}
-      <AppBadge count={[...unread.values()].reduce((sum, n) => sum + n, 0)} />
-      <BottomTabs unplayed={unplayed} />
-    </>
-  );
-}
+      <AppBadge count={[...counts.values()].reduce((sum, n) => sum + n, 0)} />
 
-export default function ReaderPage({ searchParams }: PageProps<'/'>) {
-  return (
-    // 高さの確定は layout.tsx の body（h-dvh）が持つ。ここに h-dvh を足しても
-    // flex-basis が height に勝つので効かない（実測で確認済み）。
-    <div className="flex-1 flex min-h-0 overflow-hidden">
-      <Suspense fallback={<SidebarFallback />}>
-        <ReaderShell />
-      </Suspense>
-
-      {/*
-        **中身の待ち受けは空にしてある。** 一覧の枠を先に描くこともできるが、
-        スマホでは記事を開いているかどうかで列が入れ替わる（`?article=` の有無）。
-        それは URL 由来なので枠の側では分からず、当てずっぽうで描くと
-        本物が届いた瞬間に列が飛ぶ。**出せないものを、それらしく見せない。**
-      */}
-      <Suspense fallback={<div className="flex-1 min-w-0" />}>
-        <ReaderContent searchParams={searchParams} />
-      </Suspense>
+      <BottomTabs view={view} hidden={Boolean(openId)} unplayed={unplayed} />
     </div>
   );
 }

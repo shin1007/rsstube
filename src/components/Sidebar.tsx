@@ -1,36 +1,9 @@
-'use client';
-
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
 import type { FeedRow, FolderRow, View } from "@/lib/types";
 import { VIEW_LABELS } from "@/lib/types";
 
 /**
  * フォルダとフィードの一覧。PCでのみ表示する（スマホは下部タブおよびドロワーで代替）。
- *
- * **いま何を選んでいるかは URL から読む（props で受け取らない）。**
- *
- * ここに出るもの——フォルダ・購読フィード・未読件数——は**セッションのもの**で、
- * どの一覧を開いていても同じ。ところが選択の強調だけは URL 由来なので、
- * props で受け取っていた頃は「URL に依存する部品」になっていた。そうすると
- * Cache Components の App Shell（＝押した瞬間に出せるぶん）に入れられず、
- * サイドバーが毎回サーバーの返事待ちになる。
- *
- * `useSearchParams()` は**画面の中の移動では同期で解決する**（ルータが URL を
- * もう持っているため）ので、URL から読めば強調も待たずに付く。
- * 直接開いたときだけ prerender で一度止まるが、そこは Suspense が受ける。
- *
- * **リンクに `prefetch={true}` を付けないこと。** Partial Prefetching では、
- * 既定の `<Link>` が取るのは**ルートごとに1つの App Shell**（何本リンクが
- * あっても1回）。`prefetch={true}` はそこに「そのリンクの URL ぶん」を足す
- * 指定で、**見えているリンク1本につきサーバーが1回起きる**。ここには
- * フィードとフォルダで20本前後並ぶうえ、飛び先はどれも同じ `/` で違うのは
- * searchParams だけ——付けると画面を開くたびに20回叩くことになる。
- *
- * 以前は付けるのが正しかった（`router.prefetch` の既定が動的ルートで何も
- * しなかったため。docs/traps/perf.md）。**Partial Prefetching を入れた時点で
- * その前提が変わっている。** 外しても速さは変わらないことは実測で確認済み
- * （押してからサイドバーが出るまで 13〜29ms → 14〜20ms）。
  */
 
 /** 下端に常駐する画面への導線。フィードとは別の見た目にしてある（下の注記）。 */
@@ -41,35 +14,27 @@ const NAV = [
   { href: '/settings', label: '設定・フィード管理' },
 ];
 
-const VIEWS = Object.keys(VIEW_LABELS) as View[];
-
 export function SidebarContent({
   folders,
   feeds,
   unread,
+  view,
+  folderId,
+  feedId,
   unplayed = 0,
+  active = true,
   onNavigate,
 }: {
   folders: FolderRow[];
   feeds: FeedRow[];
   unread: Map<string, number>;
+  view: View;
+  folderId?: string;
+  feedId?: string;
   unplayed?: number;
+  active?: boolean;
   onNavigate?: () => void;
 }) {
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-
-  const raw = searchParams.get('view');
-  const view: View = (VIEWS as string[]).includes(String(raw)) ? (raw as View) : 'unread';
-  const folderId = searchParams.get('folder') ?? undefined;
-  const feedId = searchParams.get('feed') ?? undefined;
-
-  /**
-   * 二次画面（設定・書き出しなど）では、どの一覧も「開いている」状態にしない。
-   * 以前は呼ぶ側が `active={false}` を渡していたが、居場所は URL が知っている。
-   */
-  const active = pathname === '/';
-
   const feedsByFolder = new Map<string, FeedRow[]>();
   for (const feed of feeds) {
     const key = feed.folder_id ?? "";
@@ -121,11 +86,11 @@ export function SidebarContent({
       {/* ここだけがスクロールする。 */}
       <div className="flex-1 min-h-0 overflow-y-auto thin-scroll">
         <div className="p-2 space-y-0.5">
-          {VIEWS.map((v) => (
+          {(Object.keys(VIEW_LABELS) as View[]).map((v) => (
             <Link
               key={v}
               href={link({ view: v })}
-             
+              prefetch={true}
               onClick={onNavigate}
               className={`block rounded px-2 py-1.5 text-sm transition ${
                 active && view === v && !folderId && !feedId
@@ -145,7 +110,7 @@ export function SidebarContent({
               <div key={folder.id}>
                 <Link
                   href={link({ view, folder: folder.id })}
-                 
+                  prefetch={true}
                   onClick={onNavigate}
                   className={`flex items-center justify-between rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${
                     folderId === folder.id
@@ -226,7 +191,7 @@ export function SidebarContent({
           <Link
             key={href}
             href={href}
-           
+            prefetch={true}
             onClick={onNavigate}
             className="flex items-center rounded px-1 py-1.5 text-xs font-medium tracking-wide text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
           >
@@ -250,7 +215,11 @@ export function Sidebar(props: {
   folders: FolderRow[];
   feeds: FeedRow[];
   unread: Map<string, number>;
+  view: View;
+  folderId?: string;
+  feedId?: string;
   unplayed?: number;
+  active?: boolean;
 }) {
   return (
     <nav className="hidden md:flex md:w-60 md:shrink-0 flex-col border-r border-zinc-800 min-h-0">
@@ -275,7 +244,7 @@ function FeedLink({
   return (
     <Link
       href={href}
-     
+      prefetch={true}
       onClick={onClick}
       title={feed.last_error ?? undefined}
       className={`flex items-center justify-between rounded px-2 py-1 text-sm transition ${
