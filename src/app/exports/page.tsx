@@ -10,8 +10,6 @@ import Link from 'next/link';
  * 書き出した瞬間のダイアログを閉じてしまっても、ここから開き直せる。
  */
 
-export const dynamic = 'force-dynamic';
-
 /** 一覧に出す件数。溜まっても遡って使うのは直近だけ。 */
 const LIMIT = 50;
 
@@ -72,3 +70,9 @@ export default async function ExportsPage() {
     </AppShell>
   );
 }
+
+/**
+ * まだ「押した瞬間に枠が出る」形に直していないので、ブロックを許す。
+ * 直したら消すこと（docs/traps/perf.md）。
+ */
+export const instant = false;

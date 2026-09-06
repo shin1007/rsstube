@@ -19,8 +19,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * 次の実行に持ち越される。
  */
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 // 本文取得は外部サイト次第で時間がかかる。長めに取る。
 export const maxDuration = 60;
 

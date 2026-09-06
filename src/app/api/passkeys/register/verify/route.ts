@@ -13,8 +13,6 @@ import type { RegistrationResponseJSON } from '@simplewebauthn/server';
  * 許すと、鍵の中身を自分で書ける＝好きな公開鍵を「登録済み」にできてしまう（0034）。
  */
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   const supabase = await createClient();

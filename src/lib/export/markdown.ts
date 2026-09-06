@@ -7,6 +7,8 @@
  * 「どの記事の話か」が保たれやすい。
  */
 
+import { JST } from '@/lib/datetime';
+
 export type ExportArticle = {
   title: string;
   /**
@@ -72,7 +74,7 @@ function formatDate(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
+    : d.toLocaleDateString('ja-JP', { timeZone: JST, year: 'numeric', month: 'numeric', day: 'numeric' });
 }
 
 /** ファイル名に使えない文字を落とす。 */

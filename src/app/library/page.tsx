@@ -1,3 +1,4 @@
+import { JST } from '@/lib/datetime';
 import { AppShell } from '@/components/AppShell';
 import { LIBRARY_PAGE_SIZE, listTags, searchLibrary } from '@/lib/library';
 import Link from 'next/link';
@@ -11,8 +12,6 @@ import Link from 'next/link';
  *
  * 状態を全部 URL に持たせてあるので、よく使う絞り込みはブックマークできる。
  */
-
-export const dynamic = 'force-dynamic';
 
 const RANGES: { label: string; days?: number }[] = [
   { label: 'すべて' },
@@ -245,5 +244,13 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('ja-JP');
+  // **時間帯を渡すこと。** サーバーで文字にしているので、渡さないと
+  // Vercel（UTC）では日付が1日ずれて出る（lib/datetime.ts）。
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('ja-JP', { timeZone: JST });
 }
+
+/**
+ * まだ「押した瞬間に枠が出る」形に直していないので、ブロックを許す。
+ * 直したら消すこと（docs/traps/perf.md）。
+ */
+export const instant = false;

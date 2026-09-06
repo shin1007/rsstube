@@ -1,9 +1,24 @@
+'use client';
+
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { FeedRow, FolderRow, View } from "@/lib/types";
 import { VIEW_LABELS } from "@/lib/types";
 
 /**
  * フォルダとフィードの一覧。PCでのみ表示する（スマホは下部タブおよびドロワーで代替）。
+ *
+ * **いま何を選んでいるかは URL から読む（props で受け取らない）。**
+ *
+ * ここに出るもの——フォルダ・購読フィード・未読件数——は**セッションのもの**で、
+ * どの一覧を開いていても同じ。ところが選択の強調だけは URL 由来なので、
+ * props で受け取っていた頃は「URL に依存する部品」になっていた。そうすると
+ * Cache Components の App Shell（＝押した瞬間に出せるぶん）に入れられず、
+ * サイドバーが毎回サーバーの返事待ちになる。
+ *
+ * `useSearchParams()` は**画面の中の移動では同期で解決する**（ルータが URL を
+ * もう持っているため）ので、URL から読めば強調も待たずに付く。
+ * 直接開いたときだけ prerender で一度止まるが、そこは Suspense が受ける。
  */
 
 /** 下端に常駐する画面への導線。フィードとは別の見た目にしてある（下の注記）。 */
@@ -14,27 +29,35 @@ const NAV = [
   { href: '/settings', label: '設定・フィード管理' },
 ];
 
+const VIEWS = Object.keys(VIEW_LABELS) as View[];
+
 export function SidebarContent({
   folders,
   feeds,
   unread,
-  view,
-  folderId,
-  feedId,
   unplayed = 0,
-  active = true,
   onNavigate,
 }: {
   folders: FolderRow[];
   feeds: FeedRow[];
   unread: Map<string, number>;
-  view: View;
-  folderId?: string;
-  feedId?: string;
   unplayed?: number;
-  active?: boolean;
   onNavigate?: () => void;
 }) {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  const raw = searchParams.get('view');
+  const view: View = (VIEWS as string[]).includes(String(raw)) ? (raw as View) : 'unread';
+  const folderId = searchParams.get('folder') ?? undefined;
+  const feedId = searchParams.get('feed') ?? undefined;
+
+  /**
+   * 二次画面（設定・書き出しなど）では、どの一覧も「開いている」状態にしない。
+   * 以前は呼ぶ側が `active={false}` を渡していたが、居場所は URL が知っている。
+   */
+  const active = pathname === '/';
+
   const feedsByFolder = new Map<string, FeedRow[]>();
   for (const feed of feeds) {
     const key = feed.folder_id ?? "";
@@ -86,7 +109,7 @@ export function SidebarContent({
       {/* ここだけがスクロールする。 */}
       <div className="flex-1 min-h-0 overflow-y-auto thin-scroll">
         <div className="p-2 space-y-0.5">
-          {(Object.keys(VIEW_LABELS) as View[]).map((v) => (
+          {VIEWS.map((v) => (
             <Link
               key={v}
               href={link({ view: v })}
@@ -215,11 +238,7 @@ export function Sidebar(props: {
   folders: FolderRow[];
   feeds: FeedRow[];
   unread: Map<string, number>;
-  view: View;
-  folderId?: string;
-  feedId?: string;
   unplayed?: number;
-  active?: boolean;
 }) {
   return (
     <nav className="hidden md:flex md:w-60 md:shrink-0 flex-col border-r border-zinc-800 min-h-0">

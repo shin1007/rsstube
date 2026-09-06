@@ -29,8 +29,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * digests の当日行を消してから叩くこと。
  */
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /** 選抜の母数。ここから新しい順に digest_count 件へ絞る。 */

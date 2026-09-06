@@ -14,8 +14,6 @@ import { randomBytes } from 'node:crypto';
  * それだと毎朝の自動書き出しができない。
  */
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 

@@ -15,8 +15,6 @@ import { DEFAULT_MEDIA_RETENTION_DAYS } from '@/lib/settings/defaults';
  * pg_cron から1日1回。supabase/scheduler.sql の rsstube-media-purge。
  */
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**

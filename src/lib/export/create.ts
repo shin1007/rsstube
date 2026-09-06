@@ -1,3 +1,4 @@
+import { JST } from '@/lib/datetime';
 import { buildMarkdown, type ExportArticle } from '@/lib/export/markdown';
 import { DEFAULT_NOTEBOOKLM_PROMPT } from '@/lib/export/prompt';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -72,7 +73,9 @@ export async function createExportFor(
 
   const finalTitle =
     title ??
-    (rows.length === 1 ? rows[0].title : `RSSTube ${new Date().toLocaleDateString('ja-JP')}`);
+    (rows.length === 1
+      ? rows[0].title
+      : `RSSTube ${new Date().toLocaleDateString('ja-JP', { timeZone: JST })}`);
 
   const markdown = buildMarkdown(articles, finalTitle);
 
