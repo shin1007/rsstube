@@ -34,6 +34,7 @@ export function ArticleNav({
   prevHref: serverPrev,
   nextHref: serverNext,
   remaining,
+  menu,
 }: {
   articleId: string;
   prevHref?: string;
@@ -43,6 +44,11 @@ export function ArticleNav({
    * 分からないときは undefined（0 とは違う。0 は「ここで終わり」）。
    */
   remaining?: number;
+  /**
+   * 記事のメニュー（スマホ）。**この帯の中に置くために受け取る。**
+   * 本文の上に浮かせていたときは、読んでいる行の右端に常に被っていた。
+   */
+  menu?: React.ReactNode;
 }) {
   const { prevHref, nextHref } = useNeighbours(articleId, serverPrev, serverNext);
   /**
@@ -86,7 +92,15 @@ export function ArticleNav({
    * 「バーの下端」に見える（空白ではなく地の色）。nav に色を敷くのはそのため
    * ——透明のままだと、そこだけ本文の背景が覗いて「余った隙間」に見える。
    */
-  const cell = 'flex min-h-12 flex-1 items-center justify-center text-center px-4 py-2 select-none no-callout touch-manipulation';
+  /**
+   * 前後のボタン1つぶん。
+   *
+   * **折り返させない。** 真ん中にメニューが入ったぶん幅が狭くなり、
+   * 「次の記事 → あと641」が2行に割れて帯の高さが変わっていた（実測・390px）。
+   * 左右の余白はスマホだけ詰める。
+   */
+  const cell =
+    'flex min-h-12 flex-1 items-center justify-center whitespace-nowrap text-center px-2 py-2 md:px-4 select-none no-callout touch-manipulation';
 
   return (
     <nav
@@ -134,6 +148,19 @@ export function ArticleNav({
       )}
 
       <span aria-hidden className="w-px bg-zinc-800" />
+
+      {/* 記事のメニュー（スマホのみ）。前後のボタンと同じ高さに収める。 */}
+      {menu && (
+        <>
+          <span
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+            className="flex shrink-0 items-center justify-center px-2 md:hidden"
+          >
+            {menu}
+          </span>
+          <span aria-hidden className="w-px bg-zinc-800 md:hidden" />
+        </>
+      )}
 
       {nextHref ? (
         <Link

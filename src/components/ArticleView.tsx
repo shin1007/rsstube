@@ -107,7 +107,7 @@ export function ArticleView({
 
       {/*
         PC用操作バー（本文の上）。
-        スマホでは右下のフローティングメニュー（ArticleMobileMenu）にまとめ、
+        スマホでは下の帯（ArticleNav）の中のメニュー（ArticleMobileMenu）にまとめ、
         画面下端や上端の操作帯による表示面積の圧迫を解消する。
       */}
       <header className="hidden md:flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-zinc-800 px-3 py-1">
@@ -135,15 +135,6 @@ export function ArticleView({
         </a>
       </header>
 
-      {/* スマホ用の右下ハンバーガー型フローティングメニュー */}
-      <ArticleMobileMenu
-        articleId={a.id}
-        title={a.summaries?.title_ja?.trim() || a.title}
-        url={a.url}
-        starred={Boolean(state?.is_starred)}
-        readLater={Boolean(state?.read_later)}
-        exported={Boolean(state?.exported_at)}
-      />
 
       {/* 指で横に払うと前後の記事へ移る。スマホには一覧へ戻る以外の道が無かった。 */}
       <ArticleSwipe articleId={a.id} prevHref={prevHref} nextHref={nextHref}>
@@ -321,7 +312,23 @@ export function ArticleView({
       </ArticleSwipe>
 
       {/* 前後への導線は、来た道も見るので client 側（ArticleNav）。 */}
-      <ArticleNav articleId={a.id} prevHref={prevHref} nextHref={nextHref} remaining={remaining} />
+      <ArticleNav
+        articleId={a.id}
+        prevHref={prevHref}
+        nextHref={nextHref}
+        remaining={remaining}
+        /* スマホの操作はここに集める。浮かせると本文に被る（ArticleMobileMenu）。 */
+        menu={
+          <ArticleMobileMenu
+            articleId={a.id}
+            title={a.summaries?.title_ja?.trim() || a.title}
+            url={a.url}
+            starred={Boolean(state?.is_starred)}
+            readLater={Boolean(state?.read_later)}
+            exported={Boolean(state?.exported_at)}
+          />
+        }
+      />
     </div>
   );
 }
