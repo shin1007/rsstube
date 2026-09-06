@@ -64,7 +64,7 @@ async function client() {
  * **`/` をまるごと描き直した RSC を積んで返す**（呼ばなければ描き直さない。
  * `next/dist/server/app-render/action-handler.js` の `skipPageRendering` が
  * 「revalidate したかどうか」だけを見ている）。`/` の RSC は実測89KB——
- * ほぼ全部が変わっていないサイドバーと一覧60件で、サーバー側では Supabase に
+ * ほぼ全部が変わっていないサイドバーと一覧1ページぶんで、サーバー側では Supabase に
  * 6往復する。**記事を1本開くたびに、遷移そのものと同じ重さの描き直しが
  * もう1回走っていた。**
  *
@@ -119,7 +119,7 @@ export async function setReadLater(articleId: string, later: boolean) {
 /**
  * 表示中の記事をまとめて既読／未読にする（Inoreader の "Mark all as read" 相当）。
  *
- * read=false を受けられるのは取り消しのため。60件がまとめて消える操作を
+ * read=false を受けられるのは取り消しのため。1ページぶんがまとめて消える操作を
  * 戻せないままにしておくと、押し間違いの被害が大きい。
  */
 export async function setReadMany(articleIds: string[], read = true) {
@@ -179,7 +179,7 @@ async function requestSummariesImpl(articleIds: string[]) {
 const VIEWS: View[] = ['unread', 'starred', 'later', 'all', 'unsummarized'];
 
 /** これ以上は遡らせない。無限スクロールに終わりが無いと、古い記事を延々と
- *  取りに行けてしまう（1回60件・往復ぶんの負荷がそのままかかる）。
+ *  取りに行けてしまう（1回 PAGE_SIZE 件・往復ぶんの負荷がそのままかかる）。
  *  掘り返す用途は /library の検索が持っているので、一覧はここで打ち止めにする。 */
 const MAX_OFFSET = 3000;
 

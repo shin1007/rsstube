@@ -1,13 +1,11 @@
-import { listSubscribedFeeds } from '@/lib/subscriptions';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
 import { AppBadge } from '@/components/AppBadge';
 import { BottomTabs } from '@/components/BottomTabs';
 import { Sidebar } from '@/components/Sidebar';
-import { countArticles, getArticle, listArticleIds, listArticles, unreadCounts } from '@/lib/articles';
-import { unplayedMediaCount } from '@/lib/media/list';
-import { createClient } from '@/lib/supabase/server';
-import { PAGE_SIZE, asId, type FeedRow, type FolderRow, type View } from '@/lib/types';
+import { countArticles, getArticle, listArticleIds, listArticles } from '@/lib/articles';
+import { shellData } from '@/lib/shell';
+import { PAGE_SIZE, asId, type View } from '@/lib/types';
 
 /**
  * リーダー本体。
@@ -34,8 +32,6 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   const search = typeof params.q === 'string' && params.q.trim() ? params.q.trim() : undefined;
   const selectedId = asId(params.article);
 
-  const supabase = await createClient();
-
   /**
    * **検索だけは、失敗してもページごと落とさない。**
    *
@@ -57,18 +53,18 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
     }
   };
 
-  const [{ data: folders }, feeds, [articles, searchFailed], counts, unplayed, picked, [total]] =
-    await Promise.all([
-      supabase.from('folders').select('id, name').order('sort_order').order('name'),
-      listSubscribedFeeds(),
-      searchable(() => listArticles({ view, folderId, feedId, search }), []),
-      unreadCounts(),
-      unplayedMediaCount(),
-      selectedId ? getArticle(selectedId) : Promise.resolve(null),
-      // 「あと何件」を出すためだけの数。**並べて投げること**——直列にすると
-      // そのぶんが画面遷移の待ち時間にまるごと乗る（docs/traps/perf.md）。
-      searchable(() => countArticles({ view, folderId, feedId, search }), null),
-    ] as const);
+  // サイドバーと下部タブが要るもの（フォルダ・購読フィード・未読件数・未聴数）は
+  // shellData() が1往復で返す。以前はここに4本並んでいた（0039）。
+  const [shell, [articles, searchFailed], picked, [total]] = await Promise.all([
+    shellData(),
+    searchable(() => listArticles({ view, folderId, feedId, search }), []),
+    selectedId ? getArticle(selectedId) : Promise.resolve(null),
+    // 「あと何件」を出すためだけの数。**並べて投げること**——直列にすると
+    // そのぶんが画面遷移の待ち時間にまるごと乗る（docs/traps/perf.md）。
+    searchable(() => countArticles({ view, folderId, feedId, search }), null),
+  ] as const);
+
+  const { folders, feeds, unread: counts, unplayed } = shell;
 
   /**
    * 何も選んでいないときは先頭の記事を出す。
@@ -135,16 +131,19 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
   /**
    * 一覧の**最後の1件**を開いているときは、その先があるかどうかが分からない。
    *
-   * ここで見ている `articles` は1ページぶん（PAGE_SIZE = 60）しかない。60件目を
-   * 開くと `index === articles.length - 1` になって「次は無い」と出てしまい、
-   * **ちょうど60件目で読み進められなくなる**（下のボタンも ← → も止まる）。
-   * 実測で確認済み——「すべて」ビューで → を押し続けると、毎回60件目で止まった。
-   * 一覧を下までスクロールすれば61件目以降は継ぎ足されるのに、前後の行き先だけは
-   * サーバーの1ページ目しか見ていなかった。
+   * ここで見ている `articles` は1ページぶん（PAGE_SIZE）しかない。ちょうど
+   * 最後の1件を開くと `index === articles.length - 1` になって「次は無い」と
+   * 出てしまい、**そこで読み進められなくなる**（下のボタンも ← → も止まる）。
+   * 実測で確認済み——「すべて」ビューで → を押し続けると、毎回1ページ目の
+   * 末尾で止まった。一覧を下までスクロールすれば続きは継ぎ足されるのに、
+   * 前後の行き先だけはサーバーの1ページ目しか見ていなかった。
    *
-   * ちょうど60件で終わっている一覧は「ここが終わり」なのか「続きがある」のかを
-   * 区別できないので、そのときだけ id しか運ばない一覧を引き直す。
-   * 60件に満たなければ本当の終わりなので、引き直さない。
+   * ちょうど PAGE_SIZE 件で終わっている一覧は「ここが終わり」なのか
+   * 「続きがある」のかを区別できないので、そのときだけ id しか運ばない一覧を
+   * 引き直す。満たなければ本当の終わりなので、引き直さない。
+   *
+   * **件数を直に書かないこと。** PAGE_SIZE は 60 から 30 に下げたことがある
+   * （速さのため。lib/types.ts）ので、数字で書くと次に変えた日に嘘になる。
    */
   const atPageEnd = index >= 0 && index === articles.length - 1 && articles.length >= PAGE_SIZE;
 
@@ -157,7 +156,7 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
    *
    * 一覧に居ない理由は2つあって、**どちらも未読ビューで起きる**:
    *
-   *   1. 無限スクロールで先へ進んでから開いた（61件目から先は1ページ目に無い）
+   *   1. 無限スクロールで先へ進んでから開いた（1ページ目より先は手元に無い）
    *   2. **開いた拍子に既読になった。** 既読を書くのと本文を描くのは同時に走るので、
    *      書き込みが先に着くと、この描画の一覧からはもう抜けている
    *
@@ -199,8 +198,8 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
     // flex-basis が height に勝つので効かない（実測で確認済み）。
     <div className="flex-1 flex min-h-0 overflow-hidden">
       <Sidebar
-        folders={(folders ?? []) as FolderRow[]}
-        feeds={(feeds ?? []) as FeedRow[]}
+        folders={folders}
+        feeds={feeds}
         unread={counts}
         unplayed={unplayed}
         view={view}
@@ -220,8 +219,8 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
           selectedId={openId}
           search={search}
           searchFailed={searchFailed}
-          folders={(folders ?? []) as FolderRow[]}
-          feeds={(feeds ?? []) as FeedRow[]}
+          folders={folders}
+          feeds={feeds}
           unread={counts}
           unplayed={unplayed}
           folderId={folderId}

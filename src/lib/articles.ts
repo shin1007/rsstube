@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { subscribedFeedIds } from '@/lib/subscriptions';
 import { sanitizeSearch } from '@/lib/search';
@@ -77,6 +78,43 @@ async function subscribedIdsFor(query: ArticleQuery): Promise<string[]> {
 }
 
 /**
+ * 検索語に当たる記事の id（0040 の `search_article_ids()`）。新しい順。
+ *
+ * **`cache()` で包んであるのは、1リクエストの中で一覧・件数・前後の id が
+ * 同じ集合を使うため。** 別々に引くと、その間に巡回が走っただけで
+ * 「あと12件」と出しておきながら3件目で終わる形になる（CLAUDE.md）。
+ * 問い合わせも1回で済む。
+ *
+ * 上限があるのは、これを `in.(…)` で URL に並べるから。実測で300件（約11KB）
+ * までは通り、500件（約19KB）で接続ごと落ちた。**当たりが多すぎる語では
+ * 新しいほうから SEARCH_ID_LIMIT 件までしか見ない**——1000件当たる語を
+ * 全部並べても読む人には使えないので、そこは割り切っている。
+ *
+ * 語は POST の本体で渡る（rpc なので）。URL に3回並べていた頃のように、
+ * `drop table` のような並びを手前の WAF に弾かれることが無くなる。
+ */
+const SEARCH_ID_LIMIT = 250;
+
+const searchIdsFor = cache(async (term: string): Promise<string[]> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('search_article_ids', {
+    p_term: term,
+    p_limit: SEARCH_ID_LIMIT,
+  });
+  if (error) throw error;
+  return ((data ?? []) as { id: string }[]).map((r) => r.id);
+});
+
+/** 検索していないときは呼ばない（空配列を当てると1件も出なくなる）。 */
+async function searchIdsIfAny(query: ArticleQuery): Promise<string[] | undefined> {
+  if (!query.search) return undefined;
+  // 検索語の下ごしらえは今までどおり。`&@` は問い合わせ構文を解釈しないので
+  // 記号で壊れることは無いが、長さの上限（100字）はここで効かせておく。
+  const term = sanitizeSearch(query.search);
+  return term ? searchIdsFor(term) : [];
+}
+
+/**
  * 一覧に出すぶん。**行に出していない列は取らない。**
  *
  * 記事は `?article=` の付け替えで開くので、1回開くたびにこの一覧が
@@ -113,7 +151,7 @@ const ID_SELECT = `id, published_at,
  * 絞り込みだけを当てる。**一覧と件数で条件がずれないように1か所にまとめる。**
  * ずれると「あと12件」と出しておきながら3件目で終わる、という形で表に出る。
  */
-function applyFilters<T>(q: T, query: ArticleQuery): T {
+function applyFilters<T>(q: T, query: ArticleQuery, searchIds?: string[]): T {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   let b = q as any;
 
@@ -143,16 +181,24 @@ function applyFilters<T>(q: T, query: ArticleQuery): T {
       break;
   }
 
-  if (query.search) {
-    // 日本語は形態素解析が無いので、タイトルと本文の部分一致で引く。
-    // 検索語をそのまま埋めるとカンマや括弧で or 式が壊れるので落としておく。
-    const term = sanitizeSearch(query.search);
-    // 訳した見出しも対象にする。一覧に出しているのはそちらなので、原題だけだと
-    // 「見えている語で検索して当たらない」ことになる（0024 の複製を引く）。
-    if (term) {
-      b = b.or(`title.ilike.%${term}%,title_ja.ilike.%${term}%,content_text.ilike.%${term}%`);
-    }
-  }
+  /**
+   * **語の照合は SQL 側（0040 の `search_article_ids()`）。**ここは当たった
+   * id を集合として当てるだけ。
+   *
+   * 以前は `title/title_ja/content_text` の ilike を or で並べていた。索引
+   * （PGroonga・0015）は使われていたが、その後ろの Bitmap Heap Scan が
+   * 候補1199行ぶんの本文を取り出して ilike をやり直していて、そこが本体だった
+   * （実測 125ms → 38ms。往復の下限が35msなので、実質90ms が消えた）。
+   *
+   * **絞り込みはここに残す。** 未読・スター・フォルダ・フィードの条件を
+   * SQL 側に移すと、一覧と件数で二重に持つことになる（CLAUDE.md）。
+   * 語の照合だけを外に出し、一覧・件数・前後の id は同じ id 集合を使う。
+   *
+   * 語が空、または1件も当たらないときは空集合。`in.()` が「1件も無い」を
+   * 正しく表すので、条件を付けないほうに倒さないこと（付けないと
+   * 検索したのに全件出る）。
+   */
+  if (query.search) b = b.in('id', searchIds ?? []);
 
   return b as T;
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -170,7 +216,11 @@ async function run(select: string, query: ArticleQuery, limit: number) {
 
   // 購読しているフィードだけに絞る。空の in は「1件も無い」で、
   // 購読ゼロやフォルダが空のときの正しい答えになる。
-  const feedIds = await subscribedIdsFor(query);
+  // 検索語に当たる id も、当てるのは同期なので先に取っておく。
+  const [feedIds, searchIds] = await Promise.all([
+    subscribedIdsFor(query),
+    searchIdsIfAny(query),
+  ]);
 
   let q = applyFilters(
     supabase
@@ -179,6 +229,7 @@ async function run(select: string, query: ArticleQuery, limit: number) {
       .in('feed_id', feedIds)
       .range(query.offset ?? 0, (query.offset ?? 0) + limit - 1),
     query,
+    searchIds,
   );
 
   /**
@@ -188,7 +239,7 @@ async function run(select: string, query: ArticleQuery, limit: number) {
    * （45組、最大18件が同時刻。自治体や省庁は同じ時刻でまとめて出す）、
    * その中の並びは Postgres の気分次第になる。決まらないと2つ壊れる:
    *   - **無限スクロールで記事が重複・欠落する。** offset で継ぎ足すので、
-   *     同着の組が60件の境目をまたぐと、2ページ目に同じ記事が出たり抜けたりする
+   *     同着の組がページの境目をまたぐと、2ページ目に同じ記事が出たり抜けたりする
    *   - **「次の記事」が戻ったり飛んだりする。** 前後は毎回この並びから数え直す
    * 実行計画が変われば並びも変わるので、いま安定して見えるのは偶然。
    */
@@ -235,7 +286,7 @@ export async function listArticles(query: ArticleQuery): Promise<ArticleRow[]> {
  * 前後の記事を出すための id 一覧。
  *
  * 無限スクロールで先へ進んでから開いた記事は1ページ目に入っていないので、
- * 一覧の配列からは位置が出せない。かといって記事を60件ずつ何度も取り直すのは
+ * 一覧の配列からは位置が出せない。かといって記事を1ページぶんずつ何度も取り直すのは
  * 高い（本文も要約も付いてくる）。ここは id しか運ばない。
  *
  * 上限を切ってあるのは、一覧の無限スクロールと同じ理由。ここより深いところの
@@ -262,7 +313,10 @@ const NEIGHBOUR_SCAN = 600;
  */
 export async function countArticles(query: ArticleQuery): Promise<number | null> {
   const supabase = await createClient();
-  const feedIds = await subscribedIdsFor(query);
+  const [feedIds, searchIds] = await Promise.all([
+    subscribedIdsFor(query),
+    searchIdsIfAny(query),
+  ]);
 
   const { count, error } = await applyFilters(
     supabase
@@ -270,6 +324,7 @@ export async function countArticles(query: ArticleQuery): Promise<number | null>
       .select(ID_SELECT, { count: 'exact', head: true })
       .in('feed_id', feedIds),
     query,
+    searchIds,
   );
   if (error) throw error;
   return count;
