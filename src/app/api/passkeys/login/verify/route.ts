@@ -13,8 +13,6 @@ import type { AuthenticationResponseJSON, AuthenticatorTransportFuture } from '@
  * ログイン中のユーザーとしては passkeys を読めない。
  */
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 /** 失敗の文面は1つにする。「その鍵は登録されていない」と返すと、鍵の有無を探れる。 */
 const FAILED = 'パスキーで確認できませんでした';

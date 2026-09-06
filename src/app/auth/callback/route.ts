@@ -15,8 +15,6 @@ import { NextResponse, type NextRequest } from 'next/server';
  * proxy.ts の matcher からこのパスを外してあるのも同じ理由（未ログインで来るため）。
  */
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;

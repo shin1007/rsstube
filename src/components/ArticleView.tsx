@@ -1,3 +1,4 @@
+import { JST } from '@/lib/datetime';
 import { requestSummary } from '@/app/actions/articles';
 import { ArticleActions } from '@/components/ArticleActions';
 import { ArticleNav } from '@/components/ArticleNav';
@@ -166,6 +167,9 @@ export function ArticleView({
               {a.author && ` / ${a.author}`}
               {a.published_at &&
                 ` / ${new Date(a.published_at).toLocaleString('ja-JP', {
+                  // **時間帯を渡すこと。** ここはサーバーで文字にしているので、
+                  // 渡さないと Vercel（UTC）で9時間ずれる（lib/datetime.ts）。
+                  timeZone: JST,
                   year: 'numeric',
                   month: 'numeric',
                   day: 'numeric',
@@ -182,6 +186,7 @@ export function ArticleView({
                 <span className="text-zinc-600">
                   {' · 取得 '}
                   {new Date(a.created_at).toLocaleString('ja-JP', {
+                    timeZone: JST,
                     month: 'numeric',
                     day: 'numeric',
                     hour: '2-digit',

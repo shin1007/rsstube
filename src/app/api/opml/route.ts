@@ -11,8 +11,6 @@ import { createClient } from '@/lib/supabase/server';
  * cron ではなくログインした本人が押すものなので、認証は通常どおり proxy と RLS に任せる。
  */
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const supabase = await createClient();

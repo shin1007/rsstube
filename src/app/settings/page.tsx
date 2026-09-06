@@ -1,3 +1,4 @@
+import { JST } from '@/lib/datetime';
 import { currentUser } from '@/lib/auth/session';
 import { AppShell } from '@/components/AppShell';
 import { VOICE_MODE_LABELS, type VoiceMode } from '@/lib/ai/script';
@@ -40,8 +41,6 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import type { FeedRow, FolderRow } from '@/lib/types';
-
-export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage({ searchParams }: PageProps<'/settings'>) {
   const supabase = await createClient();
@@ -118,7 +117,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
     return {
       ok: true,
       at: new Date().toLocaleTimeString('ja-JP', {
-        timeZone: 'Asia/Tokyo',
+        timeZone: JST,
         hour: '2-digit',
         minute: '2-digit',
       }),
@@ -580,3 +579,9 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
     </AppShell>
   );
 }
+
+/**
+ * まだ「押した瞬間に枠が出る」形に直していないので、ブロックを許す。
+ * 直したら消すこと（docs/traps/perf.md）。
+ */
+export const instant = false;

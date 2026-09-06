@@ -1,3 +1,4 @@
+import { JST } from '@/lib/datetime';
 import type { MediaSummary } from '@/lib/media/list';
 
 /**
@@ -69,7 +70,7 @@ export function estimateFinishAt(
 /** 「10:45」。日本時間で出す（ダイジェストの時刻設定も日本時間で扱っている）。 */
 export function formatEta(at: Date): string {
   return at.toLocaleTimeString('ja-JP', {
-    timeZone: 'Asia/Tokyo',
+    timeZone: JST,
     hour: '2-digit',
     minute: '2-digit',
   });

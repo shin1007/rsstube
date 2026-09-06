@@ -15,8 +15,6 @@ import { PAGE_SIZE, asId, type View } from '@/lib/types';
  *         それ以外はリストを出す。下部にタブを置く。
  */
 
-export const dynamic = 'force-dynamic';
-
 const VIEWS: View[] = ['unread', 'starred', 'later', 'all', 'unsummarized'];
 
 export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
@@ -250,3 +248,9 @@ export default async function ReaderPage({ searchParams }: PageProps<'/'>) {
     </div>
   );
 }
+
+/**
+ * まだ「押した瞬間に枠が出る」形に直していないので、ブロックを許す。
+ * 直したら消すこと（docs/traps/perf.md）。
+ */
+export const instant = false;

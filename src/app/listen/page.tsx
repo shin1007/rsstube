@@ -18,8 +18,6 @@ import Link from 'next/link';
  * 見出しを押して /watch へ。
  */
 
-export const dynamic = 'force-dynamic';
-
 const STATUS_LABEL: Record<string, string> = {
   queued: '順番待ち',
   scripting: '台本を作成中',
@@ -209,3 +207,9 @@ function fmtDuration(sec: number): string {
   const m = Math.round(sec / 60);
   return m < 1 ? '1分未満' : `${m}分`;
 }
+
+/**
+ * まだ「押した瞬間に枠が出る」形に直していないので、ブロックを許す。
+ * 直したら消すこと（docs/traps/perf.md）。
+ */
+export const instant = false;

@@ -11,8 +11,6 @@ import { authorizeCron, createAdminClient } from '@/lib/supabase/admin';
  * 新着記事の未読行を作るところにだけ効く。
  */
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 /** 1回の実行で巡回するフィード数。サーバーレス関数の実行時間に収まる程度に抑える。 */
 const FEEDS_PER_RUN = 40;
