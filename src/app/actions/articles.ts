@@ -212,7 +212,9 @@ async function loadMoreArticlesImpl(input: {
   const offset = Math.max(0, Math.trunc(Number(input.offset) || 0));
   if (offset >= MAX_OFFSET) return { articles: [], done: true };
 
-  const articles = await listArticles({
+  // 総数は1ページ目でしか要らないので、ここでは受け取らない（listArticles が
+  // offset を見て頼み分ける）。終わりは「返ってきた数が1ページに満たないこと」で見る。
+  const { articles } = await listArticles({
     view: (VIEWS as string[]).includes(input.view) ? (input.view as View) : 'unread',
     folderId: input.folderId || undefined,
     feedId: input.feedId || undefined,

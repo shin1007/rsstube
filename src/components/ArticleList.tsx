@@ -1,7 +1,14 @@
 'use client';
 
-import { JST } from '@/lib/datetime';
 import { ActionFlash } from '@/components/ArticleActions';
+import { ArticleListRow } from '@/components/ArticleListRow';
+import {
+  BAR,
+  FeedDrawer,
+  HelpOverlay,
+  Kbd,
+  UndoBar,
+} from '@/components/ArticleListChrome';
 import { UNEXPECTED_ERROR } from '@/lib/actions/result';
 import {
   loadMoreArticles,
@@ -12,7 +19,7 @@ import {
   setStarred,
 } from '@/app/actions/articles';
 import { refreshFeeds } from '@/app/actions/feeds';
-import { SidebarContent } from '@/components/Sidebar';
+import { mergeRows, type StatePatch } from '@/lib/article-rows';
 import {
   PAGE_SIZE,
   VIEW_LABELS,
@@ -47,44 +54,11 @@ import {
  * - PC: j/k で移動、m 既読、s スター、l あとで、v 元記事、Shift+A 全既読、? でヘルプ
  * - スマホ: 左スワイプで既読、右スワイプであとで
  * - 下まで来たら続きを継ぎ足す（無限スクロール）
- */
-
-/**
- * ヘルプに出す一覧。実際の処理は onKey 側にあるので、増やしたら両方直すこと。
- */
-const SHORTCUTS: [string, string][] = [
-  ['j / ↓', '一覧で次へ'],
-  ['k / ↑', '一覧で前へ'],
-  ['o / Enter', '開く'],
-  ['→ / ←', '開いたまま次／前の記事へ'],
-  ['Esc', '記事を閉じる'],
-  ['m', '既読・未読'],
-  ['s', 'スター'],
-  ['l', 'あとで'],
-  ['v', '元記事を新しいタブで開く'],
-  ['Shift + A', '表示中をすべて既読'],
-  ['Shift + M', 'ここから下（古い方）を既読'],
-  ['r', 'いま取りに行く（更新）'],
-  ['/', '検索'],
-  ['?', 'このヘルプ'],
-];
-
-/**
- * 一覧の下端に常設するぶん。
  *
- * **ヘルプ（?）は、あることを知らないと開かれない。**元の作りではショートカットが
- * 全部その中に畳まれていて、`?` を押す動機がそもそも生まれなかった。よく使う数個
- * だけを常に見えるところへ置き、残りは `?` に畳む。全部を下端に出すと、毎日見る
- * 画面の下端が読みものになる。
+ * このファイルは**捌く仕掛けだけ**を持つ。行そのものは `ArticleListRow`、
+ * ヘルプ・取り消しの帯・ドロワーは `ArticleListChrome`、行の重ね合わせは
+ * `lib/article-rows.ts`（純関数・テストあり）に分けてある。
  */
-const BAR: [string, string][] = [
-  ['j/k', '移動'],
-  ['o', '開く'],
-  ['←/→', '前後'],
-  ['m', '既読'],
-  ['s', '★'],
-  ['l', 'あとで'],
-];
 
 /**
  * 移動中に溜めておける押下の数。
@@ -94,47 +68,23 @@ const BAR: [string, string][] = [
  */
 const MAX_QUEUED_MOVES = 10;
 
-const EMPTY_STATE = {
-  is_read: false,
-  is_starred: false,
-  read_later: false,
-  exported_at: null as string | null,
-};
-
-type StatePatch = Partial<typeof EMPTY_STATE>;
-
 /**
- * 「取得」に出す時刻。
+ * 最新の値を、参照の変わらない箱に入れておく。
  *
- * 記事の日付と**同じ日なら時刻だけ**（`15:07`）、違う日なら日付から出す（`8/31`）。
- * 一覧に日付が2つ並ぶと、どちらが記事の日付なのか分からなくなる。知りたいのは
- * たいてい「ずれているかどうか」なので、ずれている日だけ日付が出れば足りる。
- */
-/**
- * **時間帯を必ず渡すこと。ここは hydration が食い違う場所だった。**
+ * 行（ArticleListRow）は memo してあるので、**渡す関数の中身が毎回変わっても
+ * 関数そのものは同じでなければならない**。一覧（rows）を見る操作をそのまま
+ * `useCallback([rows])` にすると、既読を1件付けるたびに関数が作り直され、
+ * 60行が丸ごと描き直しになる。
  *
- * このファイルは 'use client' だが、**最初の1枚はサーバーでも描かれる**。
- * 時間帯を渡さないと、サーバー（Vercel は UTC）とブラウザ（日本時間）で
- * 別の文字になり、React が hydration の食い違い（#418）として弾く。
- * 本番のコンソールに出続けていたのはこれ。
+ * 書き換えは effect でやる（描画中に ref を触らない）。押されるのは描画が
+ * 済んだあとなので、これで最新が読める。
  */
-export function formatFetched(fetched: string, published: string | null): string {
-  const at = new Date(fetched);
-  const day = (d: Date) => d.toLocaleDateString('ja-JP', { timeZone: JST });
-  const sameDay = published && day(new Date(published)) === day(at);
-
-  return sameDay
-    ? at.toLocaleTimeString('ja-JP', { timeZone: JST, hour: '2-digit', minute: '2-digit' })
-    : at.toLocaleDateString('ja-JP', { timeZone: JST, month: 'numeric', day: 'numeric' });
-}
-
-/** キーの見た目。文字だけだと本文に紛れて、押せる文字だと分からない。 */
-function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-px text-[13px] leading-none text-zinc-300">
-      {children}
-    </kbd>
-  );
+function useLatest<T>(value: T) {
+  const ref = useRef(value);
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref;
 }
 
 export function ArticleList({
@@ -273,20 +223,11 @@ export function ArticleList({
   }
 
   /**
-   * 1ページ目 + 継ぎ足し。id で重複を落とす（未読を読むと位置がずれるので、
-   * 同じ記事が両方に入ることがある）。
+   * 1ページ目 + 継ぎ足し + 押した結果。重ね方は `lib/article-rows.ts` に
+   * 出してある（決まりごとが多いので、画面から離してテストを付けた）。
    *
    * useMemo なのは、これを毎レンダー作り直すと下のキー操作の登録も
    * 作り直しになるため（1文字打つたびに listener を張り替えることになる）。
-   *
-   * **重ねる先は1ページ目も含める。** 以前は継ぎ足したぶんにしか重ねていなかった。
-   * 1ページ目はサーバーが描き直すから要らない、という理屈だったが、それは
-   * 「開いた既読」が revalidate を連れていたときの話で、その描き直しをやめた今は
-   * 押した結果がどこにも出なくなる（開いた記事が一覧では未読のまま残る）。
-   *
-   * 既読だけ別口（read-marks）なのは、**本文側で付いたぶんも重ねたいから**。
-   * 「次の記事」で読み進めると既読を書くのは MarkReadOnView で、あちらから
-   * この部品の state には触れない。
    */
   const readMarks = useSyncExternalStore(
     subscribeReadMarks,
@@ -294,24 +235,10 @@ export function ArticleList({
     readMarksServerSnapshot,
   );
 
-  const rows: ArticleRow[] = useMemo(() => {
-    const merge = (a: ArticleRow) => {
-      const p = patches[a.id];
-      const read = readMarks.has(a.id) ? { is_read: true } : null;
-      if (!p && !read) return a;
-      // 押した操作（m・スワイプ）を後に重ねる。開いて既読になったものを
-      // そのあと「未読に戻す」と押したときに、こちらが勝ってしまわないように。
-      return { ...a, state: { ...EMPTY_STATE, ...a.state, ...read, ...p } };
-    };
-    const out = articles.map(merge);
-    const seen = new Set(articles.map((a) => a.id));
-    for (const a of extra) {
-      if (seen.has(a.id)) continue;
-      seen.add(a.id);
-      out.push(merge(a));
-    }
-    return out;
-  }, [articles, extra, patches, readMarks]);
+  const rows: ArticleRow[] = useMemo(
+    () => mergeRows({ articles, extra, patches, readMarks }),
+    [articles, extra, patches, readMarks],
+  );
 
   // キーボード操作のカーソル。
   const selectedIndex = rows.findIndex((a) => a.id === selectedId);
@@ -408,7 +335,7 @@ export function ArticleList({
     try {
       const r = await loadMoreArticles({
         view,
-              folderId,
+        folderId,
         feedId,
         search,
         offset: pages * PAGE_SIZE,
@@ -472,6 +399,26 @@ export function ArticleList({
   }, [cursor, rows, selectedId, prefetchArticle]);
 
   /**
+   * 行に渡すものは、参照の変わらないものだけにする（`useLatest` の注）。
+   * 位置と id は行のほうから渡し返してもらう。
+   */
+  const rowsRef = useLatest(rows);
+
+  const register = useCallback((index: number, el: HTMLElement | null) => {
+    rowRefs.current[index] = el;
+  }, []);
+
+  const focusAt = useCallback((index: number) => setCursor(index), []);
+
+  const openAt = useCallback(
+    (index: number, id: string) => {
+      setCursor(index);
+      open(id);
+    },
+    [open],
+  );
+
+  /**
    * **ここから下（古い方）をまとめて既読にする。**
    *
    * これまで一括で消せるのは `全既読`（読み込んだぶん全部）だけで、その中間が
@@ -484,14 +431,14 @@ export function ArticleList({
    */
   const markBelow = useCallback(
     (index: number) => {
-      const target = rows.slice(index).filter((a) => !a.state?.is_read);
+      const target = rowsRef.current.slice(index).filter((a) => !a.state?.is_read);
       if (target.length === 0) return;
       const ids = target.map((a) => a.id);
       setUndoIds(ids);
       for (const id of ids) patch(id, { is_read: true });
       startTransition(() => void setReadMany(ids, true));
     },
-    [rows, patch, setUndoIds],
+    [rowsRef, patch, setUndoIds],
   );
 
   const refresh = useCallback(() => {
@@ -826,23 +773,19 @@ export function ArticleList({
         )}
 
         {rows.map((article, i) => (
-          <Row
+          <ArticleListRow
             key={article.id}
-            ref={(el) => {
-              rowRefs.current[i] = el;
-            }}
+            index={i}
             article={article}
             active={i === cursor}
             selected={article.id === selectedId}
-            onFocus={() => setCursor(i)}
-            onOpen={() => {
-              setCursor(i);
-              open(article.id);
-            }}
+            register={register}
+            onFocus={focusAt}
+            onOpen={openAt}
             onFlash={setFlash}
             onPatch={patch}
-            onIntent={() => prefetchArticle(article.id)}
-            onMarkBelow={() => markBelow(i)}
+            onIntent={prefetchArticle}
+            onMarkBelow={markBelow}
           />
         ))}
 
@@ -916,349 +859,22 @@ export function ArticleList({
 
       {/* スマホ用フィード・フォルダ切り替えドロワー */}
       {drawerOpen && (
-        <div
-          className="fixed inset-0 z-50 flex md:hidden"
-          role="dialog"
-          aria-modal="true"
-          aria-label="フィード・フォルダ一覧"
-        >
-          {/* 背景の暗幕。タップで閉じる */}
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
-            onClick={() => setDrawerOpen(false)}
-          />
-
-          {/* ドロワー本体 */}
-          <div className="relative w-72 max-w-[85vw] h-full bg-zinc-950 border-r border-zinc-800 flex flex-col z-10 shadow-2xl">
-            <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800 bg-zinc-900/50">
-              <span className="text-xs font-semibold text-zinc-300">フィード・フォルダ</span>
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(false)}
-                className="rounded p-1 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 active:scale-95 transition"
-                aria-label="閉じる"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex-1 min-h-0 flex flex-col">
-              <SidebarContent
-                folders={folders}
-                feeds={feeds}
-                unread={unread}
-                view={view}
-                folderId={folderId}
-                feedId={feedId}
-                unplayed={unplayed}
-                onNavigate={() => setDrawerOpen(false)}
-              />
-            </div>
-          </div>
-        </div>
+        <FeedDrawer
+          folders={folders}
+          feeds={feeds}
+          unread={unread}
+          view={view}
+          folderId={folderId}
+          feedId={feedId}
+          unplayed={unplayed}
+          onClose={() => setDrawerOpen(false)}
+        />
       )}
     </div>
   );
 }
-
-/**
- * 全既読の取り消し。自分から消える。
- *
- * 無限スクロールを入れてから、この対象は「読み込んだぶん全部」になった。
- * 1ページ目で頭打ちだった頃より押し間違いの被害が大きいので、消えるまでを
- * 10秒に伸ばしてある（8秒だと、件数を読んでから指を動かすには短い）。
- */
-const UNDO_MS = 10000;
 
 /** これ以上引いたら更新する。指の迷いで走らないくらいには深く。 */
 const PULL_THRESHOLD = 56;
 /** これ以上は動かさない。引っぱり続けても一覧が流れていかないように。 */
 const PULL_MAX = 80;
-
-function UndoBar({
-  count,
-  onUndo,
-  onDismiss,
-}: {
-  count: number;
-  onUndo: () => void;
-  onDismiss: () => void;
-}) {
-  useEffect(() => {
-    const timer = setTimeout(onDismiss, UNDO_MS);
-    return () => clearTimeout(timer);
-  }, [onDismiss]);
-
-  return (
-    <div
-      role="status"
-      // PC ではショートカットのバーぶん（約28px）上に置く。重ねると
-      // 「取り消す」がバーの上に乗って、どちらも読めなくなる。
-      className="absolute inset-x-3 bottom-20 z-20 flex items-center gap-3 rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs shadow-lg md:bottom-12"
-    >
-      <span className="flex-1">{count}件を既読にしました</span>
-      <button type="button" onClick={onUndo} className="font-semibold text-sky-400 hover:text-sky-300">
-        取り消す
-      </button>
-      <button type="button" onClick={onDismiss} aria-label="閉じる" className="text-zinc-500 hover:text-zinc-300">
-        ✕
-      </button>
-    </div>
-  );
-}
-
-function HelpOverlay({ onClose }: { onClose: () => void }) {
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="キーボードショートカット"
-      onClick={onClose}
-      className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-4"
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded border border-zinc-700 bg-zinc-900 p-4"
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="section-title">キーボードショートカット</h2>
-          <button type="button" onClick={onClose} aria-label="閉じる" className="text-zinc-500 hover:text-zinc-200">
-            ✕
-          </button>
-        </div>
-        <dl className="space-y-1.5">
-          {SHORTCUTS.map(([keys, label]) => (
-            <div key={keys} className="flex items-baseline gap-3">
-              <dt className="w-24 shrink-0 text-right">
-                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 text-[14px] text-zinc-300">{keys}</kbd>
-              </dt>
-              <dd className="text-xs text-zinc-400">{label}</dd>
-            </div>
-          ))}
-        </dl>
-        <p className="mt-3 border-t border-zinc-800 pt-3 text-[14px] text-zinc-500">
-          一覧は下までスクロールすると続きを読み込みます。
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function Row({
-  ref,
-  article,
-  active,
-  selected,
-  onOpen,
-  onFocus,
-  onFlash,
-  onPatch,
-  onIntent,
-  onMarkBelow,
-}: {
-  ref: (el: HTMLElement | null) => void;
-  article: ArticleRow;
-  active: boolean;
-  selected: boolean;
-  onOpen: () => void;
-  onFocus: () => void;
-  /** スワイプで何をしたかを親に伝え、帯で出してもらう。 */
-  onFlash: (text: string) => void;
-  /** 継ぎ足したぶんの行は親が state で持っている。押した結果を親へ返す。 */
-  onPatch: (id: string, patch: StatePatch) => void;
-  /** 開きそうだと分かった時点（指を置く・上に載せる）で本文を取りに行かせる。 */
-  onIntent: () => void;
-  /** 長押し（PCは右クリック）で、ここから下を既読にする。 */
-  onMarkBelow: () => void;
-}) {
-  const [, startTransition] = useTransition();
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const [swipe, setSwipe] = useState(0);
-  const [releasing, setReleasing] = useState(false);
-
-  const read = article.state?.is_read ?? false;
-  // 訳した見出し（0023）。無ければ原題のまま。
-  const heading = article.summary?.title_ja?.trim() || article.title;
-
-  // 何が起きるかをスワイプ中に見せる。滑るだけだと壊れて見える。
-  const THRESHOLD = 80;
-  const willAct = Math.abs(swipe) > THRESHOLD;
-  const leftAction = swipe < 0; // 左へ = 既読
-
-  return (
-    <div className="relative overflow-hidden border-b border-zinc-900">
-      {/* 行の背後。スワイプで顔を出す。 */}
-      {swipe !== 0 && (
-        <div
-          aria-hidden
-          className={`absolute inset-0 flex items-center px-4 text-xs font-semibold ${
-            leftAction
-              ? 'justify-end bg-zinc-700 text-zinc-200'
-              : 'justify-start bg-sky-900 text-sky-200'
-          } ${willAct ? 'opacity-100' : 'opacity-50'}`}
-        >
-          {leftAction ? (read ? '未読に戻す' : '既読にする') : article.state?.read_later ? 'あとでを外す' : 'あとで読む'}
-        </div>
-      )}
-
-      <article
-        ref={ref}
-        tabIndex={0}
-        role="button"
-        aria-current={selected ? 'true' : undefined}
-        onFocus={onFocus}
-        onClick={onOpen}
-        // マウスを載せた時点で先に取りに行く。押してから始めると、その往復
-        // （RSC 89KB）を必ず待つことになる。載せただけで離れたぶんは5分間
-        // 手元に残るので、あとで開いたときに効く。
-        //
-        // **押した瞬間（pointerdown）には取りに行かない。** 押してから click
-        // までは数十ミリ秒しかなく、取得が終わらないうちに遷移が始まる。
-        // 走っている途中の先読みは遷移には使われないので、**同じページを
-        // サーバーが2回組み立てるだけ**になる（実測で2本飛んでいた）。
-        onPointerEnter={(e) => {
-          if (e.pointerType === 'mouse') onIntent();
-        }}
-        /**
-         * 長押し（スマホ）と右クリック（PC）で、ここから下を既読にする。
-         *
-         * `contextmenu` を使うのは、**この2つが同じ1つのイベントで来る**から。
-         * 長押しを自前のタイマーで作ると、既にあるスワイプ（左=既読 / 右=あとで）と
-         * 指の取り合いになる。標準のイベントに乗れば競合しない。
-         * 押し間違いは取り消しの帯で戻せる。
-         */
-        onContextMenu={(e) => {
-          e.preventDefault();
-          onMarkBelow();
-        }}
-        onKeyDown={(e) => {
-          // 行そのものにフォーカスがあるとき用。全体のショートカットとは別。
-          if (e.key === ' ') {
-            e.preventDefault();
-            onOpen();
-          }
-        }}
-        onTouchStart={(e) => {
-          touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-          setReleasing(false);
-        }}
-        onTouchMove={(e) => {
-          if (!touchStart.current) return;
-          const dx = e.touches[0].clientX - touchStart.current.x;
-          const dy = e.touches[0].clientY - touchStart.current.y;
-          // 縦スクロールと取り違えないよう、横移動が明確なときだけ追従させる。
-          if (Math.abs(dx) > Math.abs(dy)) setSwipe(dx);
-        }}
-        onTouchEnd={() => {
-          const dx = swipe;
-          setReleasing(true);
-          setSwipe(0);
-          touchStart.current = null;
-          if (dx < -THRESHOLD) {
-            onFlash(read ? '未読に戻しました' : '既読にしました');
-            onPatch(article.id, { is_read: !read });
-            startTransition(() => void markRead(article.id, !read));
-          } else if (dx > THRESHOLD) {
-            const next = !article.state?.read_later;
-            onFlash(next ? '「あとで読む」に入れました' : '「あとで読む」から外しました');
-            onPatch(article.id, { read_later: next });
-            startTransition(() => void setReadLater(article.id, next));
-          }
-        }}
-        style={swipe !== 0 ? { transform: `translateX(${swipe}px)` } : undefined}
-        className={`relative cursor-pointer px-3 py-2.5 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)] ${
-          releasing ? 'transition-transform duration-150' : ''
-        } ${
-          selected
-            ? 'bg-[var(--color-accent-subtle)] border-l-2 border-[var(--color-accent)]'
-            : active
-              ? 'bg-zinc-900/90 shadow-[inset_2px_0_0_0_var(--color-accent)]'
-              : 'bg-zinc-950 hover:bg-zinc-900/60'
-        }`}
-      >
-        <div className="flex items-start gap-2">
-          {!read && (
-            <span
-              aria-label="未読"
-              className="mt-1.5 size-2 shrink-0 rounded-full shadow-sm"
-              style={{ backgroundColor: 'var(--color-accent)' }}
-            />
-          )}
-          {/*
-            訳した見出しがあればそれを主にする。記事の42%（1262件中531件）が
-            英語のフィードで、原題のままだと一覧を目で追うのが重い。
-            原題は捨てずに下に小さく残す（訳が的外れなときに気づけるように）。
-          */}
-          <h3 className={`flex-1 text-sm leading-snug ${read ? 'text-zinc-500' : 'font-semibold text-zinc-50'}`}>
-            {heading}
-            {heading !== article.title && (
-              <span className="mt-0.5 block text-[14px] font-normal text-zinc-600">
-                {article.title}
-              </span>
-            )}
-          </h3>
-        </div>
-
-        {/* AI要点。ここが読めれば記事を開かずに判断できる。 */}
-        {article.summary?.bullets?.length ? (
-          <ul className="mt-1.5 space-y-0.5">
-            {article.summary.bullets.slice(0, 3).map((b, i) => (
-              <li key={i} className="text-xs leading-relaxed text-zinc-400">
-                ・{b}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-1.5 line-clamp-2 text-xs text-zinc-500">
-            {/*
-              **「要約待ち…」は待てば来るときだけ出す。**
-              本文もRSSの抜粋も無い記事には要約を作らない（モデルに渡しても
-              「本文は存在しない」という入力の説明が返るだけなので）。
-              取りに行った跡（extracted_at）があるのに何も無いなら、
-              待っても何も来ない。そう書かないと永久に待たせることになる。
-            */}
-            {article.excerpt ?? (article.extracted_at ? '本文なし（元記事で読めます）' : '要約待ち…')}
-          </p>
-        )}
-
-        <div className="mt-1.5 flex items-center gap-2 text-[14px] text-zinc-600">
-          <span className="truncate">{article.feed?.title}</span>
-          {article.published_at && (
-            <time dateTime={article.published_at}>
-              {new Date(article.published_at).toLocaleDateString('ja-JP', {
-                timeZone: JST,
-                month: 'numeric',
-                day: 'numeric',
-              })}
-            </time>
-          )}
-          {/* 記事の日付の隣に、こちらへ入ってきた時刻。**同じ日なら時刻だけ**にする
-              ——一覧では日付が2つ並ぶより、違う日のときだけ日付が出るほうが目立つ。 */}
-          {article.created_at && (
-            <time
-              dateTime={article.created_at}
-              title={`取得 ${new Date(article.created_at).toLocaleString('ja-JP', { timeZone: JST })}`}
-              className="text-zinc-700"
-            >
-              取得{formatFetched(article.created_at, article.published_at)}
-            </time>
-          )}
-          {article.state?.is_starred && (
-            <span title="スター" className="text-amber-400">
-              ★
-            </span>
-          )}
-          {article.state?.read_later && (
-            <span title="あとで読む" className="text-sky-400">
-              ◷
-            </span>
-          )}
-          {article.state?.exported_at && (
-            <span title="NotebookLM へ書き出し済み" className="text-emerald-400">
-              NLM
-            </span>
-          )}
-        </div>
-      </article>
-    </div>
-  );
-}
