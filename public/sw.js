@@ -15,7 +15,7 @@
  * 中身を変えたら CACHE の版を上げること。古い版は activate で消える。
  */
 
-const CACHE = 'rsstube-shell-v3';
+const CACHE = 'rsstube-shell-v4';
 /**
  * `/_next/static/` の中身だけを入れる置き場。
  *
@@ -28,6 +28,12 @@ const CACHE = 'rsstube-shell-v3';
 const STATIC = 'rsstube-static-v1';
 /** 静的キャッシュに置く数の上限。デプロイのたびに古い build id が積み上がる。 */
 const STATIC_MAX = 120;
+/**
+ * 圏外で読むぶんの置き場。**ここはワーカーが作らない。**
+ * 入れるのはページ側（components/OfflineCache.tsx が /api/offline/bundle を取って置く）、
+ * 読むのは offline.html。ワーカーが知っているのは「消してはいけない」ことだけ。
+ */
+const OFFLINE = 'rsstube-offline-v1';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
@@ -56,9 +62,17 @@ self.addEventListener('activate', (event) => {
       if (self.registration.navigationPreload) {
         await self.registration.navigationPreload.enable();
       }
+      /**
+       * 古い版を捨てる。**圏外で読むぶん（OFFLINE）は消さないこと**
+       * ——ここを消すと、地下鉄に入った人の手元から記事が消える。
+       * 中身を入れるのはページ側（components/OfflineCache.tsx）で、
+       * 読むのは offline.html。ワーカーは触らない。
+       */
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== CACHE && k !== STATIC).map((k) => caches.delete(k)),
+        keys
+          .filter((k) => k !== CACHE && k !== STATIC && k !== OFFLINE)
+          .map((k) => caches.delete(k)),
       );
       await self.clients.claim();
     })(),

@@ -2,58 +2,277 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0d10" />
-    <title>オフライン — RSSTube</title>
+    <title>圏外 — RSSTube</title>
     <style>
       /*
        * サービスワーカーが通信できないときに出す唯一の画面なので、
-       * 外部ファイルを一切参照しない（参照した先も取れない）。
+       * **外部ファイルを一切参照しない**（参照した先も取れない）。
+       * 見た目は本体に寄せてあるが、Tailwind も React も使えないので
+       * ここだけ手書きになっている。色を変えるときは globals.css と揃えること。
        */
+      :root {
+        --bg: #09090b;
+        --line: #27272a;
+        --text: #f4f4f5;
+        --dim: #a1a1aa;
+        --dimmer: #71717a;
+      }
+      * { box-sizing: border-box; }
       body {
         margin: 0;
-        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif;
+        -webkit-text-size-adjust: 100%;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
         display: flex;
         align-items: center;
-        justify-content: center;
-        background: #0b0d10;
-        color: #f4f4f5;
-        font-family: system-ui, -apple-system, 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo,
-          sans-serif;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
       }
-      main {
-        max-width: 24rem;
-        padding: 1.5rem;
-        text-align: center;
-      }
-      h1 {
-        font-size: 1rem;
-        margin: 0 0 0.75rem;
-      }
-      p {
-        font-size: 0.8125rem;
-        line-height: 1.8;
-        color: #a1a1aa;
-        margin: 0 0 1.5rem;
-      }
+      header h1 { font-size: 0.9375rem; margin: 0; font-weight: 700; }
+      header .when { margin-left: auto; font-size: 0.75rem; color: var(--dimmer); }
       button {
         border: 1px solid #3f3f46;
         background: transparent;
-        color: #f4f4f5;
-        border-radius: 0.25rem;
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
+        color: var(--text);
+        border-radius: 0.375rem;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8125rem;
+        min-height: 2.75rem;
       }
+      main { padding: 0 1rem 4rem; max-width: 42rem; margin: 0 auto; }
+      .note { font-size: 0.75rem; line-height: 1.9; color: var(--dim); padding: 0.75rem 0; }
+      .row {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        background: transparent;
+        color: inherit;
+        padding: 0.875rem 0;
+        min-height: 3.5rem;
+        border-radius: 0;
+      }
+      .row h2 { font-size: 1rem; line-height: 1.5; margin: 0; font-weight: 700; }
+      .row ul, article .summary ul { margin: 0.5rem 0 0; padding: 0; list-style: none; }
+      .row li { font-size: 0.8125rem; line-height: 1.8; color: var(--dim); }
+      .meta { margin-top: 0.5rem; font-size: 0.8125rem; color: var(--dimmer); }
+      article h1 { font-size: 1.5rem; line-height: 1.4; margin: 0.5rem 0 0; }
+      article .summary {
+        margin-top: 1rem;
+        border: 1px solid rgba(14, 165, 233, 0.35);
+        background: rgba(14, 165, 233, 0.12);
+        border-radius: 0.5rem;
+        padding: 0.875rem;
+      }
+      article .summary li { font-size: 0.875rem; line-height: 1.8; color: #e4e4e7; }
+      article .body {
+        margin-top: 1.25rem;
+        font-size: 1.1875rem;
+        line-height: 1.9;
+        color: #d4d4d8;
+        word-break: break-word;
+      }
+      article .body p,
+      article .body ul,
+      article .body ol,
+      article .body blockquote,
+      article .body pre,
+      article .body table { margin-bottom: 1.5em; }
+      article .body h1,
+      article .body h2,
+      article .body h3,
+      article .body h4 { color: #fafafa; line-height: 1.45; margin: 1.8em 0 0.45em; }
+      article .body h2 { font-size: 1.4em; border-bottom: 1px solid #3f3f46; padding-bottom: 0.3em; }
+      article .body a { color: #93c5fd; }
+      article .body pre, article .body table { overflow-x: auto; }
+      .center { text-align: center; padding: 3rem 1rem; color: var(--dim); font-size: 0.875rem; line-height: 1.9; }
     </style>
   </head>
   <body>
-    <main>
-      <h1>オフラインです</h1>
-      <p>
-        記事の取得にはネットワークが要ります。<br />
-        電波の届くところで開き直してください。
-      </p>
-      <button type="button" onclick="location.reload()">再読み込み</button>
+    <header>
+      <button type="button" id="back" hidden>← 一覧</button>
+      <h1 id="title">圏外です</h1>
+      <span class="when" id="when"></span>
+    </header>
+
+    <main id="main">
+      <p class="center">読み込んでいます…</p>
     </main>
+
+    <script>
+      /*
+       * 手元に置いてある記事（components/OfflineCache.tsx が入れたもの）を出す。
+       *
+       * **通信は一切しない。** ここが出ている時点で通信はできていないので、
+       * 取りに行っても待たせるだけになる。オンラインに戻ったら本体へ帰す。
+       */
+      var CACHE = 'rsstube-offline-v1';
+      var KEY = '/offline-bundle.json';
+
+      var main = document.getElementById('main');
+      var back = document.getElementById('back');
+      var title = document.getElementById('title');
+      var when = document.getElementById('when');
+      var bundle = null;
+
+      /** 文字はすべて textContent で入れる。HTML を入れるのは本文だけ（消毒済み）。 */
+      function el(tag, text, className) {
+        var node = document.createElement(tag);
+        if (text != null) node.textContent = text;
+        if (className) node.className = className;
+        return node;
+      }
+
+      function dateText(iso) {
+        if (!iso) return '';
+        try {
+          return new Date(iso).toLocaleString('ja-JP', {
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+        } catch (e) {
+          return '';
+        }
+      }
+
+      function bulletList(items, className) {
+        var ul = el('ul', null, className);
+        for (var i = 0; i < items.length; i++) ul.append(el('li', '・' + items[i]));
+        return ul;
+      }
+
+      function showList() {
+        back.hidden = true;
+        title.textContent = '圏外です';
+        main.replaceChildren();
+
+        main.append(
+          el(
+            'p',
+            '通信できないので、前回開いたときに手元へ置いたぶんを出しています。' +
+              '画像は入っていません（電波のあるところで開き直すと出ます）。' +
+              'ここで読んでも既読にはなりません。',
+            'note',
+          ),
+        );
+
+        bundle.articles.forEach(function (a) {
+          var row = el('button', null, 'row');
+          row.type = 'button';
+          row.append(el('h2', a.title));
+          if (a.bullets && a.bullets.length) row.append(bulletList(a.bullets.slice(0, 3)));
+          var meta = [a.feed, dateText(a.published_at)].filter(Boolean).join(' · ');
+          row.append(el('div', meta, 'meta'));
+          row.addEventListener('click', function () {
+            showArticle(a);
+          });
+          main.append(row);
+        });
+      }
+
+      function showArticle(a) {
+        back.hidden = false;
+        title.textContent = '圏外で読む';
+        main.replaceChildren();
+        window.scrollTo(0, 0);
+
+        var art = el('article');
+        art.append(el('h1', a.title));
+        art.append(el('div', [a.feed, dateText(a.published_at)].filter(Boolean).join(' · '), 'meta'));
+
+        if (a.bullets && a.bullets.length) {
+          var box = el('div', null, 'summary');
+          box.append(bulletList(a.bullets));
+          art.append(box);
+        }
+
+        var body = el('div', null, 'body');
+        if (a.html) {
+          // 保存する前に消毒済み（lib/feeds/sanitize.ts）。画像類はサーバー側で外してある。
+          body.innerHTML = a.html;
+        } else if (a.text) {
+          a.text.split(/\n{2,}/).forEach(function (para) {
+            body.append(el('p', para));
+          });
+        } else {
+          body.append(el('p', '本文は手元にありません。電波のあるところで開いてください。'));
+        }
+        // 途中で切ったものは、そう書く。黙っていると記事が尻切れに見える。
+        if (a.truncated) {
+          body.append(el('p', '——ここまでが手元にあるぶんです。続きは電波のあるところで開いてください。', 'note'));
+        }
+        art.append(body);
+        main.append(art);
+      }
+
+      function showEmpty(message) {
+        back.hidden = true;
+        main.replaceChildren();
+        var box = el('div', null, 'center');
+        box.append(el('p', message));
+        var button = el('button', '再読み込み');
+        button.type = 'button';
+        button.addEventListener('click', function () {
+          location.reload();
+        });
+        box.append(button);
+        main.append(box);
+      }
+
+      back.addEventListener('click', showList);
+
+      // オンラインに戻ったら、こちらから本体へ帰す（開き直させない）。
+      window.addEventListener('online', function () {
+        location.replace('/');
+      });
+
+      (function () {
+        if (typeof caches === 'undefined') {
+          showEmpty('記事の取得にはネットワークが要ります。電波の届くところで開き直してください。');
+          return;
+        }
+        caches
+          .open(CACHE)
+          .then(function (cache) {
+            return cache.match(KEY);
+          })
+          .then(function (hit) {
+            if (!hit) {
+              showEmpty(
+                '手元に記事がありません。電波のあるところで一度アプリを開くと、' +
+                  'そのときの未読を持ち出せるようになります。',
+              );
+              return null;
+            }
+            return hit.json();
+          })
+          .then(function (data) {
+            if (!data) return;
+            bundle = data;
+            if (!bundle.articles || bundle.articles.length === 0) {
+              showEmpty('持ち出せる未読がありませんでした。');
+              return;
+            }
+            when.textContent = dateText(bundle.at) + ' 時点';
+            showList();
+          })
+          .catch(function () {
+            showEmpty('手元の記事を読み出せませんでした。電波のあるところで開き直してください。');
+          });
+      })();
+    </script>
   </body>
 </html>

@@ -4,6 +4,7 @@ import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
 import { AppBadge } from '@/components/AppBadge';
 import { BottomTabs } from '@/components/BottomTabs';
+import { OfflineCache } from '@/components/OfflineCache';
 import { Sidebar } from '@/components/Sidebar';
 import { ArticlePaneSkeleton, ReaderSkeleton } from '@/components/Skeleton';
 import { getArticle, listArticleIds, listArticles } from '@/lib/articles';
@@ -324,6 +325,13 @@ async function Reader({ searchParams }: PageProps<'/'>) {
           </Suspense>
         )}
       </div>
+
+      {/*
+        圏外で読むぶんを、画面が落ち着いてから静かに手元へ置く。
+        置くのはここ（毎朝いちばんに開く画面）だけでよい——二次画面まで
+        走らせても、取ってくるものは同じで、回数だけ増える。
+      */}
+      <OfflineCache />
 
       {/* ホーム画面のアイコンに未読の数を出す。サイドバーと同じ値。 */}
       <AppBadge count={[...counts.values()].reduce((sum, n) => sum + n, 0)} />
