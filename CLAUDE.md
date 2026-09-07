@@ -43,6 +43,19 @@ AI要約つきの個人用RSSリーダー。
   必ず1記事1話題（＝元の読み上げの列）に戻る。
 - **AI は Gemini API の無料枠**を使う。要約 `gemini-3.5-flash-lite`、台本 `gemini-3.5-flash`、
   音声（後段）`gemini-3.1-flash-tts-preview`。いずれも無料枠あり。
+- **proxy（middleware）は置かない**（2026-09-07 決定）。Vercel は proxy を
+  1回起こすだけで **80ms** かかり、それが**全部の画面遷移に乗っていた**
+  （本番の実測: proxy だけ 124ms 対 関数だけ 43ms。手元では同じ proxy を通しても
+  静的ファイルと差が無い＝器の費用）。認証は2か所に移してある:
+  - 未ログインを弾くのは `lib/auth/guard.ts` の `requireSession()`。**各ページの
+    入れ子（`<Suspense>` の手前）で呼ぶ。** 新しい画面を足したら呼ぶこと。
+    見るのは Cookie の期限だけで、**署名は照合しない**（照合すると冷えた関数で
+    JWKS の往復が乗る）。読み書きの可否は今までどおり RLS が決める。
+  - セッションの更新は `/auth/refresh`（Route Handler）。**Server Component から
+    更新させないこと**——Cookie を書けないので新しい更新トークンを捨てることになり、
+    回転の仕組みごとセッションが死ぬ。期限切れはここへ送って更新し、元の URL へ戻す。
+  戻すときは `src/proxy.ts` を作り直すのではなく、まず `docs/traps/perf.md` の
+  該当項を読むこと（何を確かめたか、どの経路を通したかが書いてある）。
 - **定期実行は Supabase の `pg_cron`**。Vercel Hobby の cron は1日1回までで
   1時間毎の巡回ができないため。`supabase/scheduler.sql` を参照。
 - **Next.js 16.3**。`middleware` は `proxy.ts` に改称、`params`/`searchParams` は Promise、
@@ -270,3 +283,4 @@ PR を出したまま止めると、マージのためだけにもう一往復�
 - `<Suspense>` は全ページに要る。測る前に手元のサーバーを立て直す。
 - 「押しそうだ」の先読みは、押す気配を確かめてから（先読みの重さは本番で数える）。
 - Vercel の proxy 80ms は、こちらのコードの費用ではない。
+- proxy を消したので、認証はページ側（`lib/auth/guard.ts`）と `/auth/refresh` にある。
