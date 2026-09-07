@@ -6,6 +6,7 @@ import { ArticleSwipe } from '@/components/ArticleSwipe';
 import { ExportButton } from '@/components/ExportButton';
 import { ActionForm } from '@/components/ActionForm';
 import { MarkReadOnView } from '@/components/MarkReadOnView';
+import { ReadingPosition } from '@/components/ReadingPosition';
 import { MediaButton } from '@/components/MediaButton';
 import { ShareButton } from '@/components/ShareButton';
 import { ArticleMobileMenu } from '@/components/ArticleMobileMenu';
@@ -140,8 +141,12 @@ export function ArticleView({
       <ArticleSwipe articleId={a.id} prevHref={prevHref} nextHref={nextHref}>
         <div
           key={a.id}
+          /* 読んだ位置を覚えるのに、この箱を見つけてもらう（ReadingPosition）。 */
+          data-article-scroll
           className="flex-1 overflow-y-auto thin-scroll px-4 py-4 md:px-8 pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-8"
         >
+          {/* 長い記事は一度で読み切れない。前回の位置へ戻す。 */}
+          <ReadingPosition articleId={a.id} />
           <div className="mx-auto max-w-2xl">
             {/* スマホで一覧へ戻るリンク */}
             <div className="mb-3 md:hidden">
