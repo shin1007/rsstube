@@ -15,32 +15,9 @@
  * 圧縮を切って測る（`accept-encoding: identity`）。圧縮を挟むと、送り出した
  * 時刻ではなく圧縮器が吐き出した時刻を測ることになる。
  */
-import { createClient } from '@supabase/supabase-js';
+import { sessionCookie } from './session-cookie.mjs';
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const secret = process.env.SUPABASE_SECRET_KEY;
-const publishable = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-const owner = process.env.OWNER_USER_ID;
-if (!url || !secret || !publishable || !owner) {
-  console.error('NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SECRET_KEY / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY / OWNER_USER_ID が要ります');
-  process.exit(1);
-}
-
-const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
-const { data: user } = await admin.auth.admin.getUserById(owner);
-const email = user?.user?.email;
-if (!email) throw new Error('OWNER_USER_ID のユーザーが見つかりません');
-const { data: link, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
-if (error) throw error;
-const anon = createClient(url, publishable, { auth: { persistSession: false, autoRefreshToken: false } });
-const { data: verified, error: vErr } = await anon.auth.verifyOtp({
-  type: 'email',
-  token_hash: link.properties.hashed_token,
-});
-if (vErr) throw vErr;
-const ref = new URL(url).hostname.split('.')[0];
-const cookie =
-  `sb-${ref}-auth-token=base64-` + Buffer.from(JSON.stringify(verified.session)).toString('base64url');
+const cookie = await sessionCookie();
 
 const base = (process.argv[2] || 'https://rsstube.vercel.app').replace(/\/$/, '');
 const path = process.argv[3] || '/?view=all';

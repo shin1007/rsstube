@@ -58,7 +58,8 @@ AI要約つきの個人用RSSリーダー。
   該当項を読むこと（何を確かめたか、どの経路を通したかが書いてある）。
 - **定期実行は Supabase の `pg_cron`**。Vercel Hobby の cron は1日1回までで
   1時間毎の巡回ができないため。`supabase/scheduler.sql` を参照。
-- **Next.js 16.3**。`middleware` は `proxy.ts` に改称、`params`/`searchParams` は Promise、
+- **Next.js 16.3**。`middleware` は `proxy.ts` に改称（**このプロジェクトには置いていない**。
+  上の決定を参照）、`params`/`searchParams` は Promise、
   Turbopack が既定。訓練データと差異があるので `node_modules/next/dist/docs/` を読むこと（AGENTS.md）。
 - **ダークテーマ固定**。朝晩に長時間読む用途のため、切り替えは作らない。
 - **記事・要約・フィードは全ユーザー共通**（`0005`/`0006` で実施済み）。

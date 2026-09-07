@@ -5,14 +5,15 @@
  *                                                     [--runs 5] [--out perf-before.json]
  *
  * 測り方は docs/traps/perf.md の手順に合わせてある:
- *   ① 静的ファイル（proxy を通らない）で往復の下限を出す
- *   ② ログイン済みで /login を叩き、307 だけ返させて proxy だけの値を出す
+ *   ① 静的ファイル（関数を起こさない）で往復の下限を出す
+ *   ② ログイン済みで /login を叩き、307 だけ返させて「ページを組まない関数」の値を出す
  *   ③ 各ページを HTML と RSC（実際の画面遷移が取るもの）の両方で叩く
  *
  * セッションは Secret キーで作る（パスワードは要らない）。作った Cookie は
  * このプロセスの中だけに置き、ファイルには書かない。
  */
 import { createClient } from '@supabase/supabase-js';
+import { sessionCookie } from './session-cookie.mjs';
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -25,44 +26,13 @@ const OUT = arg('out', null);
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const secret = process.env.SUPABASE_SECRET_KEY;
-const publishable = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-const owner = process.env.OWNER_USER_ID;
-if (!url || !secret || !publishable || !owner) {
-  console.error('NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SECRET_KEY / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY / OWNER_USER_ID が要ります');
+if (!url || !secret) {
+  console.error('NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SECRET_KEY が要ります');
   process.exit(1);
 }
 
+/** 実データの id を拾うためだけの管理クライアント。セッションは session-cookie.mjs が作る。 */
 const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
-
-/** Secret キーでセッションを作り、@supabase/ssr が読む形の Cookie にする。 */
-async function sessionCookie() {
-  const { data: user } = await admin.auth.admin.getUserById(owner);
-  const email = user?.user?.email;
-  if (!email) throw new Error('OWNER_USER_ID のユーザーが見つかりません');
-
-  const { data: link, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
-  if (error) throw error;
-
-  const anon = createClient(url, publishable, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: verified, error: vErr } = await anon.auth.verifyOtp({
-    type: 'email',
-    token_hash: link.properties.hashed_token,
-  });
-  if (vErr) throw vErr;
-
-  const ref = new URL(url).hostname.split('.')[0];
-  const name = `sb-${ref}-auth-token`;
-  const value = 'base64-' + Buffer.from(JSON.stringify(verified.session)).toString('base64url');
-
-  // @supabase/ssr は 3180 文字を超えると .0 .1 … に割る。読む側も同じ形を期待する。
-  const CHUNK = 3180;
-  if (value.length <= CHUNK) return `${name}=${value}`;
-  const parts = [];
-  for (let i = 0; i < value.length; i += CHUNK) {
-    parts.push(`${name}.${parts.length}=${value.slice(i, i + CHUNK)}`);
-  }
-  return parts.join('; ');
-}
 
 /** 1回叩いて TTFB と完了までを測る。 */
 async function hit(path, { rsc = false, cookie = null, redirect = 'manual' } = {}) {
@@ -137,12 +107,14 @@ const push = async (...a) => {
   if (r) rows.push(r);
 };
 
-console.log('— 下限と proxy —');
+console.log('— 下限 —');
 await push('静的ファイル（CDN。関数を起こさない）', '/offline.html', {});
-// proxy の matcher から外してある口。関数は起きるが proxy は通らないので、
-// 「関数を1回起こす費用」だけが出る。proxy の取り分はこの行との差。
-await push('関数だけ（proxy を通らない・401）', '/api/debug/extract?url=x', {});
-await push('proxy だけ（/login に 307 を返させる）', '/login', { cookie });
+// 秘密で守ってある口。ページを組まずに 401 を返すので、**関数を1回起こす費用**だけが出る。
+await push('関数だけ（ページを組まない・401）', '/api/debug/extract?url=x', {});
+// ログイン済みで /login → 307。ログイン確認とリダイレクトだけで、ページは組まない。
+// **proxy（middleware）は 2026-09-07 に外した。** それまではこの行が 124ms で、
+// 上の行（43ms）との差 80ms が「器を1回起こす費用」だった（docs/traps/perf.md）。
+await push('ログイン確認だけ（/login に 307 を返させる）', '/login', { cookie });
 
 console.log('\n— ページ（HTML / 最初の1枚）—');
 await push('/ 未読', '/', { cookie });
