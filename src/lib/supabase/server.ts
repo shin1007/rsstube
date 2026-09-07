@@ -22,8 +22,15 @@ export async function createClient() {
               cookieStore.set(name, value, options);
             }
           } catch {
-            // Server Component からは Cookie を書けない。
-            // セッションの更新は proxy.ts 側で行っているので、ここは無視してよい。
+            /**
+             * Server Component からは Cookie を書けない。
+             *
+             * **ここに来るのは「更新が起きた」ということ**なので、黙って
+             * 捨ててよい場面かどうかは呼び出し側で決まる。画面の描画では
+             * そもそも更新を起こさない（期限は lib/auth/guard.ts が先に見て、
+             * 切れていれば /auth/refresh へ送る）。Route Handler と
+             * Server Action からは書けるので、そこでは捨てられない。
+             */
           }
         },
       },

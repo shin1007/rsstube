@@ -1,3 +1,4 @@
+import { requireSession } from '@/lib/auth/guard';
 import { Suspense } from 'react';
 import { AppShellSkeleton, PageSkeleton } from '@/components/Skeleton';
 import { AppShell } from '@/components/AppShell';
@@ -38,7 +39,11 @@ const STATUS_LABEL: Record<string, string> = {
  * （docs/traps/perf.md「最初の `await` が終わるまで `<head>` すら出ない」）。
  * fallback は `components/Skeleton.tsx`。
  */
-export default function ListenPage() {
+export default async function ListenPage() {
+  // ログインしていない人はここで追い返す（proxy.ts の代わり。lib/auth/guard.ts）。
+  // <Suspense> の手前で呼ぶこと——中で呼ぶと 307 ではなく「出してから飛ばす」形になる。
+  await requireSession('/listen');
+
   return (
     <Suspense fallback={<AppShellSkeleton><PageSkeleton rows={5} /></AppShellSkeleton>}>
       <Listen />

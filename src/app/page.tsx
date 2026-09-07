@@ -1,3 +1,4 @@
+import { requireSession } from '@/lib/auth/guard';
 import { Suspense } from 'react';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
@@ -38,12 +39,38 @@ const VIEWS: View[] = ['unread', 'starred', 'later', 'all', 'unsummarized'];
  * この境界が新しく生まれるとき＝最初の1枚だけ。
  */
 export default function ReaderPage(props: PageProps<'/'>) {
+  /**
+   * **ログインしていない人はここで追い返す**（proxy.ts の代わり。lib/auth/guard.ts）。
+   *
+   * `<Suspense>` の手前で呼ぶこと。中で呼ぶと骨組みを流したあとの遷移になり、
+   * 307 ではなく「一度画面を出してから飛ばす」形になる。ここは Cookie を
+   * 読むだけで通信をしないので、手前に置いても `<head>` の先出しは遅れない。
+   */
   return (
-    <Suspense fallback={<ReaderSkeleton />}>
-      <Reader {...props} />
-    </Suspense>
+    <Gate searchParams={props.searchParams}>
+      <Suspense fallback={<ReaderSkeleton />}>
+        <Reader {...props} />
+      </Suspense>
+    </Gate>
   );
 }
+
+/** 戻り先を組み立ててから確認する。朝いちばんに開いた記事の URL へ戻すため。 */
+async function Gate({
+  searchParams,
+  children,
+}: {
+  searchParams: PageProps<'/'>['searchParams'];
+  children: React.ReactNode;
+}) {
+  const params = await searchParams;
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (typeof v === 'string') sp.set(k, v);
+  const qs = sp.toString();
+  await requireSession(qs ? `/?${qs}` : '/');
+  return children;
+}
+
 
 async function Reader({ searchParams }: PageProps<'/'>) {
   const params = await searchParams;

@@ -1,3 +1,4 @@
+import { requireSession } from '@/lib/auth/guard';
 import { Suspense } from 'react';
 import { WatchSkeleton } from '@/components/Skeleton';
 import { MediaRetryButton } from '@/components/MediaRetryButton';
@@ -25,7 +26,12 @@ export const dynamic = 'force-dynamic';
  * （docs/traps/perf.md「最初の `await` が終わるまで `<head>` すら出ない」）。
  * fallback は `components/Skeleton.tsx`。
  */
-export default function WatchPage(props: PageProps<'/watch/[id]'>) {
+export default async function WatchPage(props: PageProps<'/watch/[id]'>) {
+  // ログインしていない人はここで追い返す（proxy.ts の代わり。lib/auth/guard.ts）。
+  // <Suspense> の手前で呼ぶこと——中で呼ぶと 307 ではなく「出してから飛ばす」形になる。
+  const { id } = await props.params;
+  await requireSession(`/watch/${id}`);
+
   return (
     <Suspense fallback={<WatchSkeleton />}>
       <Watch {...props} />
