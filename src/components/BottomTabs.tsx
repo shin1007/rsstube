@@ -31,7 +31,6 @@ export function BottomTabs({
     isActive: boolean;
   }[] = [
     { href: '/?view=unread', label: '読む', isActive: isMain && view === 'unread' },
-    { href: '/?view=later', label: 'あとで', isActive: isMain && view === 'later' },
     { href: '/?view=starred', label: 'スター', isActive: isMain && view === 'starred' },
     // 朝のダイジェストを取り出すのも、音声を聴くのもスマホからが主。
     { href: '/listen', label: '聴く', badge: unplayed, isActive: pathname.startsWith('/listen') },

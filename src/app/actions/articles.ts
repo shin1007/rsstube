@@ -68,7 +68,7 @@ async function client() {
  * 6往復する。**記事を1本開くたびに、遷移そのものと同じ重さの描き直しが
  * もう1回走っていた。**
  *
- * なので**押した結果が画面で分かる操作**（スター・あとで・手で付けた既読）は
+ * なので**押した結果が画面で分かる操作**（スター・手で付けた既読）は
  * 今までどおり revalidate し、**開いた拍子に付く既読**だけ黙って書く。
  * 既読の見た目は ArticleList の楽観更新が持つ。サイドバーの未読数だけは
  * 次の描画まで1件ぶん古いままになるが、読み終える前に減るほうが嘘に近い。
@@ -85,7 +85,7 @@ async function setState(
       { article_id: articleId, user_id: userId, ...patch, updated_at: new Date().toISOString() },
       // 主キーは (article_id, user_id)。0005 で記事を全ユーザー共通にしたときに
       // こう変わった。article_id だけを指定すると、それに合う一意制約が無いので
-      // Postgres が 42P10 で弾き、既読もスターもあとでも**全部失敗する**。
+      // Postgres が 42P10 で弾き、既読もスターも**全部失敗する**。
       { onConflict: 'article_id,user_id' },
     );
   if (error) throw error;
@@ -112,9 +112,6 @@ export async function setStarred(articleId: string, starred: boolean) {
   await setState(articleId, { is_starred: starred });
 }
 
-export async function setReadLater(articleId: string, later: boolean) {
-  await setState(articleId, { read_later: later });
-}
 
 /**
  * 表示中の記事をまとめて既読／未読にする（Inoreader の "Mark all as read" 相当）。
@@ -176,7 +173,7 @@ async function requestSummariesImpl(articleIds: string[]) {
   revalidatePath('/');
 }
 
-const VIEWS: View[] = ['unread', 'starred', 'later', 'all', 'unsummarized'];
+const VIEWS: View[] = ['unread', 'starred', 'all', 'unsummarized'];
 
 /** これ以上は遡らせない。無限スクロールに終わりが無いと、古い記事を延々と
  *  取りに行けてしまう（1回 PAGE_SIZE 件・往復ぶんの負荷がそのままかかる）。

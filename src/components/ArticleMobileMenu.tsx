@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from 'react';
-import { setReadLater, setStarred } from '@/app/actions/articles';
+import { setStarred } from '@/app/actions/articles';
 import { createExport } from '@/app/actions/exports';
 import { requestArticleMedia } from '@/app/actions/media';
 import { ExportDialog } from '@/components/ExportDialog';
@@ -16,19 +16,16 @@ export function ArticleMobileMenu({
   title,
   url,
   starred,
-  readLater,
   exported,
 }: {
   articleId: string;
   title: string;
   url: string;
   starred: boolean;
-  readLater: boolean;
   exported?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [starState, setStarState] = useState(starred);
-  const [laterState, setLaterState] = useState(readLater);
   const [flash, setFlash] = useState<string | null>(null);
 
   // 音声化用
@@ -80,19 +77,6 @@ export function ArticleMobileMenu({
       await setStarred(articleId, next);
     } catch {
       setStarState(!next);
-      setFlash('保存できませんでした');
-    }
-  };
-
-  // あとで読む切り替え
-  const handleToggleLater = async () => {
-    const next = !laterState;
-    setLaterState(next);
-    setFlash(next ? '◷ 「あとで読む」に追加しました' : '「あとで読む」から外しました');
-    try {
-      await setReadLater(articleId, next);
-    } catch {
-      setLaterState(!next);
       setFlash('保存できませんでした');
     }
   };
@@ -190,16 +174,6 @@ export function ArticleMobileMenu({
             >
               <span className={starState ? 'text-amber-400 font-bold' : 'text-zinc-400'}>★</span>
               <span>{starState ? 'スターを外す' : 'スターを付ける'}</span>
-            </button>
-
-            {/* あとで読む */}
-            <button
-              type="button"
-              onClick={handleToggleLater}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-left hover:bg-zinc-800 text-zinc-200 transition active:scale-95"
-            >
-              <span className={laterState ? 'text-sky-400 font-bold' : 'text-zinc-400'}>◷</span>
-              <span>{laterState ? '「あとで」から外す' : 'あとで読む'}</span>
             </button>
 
             {/* 共有 */}

@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { setReadLater, setStarred } from '@/app/actions/articles';
+import { setStarred } from '@/app/actions/articles';
 
 /**
- * 記事のスター／あとで。
+ * 記事のスター。
  *
  * 以前は素の `<form action={サーバー関数}>` だった。動いてはいたが、
  * **押してから色が変わるまでサーバーの往復ぶん待つ**ので、押せたのかどうかが
@@ -21,11 +21,9 @@ import { setReadLater, setStarred } from '@/app/actions/articles';
 export function ArticleActions({
   articleId,
   starred,
-  readLater,
 }: {
   articleId: string;
   starred: boolean;
-  readLater: boolean;
 }) {
   const [flash, setFlash] = useState<{ text: string; undo?: () => void } | null>(null);
 
@@ -40,17 +38,6 @@ export function ArticleActions({
         onLabel="スターを付けました"
         offLabel="スターを外しました"
         action={setStarred}
-        onFlash={setFlash}
-      />
-      <Toggle
-        articleId={articleId}
-        active={readLater}
-        label="◷ あとで"
-        short="◷"
-        activeClass="text-sky-400"
-        onLabel="「あとで読む」に入れました"
-        offLabel="「あとで読む」から外しました"
-        action={setReadLater}
         onFlash={setFlash}
       />
       {flash && <ActionFlash {...flash} onDismiss={() => setFlash(null)} />}

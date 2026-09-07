@@ -81,17 +81,16 @@ export type ArticleRow = {
     title_ja: string | null;
   } | null;
   /**
-   * 既読・スター・あとで・書き出し済み。
+   * 既読・スター・書き出し済み。
    *
-   * `is_read` と `read_later` はリーダーの一覧でしか見ないので `?`
-   * ——アーカイブは運ばない。**運ばないものを false で埋めないこと。**
-   * 「知っていて未読」と「そもそも運んでいない」は別の意味で、埋めると
-   * 区別が消える（ui.md の「まだ何も無い状態を実在する値と同じにしない」）。
+   * `is_read` はリーダーの一覧でしか見ないので `?`——アーカイブは運ばない。
+   * **運ばないものを false で埋めないこと。**「知っていて未読」と
+   * 「そもそも運んでいない」は別の意味で、埋めると区別が消える
+   * （ui.md の「まだ何も無い状態を実在する値と同じにしない」）。
    */
   state: {
     is_read?: boolean;
     is_starred: boolean;
-    read_later?: boolean;
     exported_at: string | null;
   } | null;
 };
@@ -134,12 +133,11 @@ export function asId(value: unknown): string | undefined {
 }
 
 /** 一覧の表示モード。 */
-export type View = 'unread' | 'starred' | 'later' | 'all' | 'unsummarized';
+export type View = 'unread' | 'starred' | 'all' | 'unsummarized';
 
 export const VIEW_LABELS: Record<View, string> = {
   unread: '未読',
   starred: 'スター',
-  later: 'あとで',
   all: 'すべて',
   // ワーカーが要約を付けられなかった記事の置き場。ここから積み直せる。
   unsummarized: '要約なし',

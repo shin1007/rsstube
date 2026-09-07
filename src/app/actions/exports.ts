@@ -64,29 +64,3 @@ async function getExportImpl(id: string): Promise<ExportResult> {
   return data as ExportResult;
 }
 
-/** 「あとで」に溜めた記事をまとめて書き出す。 */
-export async function exportReadLater() {
-  return attempt(() => exportReadLaterImpl());
-}
-
-async function exportReadLaterImpl(): Promise<ExportResult> {
-  const supabase = await createClient();
-  const user = await currentUser(supabase);
-  if (!user) throw new Error('未ログインです');
-
-  const { data, error } = await supabase
-    .from('article_states')
-    .select('article_id')
-    .eq('user_id', user.id)
-    .eq('read_later', true)
-    // 一度書き出したものは含めない。
-    .is('exported_at', null)
-    .limit(8);
-  if (error) throw error;
-
-  const ids = (data ?? []).map((r) => r.article_id);
-  if (ids.length === 0) throw new Error('書き出せる「あとで」の記事がありません');
-
-  // 内側では包まない版を呼ぶ。ここで ActionResult を返すと二重に包まれる。
-  return createExportImpl(ids, 'manual');
-}

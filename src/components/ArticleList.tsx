@@ -14,7 +14,6 @@ import {
   loadMoreArticles,
   markRead,
   requestSummaries,
-  setReadLater,
   setReadMany,
   setStarred,
 } from '@/app/actions/articles';
@@ -52,8 +51,8 @@ import {
  * 記事リスト。ここが「大量の記事を高速に捌く」中心。
  *
  * - 行にAIの要点を出し、開かずに判断できるようにする
- * - PC: j/k で移動、m 既読、s スター、l あとで、v 元記事、Shift+A 全既読、? でヘルプ
- * - スマホ: 左スワイプで既読、右スワイプであとで
+ * - PC: j/k で移動、m 既読、s スター、v 元記事、Shift+A 全既読、? でヘルプ
+ * - スマホ: 左スワイプで既読、右スワイプでスター
  * - 下まで来たら続きを継ぎ足す（無限スクロール）
  *
  * このファイルは**捌く仕掛けだけ**を持つ。行そのものは `ArticleListRow`、
@@ -604,15 +603,6 @@ export function ArticleList({
             startTransition(() => void setStarred(current.id, next));
           }
           break;
-        case 'l':
-          if (current) {
-            e.preventDefault();
-            const next = !current.state?.read_later;
-            setFlash(next ? '「あとで読む」に入れました' : '「あとで読む」から外しました');
-            patch(current.id, { read_later: next });
-            startTransition(() => void setReadLater(current.id, next));
-          }
-          break;
         case 'v':
           if (current) {
             e.preventDefault();
@@ -789,7 +779,7 @@ export function ArticleList({
          *
          * `preventDefault()` はしない（passive のままにする）。いちばん上に
          * 居るときは下へのスクロール自体が起きないので、止める必要が無い。
-         * 行のスワイプ（左=既読 / 右=あとで）とはぶつからない——あちらは
+         * 行のスワイプ（左=既読 / 右=スター）とはぶつからない——あちらは
          * 横の移動が縦より大きいときだけ動く。ここはその逆だけを見る。
          */
         onTouchStart={(e) => {

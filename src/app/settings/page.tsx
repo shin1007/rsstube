@@ -274,7 +274,7 @@ async function Settings({ searchParams }: PageProps<'/settings'>) {
             </div>
             <p className="text-xs text-zinc-500">
               音声はサーバー容量の都合で既定{DEFAULT_MEDIA_RETENTION_DAYS}日。消える前に「聴く」から MP3 で保存できます。
-              保持期間を過ぎた既読記事は本文だけを消します（スター・あとで・書き出し済みは対象外）。
+              保持期間を過ぎた既読記事は本文だけを消します（スター・書き出し済みは対象外）。
               記事の行自体は残るので、既読の記事が未読で戻ってくることはありません。0 で無効。
             </p>
 

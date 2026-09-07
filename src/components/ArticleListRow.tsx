@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useCallback, useRef, useState, useTransition } from 'react';
-import { markRead, setReadLater } from '@/app/actions/articles';
+import { markRead, setStarred } from '@/app/actions/articles';
 import { formatFetched, type StatePatch } from '@/lib/article-rows';
 import { JST } from '@/lib/datetime';
 import type { ArticleRow } from '@/lib/types';
@@ -88,7 +88,7 @@ export const ArticleListRow = memo(function ArticleListRow({
               : 'justify-start bg-sky-900 text-sky-200'
           } ${willAct ? 'opacity-100' : 'opacity-50'}`}
         >
-          {leftAction ? (read ? '未読に戻す' : '既読にする') : article.state?.read_later ? 'あとでを外す' : 'あとで読む'}
+          {leftAction ? (read ? '未読に戻す' : '既読にする') : article.state?.is_starred ? 'スターを外す' : 'スターを付ける'}
         </div>
       )}
 
@@ -114,7 +114,7 @@ export const ArticleListRow = memo(function ArticleListRow({
          * 長押し（スマホ）と右クリック（PC）で、ここから下を既読にする。
          *
          * `contextmenu` を使うのは、**この2つが同じ1つのイベントで来る**から。
-         * 長押しを自前のタイマーで作ると、既にあるスワイプ（左=既読 / 右=あとで）と
+         * 長押しを自前のタイマーで作ると、既にあるスワイプ（左=既読 / 右=スター）と
          * 指の取り合いになる。標準のイベントに乗れば競合しない。
          * 押し間違いは取り消しの帯で戻せる。
          */
@@ -150,10 +150,10 @@ export const ArticleListRow = memo(function ArticleListRow({
             onPatch(article.id, { is_read: !read });
             startTransition(() => void markRead(article.id, !read));
           } else if (dx > THRESHOLD) {
-            const next = !article.state?.read_later;
-            onFlash(next ? '「あとで読む」に入れました' : '「あとで読む」から外しました');
-            onPatch(article.id, { read_later: next });
-            startTransition(() => void setReadLater(article.id, next));
+            const next = !article.state?.is_starred;
+            onFlash(next ? 'スターを付けました' : 'スターを外しました');
+            onPatch(article.id, { is_starred: next });
+            startTransition(() => void setStarred(article.id, next));
           }
         }}
         style={swipe !== 0 ? { transform: `translateX(${swipe}px)` } : undefined}
@@ -240,11 +240,6 @@ export const ArticleListRow = memo(function ArticleListRow({
           {article.state?.is_starred && (
             <span title="スター" className="text-amber-400">
               ★
-            </span>
-          )}
-          {article.state?.read_later && (
-            <span title="あとで読む" className="text-sky-400">
-              ◷
             </span>
           )}
           {article.state?.exported_at && (

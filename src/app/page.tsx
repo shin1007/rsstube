@@ -21,7 +21,7 @@ import { PAGE_SIZE, asId, type View } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-const VIEWS: View[] = ['unread', 'starred', 'later', 'all', 'unsummarized'];
+const VIEWS: View[] = ['unread', 'starred', 'all', 'unsummarized'];
 
 /**
  * **枠だけを先に流すための入れ子。ここは `async` にしないこと。**
