@@ -95,12 +95,18 @@ export function ArticleNav({
   /**
    * 前後のボタン1つぶん。
    *
+   * **高さは 3.5rem（56px）。** 指の当たり判定の下限（44px）ではなく、
+   * その上を取ってある——読んでいる途中に画面の下端を見ずに押すボタンで、
+   * ホームバーのすぐ上にあるので、下限ぴったりだと下半分が持っていかれる。
+   * **上げたら本文側の下余白も一緒に上げること**（ArticleView の pb）。
+   * 帯は本文の上に固定で乗っているので、余白が足りないと最後の1行が潜る。
+   *
    * **折り返させない。** 真ん中にメニューが入ったぶん幅が狭くなり、
    * 「次の記事 → あと641」が2行に割れて帯の高さが変わっていた（実測・390px）。
    * 左右の余白はスマホだけ詰める。
    */
   const cell =
-    'flex min-h-12 flex-1 items-center justify-center whitespace-nowrap text-center px-2 py-2 md:px-4 select-none no-callout touch-manipulation';
+    'flex min-h-14 flex-1 items-center justify-center whitespace-nowrap text-center px-2 py-2 md:px-4 select-none no-callout touch-manipulation';
 
   return (
     <nav

@@ -140,7 +140,7 @@ export function ArticleView({
       <ArticleSwipe articleId={a.id} prevHref={prevHref} nextHref={nextHref}>
         <div
           key={a.id}
-          className="flex-1 overflow-y-auto thin-scroll px-4 py-4 md:px-8 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-8"
+          className="flex-1 overflow-y-auto thin-scroll px-4 py-4 md:px-8 pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-8"
         >
           <div className="mx-auto max-w-2xl">
             {/* スマホで一覧へ戻るリンク */}
