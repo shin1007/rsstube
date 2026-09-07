@@ -244,6 +244,15 @@ export function ArticleList({
   // キーボード操作のカーソル。
   const selectedIndex = rows.findIndex((a) => a.id === selectedId);
   const [cursor, setCursor] = useState(() => Math.max(0, selectedIndex));
+  /**
+   * カーソルを**人が動かしたか**。先読みの判断にだけ使う（下の effect）。
+   *
+   * カーソルは何もしなくても先頭（0）に居るので、そのまま先読みすると
+   * **一覧を開いただけで先頭記事のページを丸ごと1本取りに行く**。実測で
+   * 140KB、長い記事では 370KB あり、スマホでは j/k を使わないので
+   * ほぼ確実に無駄になる（朝いちばん、回線が細いときにこれを2本払っていた）。
+   */
+  const cursorMoved = useRef(false);
   const rowRefs = useRef<(HTMLElement | null)[]>([]);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -401,6 +410,9 @@ export function ArticleList({
    * 遷移には使われず、サーバーが同じページを2回組み立てるだけになる。
    */
   useEffect(() => {
+    // **人がカーソルを動かすまでは取りに行かない。** 初期位置（先頭）は
+    // 「開きそう」の合図ではない（上の cursorMoved）。
+    if (!cursorMoved.current) return;
     const id = rows[cursor]?.id;
     if (!id || id === selectedId || id === opened.current) return;
     prefetchArticle(id);
@@ -416,7 +428,10 @@ export function ArticleList({
     rowRefs.current[index] = el;
   }, []);
 
-  const focusAt = useCallback((index: number) => setCursor(index), []);
+  const focusAt = useCallback((index: number) => {
+    cursorMoved.current = true;
+    setCursor(index);
+  }, []);
 
   const openAt = useCallback(
     (index: number, id: string) => {
@@ -512,6 +527,7 @@ export function ArticleList({
         case 'ArrowDown': {
           e.preventDefault();
           const next = Math.min(cursor + 1, rows.length - 1);
+          cursorMoved.current = true;
           setCursor(next);
           rowRefs.current[next]?.scrollIntoView({ block: 'nearest' });
           // 末尾が近づいたら続きを呼ぶ。キーだけで読み進める人は、下端が
@@ -523,6 +539,7 @@ export function ArticleList({
         case 'ArrowUp': {
           e.preventDefault();
           const prev = Math.max(cursor - 1, 0);
+          cursorMoved.current = true;
           setCursor(prev);
           rowRefs.current[prev]?.scrollIntoView({ block: 'nearest' });
           break;
