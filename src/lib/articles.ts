@@ -121,7 +121,7 @@ export async function listArticleIds(query: ArticleQuery): Promise<ArticleSlot[]
  * 複合なので、PostgREST は記事から見て「多」の関係だと判断する（RLS で
  * 自分の1行しか返らなくても、形は配列のまま）。受け取る側は
  * `state?.is_read` のように**物として**読んでいたので、**ずっと undefined**
- * だった——スター・あとで・書き出し済みの印が本文の上に出ず、「出したなら
+ * だった——スター・書き出し済みの印が本文の上に出ず、「出したなら
  * 既読にする」も毎回「未読」から始めていた。型は `| null` と書いてあるので
  * 型検査では捕まらない。ここで物に均してから渡す。
  */
@@ -136,7 +136,7 @@ export async function getArticle(id: string) {
       `id, title, url, author, published_at, excerpt, content_text, content_html, content_ok, extracted_at, extract_fail, created_at,
        feeds (id, title),
        summaries (bullets, tags, title_ja),
-       article_states (is_read, is_starred, read_later, exported_at)`,
+       article_states (is_read, is_starred, exported_at)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -148,7 +148,7 @@ export async function getArticle(id: string) {
   return {
     ...data,
     article_states: (Array.isArray(states) ? (states[0] ?? null) : states) as
-      | { is_read: boolean; is_starred: boolean; read_later: boolean; exported_at: string | null }
+      | { is_read: boolean; is_starred: boolean; exported_at: string | null }
       | null,
   };
 }

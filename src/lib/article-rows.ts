@@ -20,7 +20,6 @@ import type { ArticleRow } from '@/lib/types';
 export const EMPTY_STATE = {
   is_read: false,
   is_starred: false,
-  read_later: false,
   exported_at: null as string | null,
 };
 

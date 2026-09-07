@@ -33,7 +33,6 @@ type ArticleDetail = {
   article_states: {
     is_read: boolean;
     is_starred: boolean;
-    read_later: boolean;
     exported_at: string | null;
   } | null;
 };
@@ -112,11 +111,7 @@ export function ArticleView({
         画面下端や上端の操作帯による表示面積の圧迫を解消する。
       */}
       <header className="hidden md:flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-zinc-800 px-3 py-1">
-        <ArticleActions
-          articleId={a.id}
-          starred={Boolean(state?.is_starred)}
-          readLater={Boolean(state?.read_later)}
-        />
+        <ArticleActions articleId={a.id} starred={Boolean(state?.is_starred)} />
 
         <ExportButton articleIds={[a.id]} exported={Boolean(state?.exported_at)} />
 
@@ -329,7 +324,6 @@ export function ArticleView({
             title={a.summaries?.title_ja?.trim() || a.title}
             url={a.url}
             starred={Boolean(state?.is_starred)}
-            readLater={Boolean(state?.read_later)}
             exported={Boolean(state?.exported_at)}
           />
         }

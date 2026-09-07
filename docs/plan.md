@@ -180,7 +180,7 @@ Vercel Cron (毎日6時台) → /api/cron/digest
 | `folders` | id, name, sort_order |
 | `feeds` | id, folder_id, url, site_url, title, etag, last_modified, last_fetched_at, error_count |
 | `articles` | id, feed_id, guid, url, url_hash(unique), title, author, published_at, excerpt, content_text, content_ok |
-| `article_states` | article_id, is_read, is_starred, read_later, read_at |
+| `article_states` | article_id, is_read, is_starred, read_at |
 | `summaries` | article_id, bullets(jsonb), tags(text[]), title_ja, model, created_at |
 | `exports` | id, kind('manual'\|'digest'), title, markdown, drive_file_id, drive_url, article_ids(uuid[]), created_at |
 | `digests` | id, date, export_id, media_id(nullable), article_ids(uuid[]) |

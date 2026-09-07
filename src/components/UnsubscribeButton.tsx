@@ -89,7 +89,7 @@ export function UnsubscribeButton({
   }
 
   if (impact) {
-    const kept = impact.starred + impact.readLater + impact.exported;
+    const kept = impact.starred + impact.exported;
     return (
       <div className="w-full rounded border border-amber-900/60 bg-amber-950/20 p-2.5 text-xs">
         <p className="text-zinc-200">「{title}」の購読をやめますか？</p>
@@ -101,7 +101,6 @@ export function UnsubscribeButton({
               ・
               {[
                 impact.starred > 0 ? `スター${impact.starred}件` : null,
-                impact.readLater > 0 ? `あとで${impact.readLater}件` : null,
                 impact.exported > 0 ? `書き出し済み${impact.exported}件` : null,
               ]
                 .filter(Boolean)

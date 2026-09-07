@@ -74,15 +74,15 @@ describe('mergeRows', () => {
 
   it('元の状態は消さない（重ねた列だけが変わる）', () => {
     const out = mergeRows({
-      articles: [row('a', { is_read: false, is_starred: true, exported_at: '2026-09-01' })],
+      articles: [row('a', { is_read: false, is_starred: false, exported_at: '2026-09-01' })],
       extra: [],
-      patches: { a: { read_later: true } },
+      patches: { a: { is_starred: true } },
       readMarks: none,
     });
     expect(out[0].state).toMatchObject({
-      is_starred: true,
+      is_read: false,
       exported_at: '2026-09-01',
-      read_later: true,
+      is_starred: true,
     });
   });
 

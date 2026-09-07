@@ -302,7 +302,6 @@ export type UnsubscribeImpact = {
   dropped: number;
   /** 残る件数の内訳。 */
   starred: number;
-  readLater: number;
   exported: number;
 };
 
@@ -315,25 +314,23 @@ async function feedImpactImpl(feedId: string): Promise<UnsubscribeImpact> {
 
   const { data, error } = await supabase
     .from('article_states')
-    .select('is_starred, read_later, exported_at, articles!inner (feed_id)')
+    .select('is_starred, exported_at, articles!inner (feed_id)')
     .eq('user_id', userId)
     .eq('articles.feed_id', feedId);
   if (error) throw error;
 
   const rows = (data ?? []) as unknown as {
     is_starred: boolean;
-    read_later: boolean;
     exported_at: string | null;
   }[];
 
   // 印が付いているものは購読をやめても残る（0012）。残るものを先に数え、
   // それ以外を「消えるもの」とする。
-  const kept = rows.filter((r) => r.is_starred || r.read_later || r.exported_at);
+  const kept = rows.filter((r) => r.is_starred || r.exported_at);
 
   return {
     dropped: rows.length - kept.length,
     starred: rows.filter((r) => r.is_starred).length,
-    readLater: rows.filter((r) => r.read_later).length,
     exported: rows.filter((r) => r.exported_at).length,
   };
 }
@@ -342,7 +339,7 @@ async function feedImpactImpl(feedId: string): Promise<UnsubscribeImpact> {
  * 購読をやめる。
  *
  * 記事とフィードは他の購読者のものでもあるので消さない。自分の状態行のうち、
- * 印を付けていないものだけが消える（スター・あとで・書き出し済みは残る。0012）。
+ * 印を付けていないものだけが消える（スター・書き出し済みは残る。0012）。
  */
 export async function deleteFeed(feedId: string) {
   return attempt(() => deleteFeedImpl(feedId));

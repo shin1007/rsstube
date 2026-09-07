@@ -26,7 +26,6 @@ const dummyArticle = {
   article_states: {
     is_read: true,
     is_starred: false,
-    read_later: false,
     exported_at: null,
   },
 };

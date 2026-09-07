@@ -51,7 +51,6 @@ test.describe('Article Mobile View & Bottom Navigation Layout', () => {
       await fabButton.click();
       await expect(page.getByRole('button', { name: 'メニューを閉じる' })).toBeVisible();
       await expect(page.getByRole('button', { name: /スター/ })).toBeVisible();
-      await expect(page.getByRole('button', { name: /あとで/ })).toBeVisible();
       await expect(page.getByRole('button', { name: /NotebookLM/ })).toBeVisible();
       await expect(page.getByRole('button', { name: /音声/ })).toBeVisible();
 
