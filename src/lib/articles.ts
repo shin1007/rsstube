@@ -1,18 +1,21 @@
-import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
-import { subscribedFeedIds } from '@/lib/subscriptions';
 import { sanitizeSearch } from '@/lib/search';
 import { PAGE_SIZE, asId, type ArticleRow, type View } from '@/lib/types';
 
 /**
- * 一覧用の記事取得。
+ * 一覧用の記事取得。**問い合わせは `list_articles()`（0042）に1本化してある。**
  *
- * 記事・要約・状態を1クエリで取る。Supabase の埋め込み選択を使うので
- * N+1 にはならない。並び順は新着順だけ（重要度をやめたので、0037）。
+ * 以前はここが直列2〜3往復だった——購読の feed_id を引く → 返ってきてから
+ * 記事を引く →（記事を開いていて位置が出せなければ）前後の id をもう1往復。
+ * 本番のデータで計ると **DB の仕事は合計 4.5ms しかない**（素の往復が
+ * 34.3ms）ので、払っていたのは往復そのものだった。0039 で `shell_data()` が
+ * 4本を1本にまとめたのと同じ形が、一覧に残っていた。
  *
- * 記事とフィードは全ユーザー共通なので（0005）、「自分の記事」を切り出しているのは
- * article_states!inner のほう。状態行は購読時と巡回時にしか作られないため、
- * これが購読フィルタを兼ねる。フォルダは購読ごとの持ち物なので subscriptions を見る。
+ * 絞り込み・並び順・総数の数え方は**全部 SQL 側が持っている**。ここに
+ * 条件を書き足さないこと——一覧と総数と前後の id で条件がずれると、
+ * 「あと12件」と出しておきながら3件目で終わる形で表に出る。
+ * 記事・要約・フィードは全ユーザー共通なので（0005）、「自分の記事」を
+ * 切り出しているのは `article_states` の有無（RLS）。
  */
 
 export type ArticleQuery = {
@@ -30,256 +33,15 @@ export type ArticleQuery = {
   offset?: number;
 };
 
-type RawRow = {
-  id: string;
-  title: string;
-  url: string;
-  published_at: string | null;
-  excerpt: string | null;
-  extracted_at: string | null;
-  created_at: string | null;
-  feeds: { id: string; title: string; subscriptions?: unknown } | null;
-  summaries: { bullets: string[]; title_ja: string | null } | null;
-  article_states: {
-    is_read: boolean;
-    is_starred: boolean;
-    read_later: boolean;
-    exported_at: string | null;
-  } | null;
-};
-
-/**
- * **購読しているフィードだけに絞るのは `feed_id in (…)` で行う。**
- *
- * 記事とフィードは全ユーザー共通なので（0005）、購読していないフィードの記事も
- * 表には残っている。以前はそれを `feeds!inner (subscriptions!inner (folder_id))` の
- * 入れ子で落としていた——正しいのだが、**その入れ子ひとつで未読一覧が7倍遅かった**
- * （本番相当のデータで 227ms → 31ms）。埋め込みは1つ増えるごとに横結合が増え、
- * Supabase の無料枠では計画だけで数十msかかる（EXPLAIN で計画44ms・実行61ms）。
- * 購読は12本しかないので、id を先に引いて集合で絞るほうが圧倒的に速い。
- *
- * `article_states!inner` のほうは残す。あれは「自分の記事」を切り出すためのもので
- * （状態行は購読時と巡回時にしか作られない）、購読の絞り込みとは別の仕事をしている。
- */
-/**
- * **問い合わせの組み立て役を async にしないこと。**
- *
- * supabase-js の builder は thenable なので、`async` 関数から返すと
- * その `await` が builder を実行してしまう（返るのは組み立て途中の builder
- * ではなく**結果**になる）。`.order()` が無いと型検査で言われて気づいたが、
- * 型が緩い書き方をしていたら、そのまま並べ替えの無い問い合わせが走っていた。
- * 非同期に要るもの（購読の id）だけを先に取り、当てるのは同期でやる。
- */
-async function subscribedIdsFor(query: ArticleQuery): Promise<string[]> {
-  const subs = await subscribedFeedIds();
-  return query.folderId
-    ? subs.filter((s) => s.folder_id === query.folderId).map((s) => s.feed_id)
-    : subs.map((s) => s.feed_id);
-}
-
-/**
- * 検索語に当たる記事の id（0040 の `search_article_ids()`）。新しい順。
- *
- * **`cache()` で包んであるのは、1リクエストの中で一覧・件数・前後の id が
- * 同じ集合を使うため。** 別々に引くと、その間に巡回が走っただけで
- * 「あと12件」と出しておきながら3件目で終わる形になる（CLAUDE.md）。
- * 問い合わせも1回で済む。
- *
- * 上限があるのは、これを `in.(…)` で URL に並べるから。実測で300件（約11KB）
- * までは通り、500件（約19KB）で接続ごと落ちた。**当たりが多すぎる語では
- * 新しいほうから SEARCH_ID_LIMIT 件までしか見ない**——1000件当たる語を
- * 全部並べても読む人には使えないので、そこは割り切っている。
- *
- * 語は POST の本体で渡る（rpc なので）。URL に3回並べていた頃のように、
- * `drop table` のような並びを手前の WAF に弾かれることが無くなる。
- */
-const SEARCH_ID_LIMIT = 250;
-
-const searchIdsFor = cache(async (term: string): Promise<string[]> => {
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc('search_article_ids', {
-    p_term: term,
-    p_limit: SEARCH_ID_LIMIT,
-  });
-  if (error) throw error;
-  return ((data ?? []) as { id: string }[]).map((r) => r.id);
-});
-
-/** 検索していないときは呼ばない（空配列を当てると1件も出なくなる）。 */
-async function searchIdsIfAny(query: ArticleQuery): Promise<string[] | undefined> {
-  if (!query.search) return undefined;
-  // 検索語の下ごしらえは今までどおり。`&@` は問い合わせ構文を解釈しないので
-  // 記号で壊れることは無いが、長さの上限（100字）はここで効かせておく。
-  const term = sanitizeSearch(query.search);
-  return term ? searchIdsFor(term) : [];
-}
-
-/**
- * 一覧に出すぶん。**行に出していない列は取らない。**
- *
- * 記事は `?article=` の付け替えで開くので、1回開くたびにこの一覧が
- * まるごと運び直される（実測61KB / 24行）。`url` `author` `content_ok`
- * `tags` は行のどこにも出していないのに、そのぶんが遷移のたびに乗っていた。
- * 元記事のリンクも書き手も、開いた先（getArticle）が持っている。
- */
-const LIST_SELECT = `id, title, url, published_at, excerpt, extracted_at, created_at,
-   feeds!inner (id, title),
-   summaries (bullets, title_ja),
-   article_states!inner (is_read, is_starred, read_later, exported_at)`;
-
-/**
- * 前後の記事を出すためだけの、id しか要らないぶん。
- *
- * 埋め込みを落とせないのは、絞り込み（未読・スター・フォルダ）が
- * 埋め込んだ表の列を見るため。!inner が無いと条件そのものが書けない。
- * 運ぶ列は id だけなので、本文も要約も付いてこない。
- *
- * **`summaries` も埋めておくこと。** 「要約なし」ビューの条件が
- * `.is('summaries', null)` で、埋め込んでいないと PostgREST が
- * `column articles.summaries does not exist` で落ちる。しかも
- * `head: true`（件数だけ数える形）だと本文が返らないぶん**メッセージが空の
- * エラー**になり、画面には `Error: {"message":""}` の500だけが出る
- * ——どの問い合わせが落ちたのか手掛かりが無い。
- * `!inner` にはしないこと。要約が無い記事こそがこのビューの中身なので、
- * 内部結合にすると1件も残らない。
- */
-const ID_SELECT = `id, published_at,
-   summaries (article_id),
-   article_states!inner (is_read, is_starred, read_later)`;
-
-/**
- * 絞り込みだけを当てる。**一覧と件数で条件がずれないように1か所にまとめる。**
- * ずれると「あと12件」と出しておきながら3件目で終わる、という形で表に出る。
- */
-function applyFilters<T>(q: T, query: ArticleQuery, searchIds?: string[]): T {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  let b = q as any;
-
-  // フォルダの絞り込みは scopeToSubscribed が feed_id の集合として当てる。
-  if (query.feedId) b = b.eq('feed_id', query.feedId);
-
-  switch (query.view) {
-    case 'unread':
-      b = b.eq('article_states.is_read', false);
-      break;
-    case 'starred':
-      b = b.eq('article_states.is_starred', true);
-      break;
-    case 'later':
-      b = b.eq('article_states.read_later', true);
-      break;
-    case 'unsummarized':
-      // ワーカーは要約が返らなかった記事もジョブを完了扱いにする（無料枠を
-      // 食い潰さないため）。落ちたぶんはここでしか見つけられない。
-      //
-      // ただし「まだ本文を取りに行っていない記事」は、要約が無くて当たり前で、
-      // 待てば付く。混ぜると順番待ちの山に埋もれて、本当に落ちたものが見えなくなる
-      // （実際に95件の順番待ちがあった）。処理済みのものだけを出す（0014）。
-      b = b.is('summaries', null).not('extracted_at', 'is', null);
-      break;
-    case 'all':
-      break;
-  }
-
-  /**
-   * **語の照合は SQL 側（0040 の `search_article_ids()`）。**ここは当たった
-   * id を集合として当てるだけ。
-   *
-   * 以前は `title/title_ja/content_text` の ilike を or で並べていた。索引
-   * （PGroonga・0015）は使われていたが、その後ろの Bitmap Heap Scan が
-   * 候補1199行ぶんの本文を取り出して ilike をやり直していて、そこが本体だった
-   * （実測 125ms → 38ms。往復の下限が35msなので、実質90ms が消えた）。
-   *
-   * **絞り込みはここに残す。** 未読・スター・フォルダ・フィードの条件を
-   * SQL 側に移すと、一覧と件数で二重に持つことになる（CLAUDE.md）。
-   * 語の照合だけを外に出し、一覧・件数・前後の id は同じ id 集合を使う。
-   *
-   * 語が空、または1件も当たらないときは空集合。`in.()` が「1件も無い」を
-   * 正しく表すので、条件を付けないほうに倒さないこと（付けないと
-   * 検索したのに全件出る）。
-   */
-  if (query.search) b = b.in('id', searchIds ?? []);
-
-  return b as T;
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-}
-
-/**
- * 絞り込みと並び順は1か所にまとめる。一覧と id 取得で条件がずれると、
- * 「前後の記事」だけ別の並びを指すことになり、押すたびに飛ぶ先が変わる。
- *
- * select を変数で渡しているので supabase-js の型推論は効かない。
- * 呼び出し側が形を知っているので、そちらで受け直すこと。
- */
-async function run(
-  select: string,
-  query: ArticleQuery,
-  limit: number,
-  /**
-   * 総数も一緒に返してもらうか。**1ページ目でだけ true にすること。**
-   *
-   * `count: 'exact'` を付けると、範囲が総数を追い越したときに PostgREST が
-   * 416（PGRST103 `Requested range not satisfiable`）で落ちる。付けない同じ
-   * 問い合わせは 200 と空配列で返る（実測: offset=5000 で 416 / 0件）。
-   * 無限スクロールの継ぎ足しは終わりを「返ってきた数が1ページに満たないこと」で
-   * 見ているので、ここで投げると一覧の末尾に「読み込めませんでした」が出る。
-   */
-  withCount = false,
-) {
-  const supabase = await createClient();
-
-  // 購読しているフィードだけに絞る。空の in は「1件も無い」で、
-  // 購読ゼロやフォルダが空のときの正しい答えになる。
-  // 検索語に当たる id も、当てるのは同期なので先に取っておく。
-  const [feedIds, searchIds] = await Promise.all([
-    subscribedIdsFor(query),
-    searchIdsIfAny(query),
-  ]);
-
-  let q = applyFilters(
-    supabase
-      .from('articles')
-      .select(select, withCount ? { count: 'exact' } : undefined)
-      .in('feed_id', feedIds)
-      .range(query.offset ?? 0, (query.offset ?? 0) + limit - 1),
-    query,
-    searchIds,
-  );
-
-  /**
-   * **最後に id で並べること（同着の決着）。**
-   *
-   * 日時だけでは順番が決まらない。実データで**243件が同じ日時**を持ち
-   * （45組、最大18件が同時刻。自治体や省庁は同じ時刻でまとめて出す）、
-   * その中の並びは Postgres の気分次第になる。決まらないと2つ壊れる:
-   *   - **無限スクロールで記事が重複・欠落する。** offset で継ぎ足すので、
-   *     同着の組がページの境目をまたぐと、2ページ目に同じ記事が出たり抜けたりする
-   *   - **「次の記事」が戻ったり飛んだりする。** 前後は毎回この並びから数え直す
-   * 実行計画が変われば並びも変わるので、いま安定して見えるのは偶然。
-   */
-  q = q
-    .order('published_at', { ascending: false, nullsFirst: false })
-    .order('id', { ascending: false });
-
-  const { data, count, error } = await q;
-  if (error) throw error;
-  return { rows: data ?? [], total: count ?? null };
-}
-
 /**
  * 一覧1ページぶんと、いまの絞り込みの総数。
  *
- * **総数は一覧と同じ1回で受け取る**（`count: 'exact'`）。以前は
- * `countArticles()` を別に投げていて、`Promise.all` で並べてはいたものの
- * **その1本が毎回いちばん遅かった**（実測・手元から: 一覧 79ms に対して
- * 件数だけの `head: true` が 112ms。「すべて」でも 120ms 対 128ms）。
- * 同じ問い合わせに載せると増える時間は誤差の範囲だった（79→79ms、120→116ms）
- * ——PostgREST が数えるのに払っていたのは走査ではなく、問い合わせを
- * もう1本組み立てて往復するほうだったということ（docs/traps/perf.md の
- * 「exact count は DB が数えるより一桁高い」と同じ話）。
+ * **総数は一覧と同じ1回で返る**（SQL の `count(*) over ()`）。別に数えていた
+ * 頃は、並べて投げても**その1本が毎回いちばん遅かった**（実測・一覧 79ms に
+ * 対して件数だけの `head: true` が 112ms）。数える走査ではなく、PostgREST が
+ * もう1本組み立てて往復するぶんを払っていたということ。
  *
- * 総数が要るのは1ページ目だけ（「あと何件」の表示）。継ぎ足しでは頼まない
- * ——範囲が総数を追い越すと 416 になるため（`run()` の withCount）。
+ * 総数が要るのは1ページ目だけ（「あと何件」の表示）。継ぎ足しでは頼まない。
  */
 export type ArticlePage = {
   articles: ArticleRow[];
@@ -287,45 +49,53 @@ export type ArticlePage = {
   total: number | null;
 };
 
-export async function listArticles(query: ArticleQuery): Promise<ArticlePage> {
-  const offset = query.offset ?? 0;
-  const { rows, total } = await run(LIST_SELECT, query, PAGE_SIZE, offset === 0);
+/** SQL 側が返す形。行の形は ArticleRow に合わせてあるので、詰め替えは要らない。 */
+type RawPage = { articles: ArticleRow[]; total: number | null };
 
-  const articles = (rows as unknown as RawRow[]).map((r) => {
-    // 行は先頭3つしか出さない。4つ目から先は運ぶだけ無駄になる。
-    const bullets = r.summaries?.bullets?.slice(0, 3) ?? [];
+/**
+ * `list_articles()` を1回呼ぶ。**呼び口はここだけにすること。**
+ * 引数の綴りを間違えても PostgREST は既定値で通してしまう（黙って
+ * 「全部」の一覧が返る）ので、組み立てる場所を散らさない。
+ */
+async function run(query: ArticleQuery, limit: number, idsOnly: boolean, withCount: boolean) {
+  const supabase = await createClient();
 
-    return {
-      id: r.id,
-      title: r.title,
-      // 行には出さないが、`v`（元記事を開く）が使う。**消さないこと**
-      // ——消したときは window.open(undefined) になって about:blank が開いた。
-      url: r.url,
-      published_at: r.published_at,
-      /**
-       * **要点があるときは抜粋を運ばない。** 行に出るのはどちらか片方で、
-       * 要点があればそちらが勝つ（ArticleList の Row）。抜粋は日本語で
-       * 150字ほどあり、1行あたりでいちばん重い列なのに、ほとんどの行では
-       * 一度も表示されない。
-       */
-      excerpt: bullets.length > 0 ? null : r.excerpt,
-      extracted_at: r.extracted_at,
-      created_at: r.created_at,
-      feed: r.feeds ? { id: r.feeds.id, title: r.feeds.title } : null,
-      summary: r.summaries ? { ...r.summaries, bullets } : null,
-      state: r.article_states ?? null,
-    };
+  // 語の下ごしらえだけはこちら。`&@` は問い合わせ構文を解釈しないので記号で
+  // 壊れることは無いが、長さの上限（100字）はここで効かせておく。
+  const term = query.search ? sanitizeSearch(query.search) : '';
+
+  // **消毒して何も残らなかった語は「絞らない」ではなく「1件も当たらない」。**
+  // 空の語をそのまま渡すと絞りが外れて全件出る（検索したのに、が起きる）。
+  // ついでに、その1往復も要らない。
+  if (query.search && !term) return { articles: [], total: withCount ? 0 : null };
+
+  const { data, error } = await supabase.rpc('list_articles', {
+    p_view: query.view,
+    p_folder: query.folderId ?? null,
+    p_feed: query.feedId ?? null,
+    p_term: term || null,
+    p_limit: limit,
+    p_offset: query.offset ?? 0,
+    p_with_count: withCount,
+    p_ids_only: idsOnly,
   });
 
-  return { articles, total };
+  if (error) throw error;
+
+  const page = (data ?? {}) as Partial<RawPage>;
+  return { articles: page.articles ?? [], total: page.total ?? null };
+}
+
+export async function listArticles(query: ArticleQuery): Promise<ArticlePage> {
+  return run(query, PAGE_SIZE, false, (query.offset ?? 0) === 0);
 }
 
 /**
  * 前後の記事を出すための id 一覧。
  *
  * 無限スクロールで先へ進んでから開いた記事は1ページ目に入っていないので、
- * 一覧の配列からは位置が出せない。かといって記事を1ページぶんずつ何度も取り直すのは
- * 高い（本文も要約も付いてくる）。ここは id しか運ばない。
+ * 一覧の配列からは位置が出せない。かといって記事を1ページぶんずつ何度も
+ * 取り直すのは高い（本文も要約も付いてくる）。ここは id しか運ばない。
  *
  * 上限を切ってあるのは、一覧の無限スクロールと同じ理由。ここより深いところの
  * 前後は出ない（出せないぶんはリンクを出さない。押せないボタンは出さない）。
@@ -337,31 +107,24 @@ const NEIGHBOUR_SCAN = 600;
  * 未読ビューで開いた記事はその場で既読になるので、次に一覧を引いたときには
  * もう居ない。id では引っかからないが、日付なら「居たはずの場所」が分かる。
  */
-/**
- * 「あと何件」の総数は `listArticles()` が一覧と同じ1回で返す。
- *
- * 以前ここに `countArticles()`（`count: 'exact', head: true`）があった。
- * 別に投げていた理由は「行を1件も運ばないから安い」だったが、実測すると
- * **一覧そのものより遅い1本**だった（79ms 対 112ms）。数える走査ではなく、
- * PostgREST がもう1本組み立てて往復するぶんを払っていたため。
- * **同じことを数える口を2つ持たないこと**——絞り込みがずれると
- * 「あと12件」と出しておきながら3件目で終わる形で表に出る。
- *
- * 以前ここを数えなかった時期の判断（未読ビューでは読むそばから変わるから）は
- * 変えていない: 読み手が知りたいのは正確な在庫ではなく「まだ続くのか」で、
- * 1件ずれても用は足りる。数が無いほうが困る。
- */
-
 export type ArticleSlot = { id: string; published_at: string | null };
 
 export async function listArticleIds(query: ArticleQuery): Promise<ArticleSlot[]> {
-  const { rows } = await run(ID_SELECT, { ...query, offset: 0 }, NEIGHBOUR_SCAN);
-  return (rows as unknown as ArticleSlot[]).map((r) => ({
-    id: r.id,
-    published_at: r.published_at,
-  }));
+  const { articles } = await run({ ...query, offset: 0 }, NEIGHBOUR_SCAN, true, false);
+  return articles as unknown as ArticleSlot[];
 }
 
+/**
+ * 本文ペインに出す1本ぶん。
+ *
+ * **`article_states` は配列で返ってくる。** 主キーが `(article_id, user_id)` の
+ * 複合なので、PostgREST は記事から見て「多」の関係だと判断する（RLS で
+ * 自分の1行しか返らなくても、形は配列のまま）。受け取る側は
+ * `state?.is_read` のように**物として**読んでいたので、**ずっと undefined**
+ * だった——スター・あとで・書き出し済みの印が本文の上に出ず、「出したなら
+ * 既読にする」も毎回「未読」から始めていた。型は `| null` と書いてあるので
+ * 型検査では捕まらない。ここで物に均してから渡す。
+ */
 export async function getArticle(id: string) {
   // 形が違う id は「無い記事」と同じ扱い（lib/types.ts の asId を参照）。
   if (!asId(id)) return null;
@@ -379,7 +142,15 @@ export async function getArticle(id: string) {
     .maybeSingle();
 
   if (error) throw error;
-  return data;
+  if (!data) return null;
+
+  const states = data.article_states as unknown;
+  return {
+    ...data,
+    article_states: (Array.isArray(states) ? (states[0] ?? null) : states) as
+      | { is_read: boolean; is_starred: boolean; read_later: boolean; exported_at: string | null }
+      | null,
+  };
 }
 
 /**
