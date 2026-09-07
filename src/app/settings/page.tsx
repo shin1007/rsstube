@@ -1,3 +1,4 @@
+import { requireSession } from '@/lib/auth/guard';
 import { Suspense } from 'react';
 import { AppShellSkeleton, Bar, PageSkeleton } from '@/components/Skeleton';
 import { JST } from '@/lib/datetime';
@@ -54,7 +55,11 @@ export const dynamic = 'force-dynamic';
  * （docs/traps/perf.md「最初の `await` が終わるまで `<head>` すら出ない」）。
  * fallback は `components/Skeleton.tsx`。
  */
-export default function SettingsPage(props: PageProps<'/settings'>) {
+export default async function SettingsPage(props: PageProps<'/settings'>) {
+  // ログインしていない人はここで追い返す（proxy.ts の代わり。lib/auth/guard.ts）。
+  // <Suspense> の手前で呼ぶこと——中で呼ぶと 307 ではなく「出してから飛ばす」形になる。
+  await requireSession('/settings');
+
   return (
     <Suspense fallback={<AppShellSkeleton><PageSkeleton rows={7} tall /></AppShellSkeleton>}>
       <Settings {...props} />

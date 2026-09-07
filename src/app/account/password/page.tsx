@@ -1,3 +1,4 @@
+import { requireSession } from '@/lib/auth/guard';
 import { currentUser } from '@/lib/auth/session';
 import { PasswordField } from '@/components/PasswordField';
 import { createClient } from '@/lib/supabase/server';
@@ -21,6 +22,10 @@ export const dynamic = 'force-dynamic';
 const MIN_PASSWORD = 8;
 
 export default async function PasswordPage({ searchParams }: PageProps<'/account/password'>) {
+  // ログインしていない人はここで追い返す（proxy.ts の代わり。lib/auth/guard.ts）。
+  // <Suspense> の手前で呼ぶこと——中で呼ぶと 307 ではなく「出してから飛ばす」形になる。
+  await requireSession('/account/password');
+
   const params = await searchParams;
   const done = params.done === '1';
   const error = typeof params.error === 'string' ? params.error : null;

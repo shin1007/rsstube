@@ -1,6 +1,7 @@
 import { PasskeySignIn } from '@/components/PasskeySignIn';
 import { PasswordField } from '@/components/PasswordField';
 import { isAllowedEmail } from '@/lib/auth/allowlist';
+import { sessionState } from '@/lib/auth/guard';
 import { createClient } from '@/lib/supabase/server';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -31,6 +32,14 @@ import { redirect } from 'next/navigation';
 const MIN_PASSWORD = 8;
 
 export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
+  /**
+   * **もう入っている人にログイン画面を出さない**（これまで proxy.ts がやっていた）。
+   *
+   * 見るのは Cookie の期限だけ（`lib/auth/guard.ts`）。切れているときは
+   * ここを通す——更新できるとは限らないので、入り直せる画面を出すほうが安全。
+   */
+  if ((await sessionState()) === 'live') redirect('/');
+
   const params = await searchParams;
   const sent = params.sent === '1';
   const error = typeof params.error === 'string' ? params.error : null;
