@@ -192,8 +192,15 @@ export function sanitizeHtml(html: string, baseUrl?: string): string {
         const src = safeUrl(child.getAttribute('src'), baseUrl);
         if (allowedIframe(src)) {
           child.setAttribute('src', src as string);
-          // 中でできることを最小限に絞る。
-          child.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+          /**
+           * 中でできることを最小限に絞る。
+           *
+           * **`allow-presentation` は付けない。** 仕様にはある値だが WebKit が
+           * 解釈できず、埋め込みのある記事を開くたびに Safari のコンソールへ
+           * `invalid sandbox flag` が出る（本番の iPhone で実測）。得られるのは
+           * 「枠の中から画面をテレビへ飛ばせる」だけで、毎回の警告と釣り合わない。
+           */
+          child.setAttribute('sandbox', 'allow-scripts allow-same-origin');
           child.setAttribute('loading', 'lazy');
           child.setAttribute('referrerpolicy', 'no-referrer');
         } else {

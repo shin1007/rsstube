@@ -11,8 +11,9 @@ import { NextResponse, type NextRequest } from 'next/server';
  *   4. code をセッションに交換して Cookie に載せ、/ へ送る
  *
  * @supabase/ssr は PKCE なので 4 が要る。ここが無いと code を持ったまま / に着き、
- * セッションが無いので proxy が /login へ戻し、永久に入れない。
- * proxy.ts の matcher からこのパスを外してあるのも同じ理由（未ログインで来るため）。
+ * セッションが無いので /login へ戻され、永久に入れない。
+ * **この経路にログイン確認（requireSession）を足さないこと**——ここは
+ * 未ログインで来るところなので、掛けた瞬間にログインが成立しなくなる。
  */
 
 export const runtime = 'nodejs';

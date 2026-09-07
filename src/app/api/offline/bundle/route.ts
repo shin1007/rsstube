@@ -99,7 +99,6 @@ export async function GET() {
     return {
       id: r.id,
       title: r.summaries?.title_ja?.trim() || r.title,
-      original: r.title,
       url: r.url,
       feed: r.feeds?.title ?? null,
       published_at: r.published_at,

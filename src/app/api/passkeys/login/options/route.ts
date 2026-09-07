@@ -16,8 +16,9 @@ import { cookies } from 'next/headers';
  * residentKey を required にして登録してあるので（register/options）、
  * 端末側が「このサイトの鍵」を覚えていて、選択画面を出してくれる。
  *
- * ここはセッションが無い状態で叩かれる。proxy.ts の matcher から
- * api/passkeys を外してあるのはそのため。
+ * ここはセッションが無い状態で叩かれる。**認証を掛けないこと**——掛けると
+ * この POST が /login への 307 に化けて、ブラウザには JSON の代わりに HTML が
+ * 返る（「予期しないトークン '<'」としか出ない）。
  */
 
 export const runtime = 'nodejs';

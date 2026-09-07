@@ -186,7 +186,7 @@ export function ArticleSwipe({
         // 指の動きより控えめに動かす。等倍だと本文が画面から出てしまい、
         // 「移る」のか「消える」のか分からない。
         // **transform を出しっぱなしにしないこと。** 変形している間は
-        // 中の position:fixed（HelpTip の吹き出し）がこの枠を基準にしてしまう。
+        // 中の position:fixed（知らせの帯など）がこの枠を基準にしてしまう。
         style={dx !== 0 ? { transform: `translateX(${dx * 0.35}px)` } : undefined}
       >
         {children}

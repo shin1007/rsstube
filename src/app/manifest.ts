@@ -7,8 +7,9 @@ import type { MetadataRoute } from 'next';
  * スマホのホーム画面から起動して、URLバー無しの単独アプリとして開くのが目的。
  * 朝の通勤前に開くものなので、起動が速く見えることに意味がある。
  *
- * proxy.ts の matcher は manifest.webmanifest を除外してある。
- * ここを認証にかけると、未ログインの状態でインストール要件を満たせなくなる。
+ * **ここに認証を掛けないこと。** 未ログインの状態でインストール要件を
+ * 満たせなくなる（sw.js と offline.html も同じ理由で素通し。lib/auth/guard.ts は
+ * ページ側で呼ぶ形なので、public/ と静的な口はもともと通らない）。
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {

@@ -18,7 +18,7 @@
  * ——記事を開く URL を叩くので既読が付く。
  */
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
+import { sessionCookie } from './session-cookie.mjs';
 
 const BASE = process.env.BASE ?? 'http://localhost:3000';
 
@@ -27,27 +27,7 @@ const admin = createClient(url, process.env.SUPABASE_SECRET_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-const { data: user } = await admin.auth.admin.getUserById(process.env.OWNER_USER_ID);
-const { data: link } = await admin.auth.admin.generateLink({
-  type: 'magiclink',
-  email: user.user.email,
-});
-
-const jar = new Map();
-const session = createServerClient(url, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, {
-  cookies: {
-    getAll: () => [...jar].map(([name, value]) => ({ name, value })),
-    setAll: (list) => {
-      for (const c of list) jar.set(c.name, c.value);
-    },
-  },
-});
-const { error: authError } = await session.auth.verifyOtp({
-  type: 'email',
-  token_hash: link.properties.hashed_token,
-});
-if (authError) throw authError;
-const cookie = [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+const cookie = await sessionCookie();
 
 // 実在の id をひとつずつ拾う。作り物の UUID だと「無いとき」しか通らない。
 const [{ data: articles }, { data: feeds }, { data: folders }] = await Promise.all([

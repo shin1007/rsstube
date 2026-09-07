@@ -13,7 +13,7 @@ import { redirect } from 'next/navigation';
  *     /auth/callback がセッションを作ってここへ送る
  *   - ログイン済みで、あとから変えたくなったとき（設定画面からのリンク）
  *
- * どちらもセッションがある前提。無ければ proxy が /login へ返す。
+ * どちらもセッションがある前提。無ければ下の requireSession が /login へ返す。
  */
 
 export const dynamic = 'force-dynamic';

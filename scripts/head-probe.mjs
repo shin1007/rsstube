@@ -13,7 +13,7 @@
  * セッションは Secret キーで作る（パスワードは要らない）。Cookie は
  * このプロセスの中だけに置き、ファイルには書かない。
  */
-import { createClient } from '@supabase/supabase-js';
+import { sessionCookie } from './session-cookie.mjs';
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -23,48 +23,6 @@ const arg = (name, fallback) => {
 const BASE = arg('base', 'https://rsstube.vercel.app').replace(/\/$/, '');
 const RUNS = Number(arg('runs', 3));
 const PATHS = arg('paths', '/,/library,/listen,/exports,/settings').split(',');
-
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const secret = process.env.SUPABASE_SECRET_KEY;
-const publishable = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-const owner = process.env.OWNER_USER_ID;
-if (!url || !secret || !publishable || !owner) {
-  console.error(
-    'NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SECRET_KEY / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY / OWNER_USER_ID が要ります',
-  );
-  process.exit(1);
-}
-
-const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
-
-/** perf-probe.mjs と同じ手口。@supabase/ssr が読む形の Cookie を作る。 */
-async function sessionCookie() {
-  const { data: user } = await admin.auth.admin.getUserById(owner);
-  const email = user?.user?.email;
-  if (!email) throw new Error('OWNER_USER_ID のユーザーが見つかりません');
-
-  const { data: link, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
-  if (error) throw error;
-
-  const anon = createClient(url, publishable, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: verified, error: vErr } = await anon.auth.verifyOtp({
-    type: 'email',
-    token_hash: link.properties.hashed_token,
-  });
-  if (vErr) throw vErr;
-
-  const ref = new URL(url).hostname.split('.')[0];
-  const name = `sb-${ref}-auth-token`;
-  const value = 'base64-' + Buffer.from(JSON.stringify(verified.session)).toString('base64url');
-
-  const CHUNK = 3180;
-  if (value.length <= CHUNK) return `${name}=${value}`;
-  const parts = [];
-  for (let i = 0; i < value.length; i += CHUNK) {
-    parts.push(`${name}.${parts.length}=${value.slice(i, i + CHUNK)}`);
-  }
-  return parts.join('; ');
-}
 
 /** 応答を chunk ごとに読み、`</head>` を見た時刻と最後の時刻を返す。 */
 async function once(path, cookie) {
