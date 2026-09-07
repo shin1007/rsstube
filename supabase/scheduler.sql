@@ -15,7 +15,7 @@ create extension if not exists pg_net;
 select cron.unschedule(jobname)
   from cron.job
  where jobname in ('rsstube-poll', 'rsstube-worker', 'rsstube-purge', 'rsstube-digest',
-                   'rsstube-media-purge');
+                   'rsstube-media-purge', 'rsstube-warmup');
 
 -- 1時間毎: フィード巡回
 select cron.schedule('rsstube-poll', '7 * * * *', $$
@@ -67,6 +67,24 @@ select cron.schedule('rsstube-media-purge', '45 3 * * *', $$
     headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__'),
     timeout_milliseconds := 60000
   );
+$$);
+
+-- 5分毎: 画面の入口を温めておく（2026-09-07、`docs/traps/perf.md` の
+-- 「測っていたのは温まった関数だけ」を参照）。
+--
+-- `/` と `/auth/refresh` は poll・worker・digest とは別の Vercel の関数で、
+-- こちらを叩く cron が無かった。ユーザーが開くのはこの2つだけなので、
+-- 巡回や台本作りがどれだけ回っていても温まらない。開いた瞬間がいつも
+-- コールドスタートというのが「PWAを開くと数秒かかる」の有力な候補。
+--
+-- 認証は掛けない（掛けられない）。**Cookie を1つも持たずに叩く**ので、
+-- guard.ts / auth/refresh の両方とも「未ログイン」として即座に /login へ
+-- リダイレクトするだけで終わる——DBへは1回も触らない。ここで温めたいのは
+-- 中身の実行結果ではなく、**その手前でLambdaに読み込ませておく
+-- モジュール一式**（一覧・本文・サイドバーの組み立てコードごと）。
+select cron.schedule('rsstube-warmup', '*/5 * * * *', $$
+  select net.http_get(url := '__APP_URL__/');
+  select net.http_get(url := '__APP_URL__/auth/refresh');
 $$);
 
 -- 確認用:

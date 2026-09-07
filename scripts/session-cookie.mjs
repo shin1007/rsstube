@@ -15,7 +15,15 @@ import { createServerClient } from '@supabase/ssr';
  *
  * 中身は生きたトークンなので、**ファイルに書かないこと**。使うプロセスの中だけに置く。
  */
-export async function sessionCookie() {
+/**
+ * 上と同じ手口で、Cookie の名前→値を `Map` のまま返す。
+ *
+ * `sessionCookie()` は文字列にして返すだけなので、期限を書き換えて
+ * 「切れたセッション」を作りたいとき（`cold-start-probe.mjs`）は
+ * こちらを使う。名前だけで `sb-<ref>-auth-token` を拾えるように、
+ * ここで組み立てる jar の中身は変えていない。
+ */
+export async function sessionCookieJar() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const secret = process.env.SUPABASE_SECRET_KEY;
   const publishable = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -54,5 +62,10 @@ export async function sessionCookie() {
   });
   if (authError) throw authError;
 
+  return jar;
+}
+
+export async function sessionCookie() {
+  const jar = await sessionCookieJar();
   return [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
 }
