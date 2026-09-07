@@ -65,7 +65,19 @@ export function ArticleSwipe({
    */
   useEffect(() => {
     prevAsked.current = false;
-    if (nextHref) prefetchFull(router, nextHref);
+    if (!nextHref) return;
+    /**
+     * **見えていないときは取りに行かない。**
+     *
+     * スマホで一覧を見ている間、本文ペインは `hidden md:flex` で畳まれて
+     * いるだけで DOM には居る。素直に書くと、**一覧を開いただけで
+     * 「次の記事」のページを丸ごと1本取りに行く**——読む気配すら無い記事を、
+     * 朝いちばんの細い回線で先に落としていた（実測で 140KB、長いものは 370KB）。
+     * `offsetParent` は display:none の親があると null になるので、
+     * 畳まれているかどうかがそのまま分かる。
+     */
+    if (box.current && box.current.offsetParent === null) return;
+    prefetchFull(router, nextHref);
   }, [nextHref, router]);
 
   useEffect(() => {
