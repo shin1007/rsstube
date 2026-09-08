@@ -1,4 +1,3 @@
-import { warmDbPath } from '@/lib/supabase/warm';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
@@ -102,14 +101,14 @@ export async function requireSession(next: string): Promise<void> {
   if (state === 'live') return;
 
   /**
-   * **ここまで来た1回は、DB に一度も触らずに終わる。**
+   * **ここまで来た1回は、DB に一度も触らずに終わる**（pg_cron の温めがこれ）。
    *
-   * pg_cron の温めがまさにこれ（Cookie を付けられないので必ず 307）。
-   * そのままだと関数だけ温まって Supabase へ向かう道は冷えたままになり、
-   * **次に来るオーナーの1回**が DNS・TLS ごと払う。実測で 813ms 対 426ms。
-   * 応答を返したあとに1本だけ投げて、道を開けておく（lib/supabase/warm.ts）。
+   * だから次に来るオーナーの1回が「1本目」の重さを払う（実測で 528〜813ms、
+   * 2本目は 227〜491ms）。**ここで Supabase へ接続を1本開けてみたが、差は
+   * 出なかった**——重いのは接続ではなく、そのインスタンスで初めてページを
+   * 組むぶんだった。詳しくは docs/traps/perf.md の
+   * 「匿名の1回では、描く道は温まらない」。**もう一度入れないこと。**
    */
-  warmDbPath();
 
   if (state === 'expired') {
     const store = await cookies();
