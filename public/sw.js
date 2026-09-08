@@ -15,7 +15,27 @@
  * 中身を変えたら CACHE の版を上げること。古い版は activate で消える。
  */
 
-const CACHE = 'rsstube-shell-v5';
+const CACHE = 'rsstube-shell-v6';
+
+/**
+ * **このワーカーが起きた時刻**と、**画面遷移の取得を始めた時刻**。
+ *
+ * iPhone の起動が遅い理由をサーバー側から見ることはできない。ワーカーの起動は
+ * ページより**前**に起きるので、ページの `performance` にも出てこない
+ * （`workerStart` は navigationPreload と同じく WebKit が埋めてくれない）。
+ * そこで両方を素の時刻で控えておき、ページから聞かれたら渡す
+ * （下の `message`。読むのは components/BootTiming.tsx）。
+ *
+ * ページ側の `performance.timeOrigin` と引き算すれば、
+ * 「画面遷移が始まってから、実際に通信が始まるまで」＝**ワーカーの起動ぶん**が出る。
+ * ここが数百msあるなら、犯人はサービスワーカーの起動そのもの。
+ *
+ * **この2つは Date.now() で持つこと。** ワーカーの `performance.now()` は
+ * ワーカーが起きた時刻が原点なので、ページとは原点が違って引き算できない。
+ */
+const SW_BOOT_AT = Date.now();
+let LAST_NAV = null;
+
 /**
  * `/_next/static/` の中身だけを入れる置き場。
  *
@@ -125,6 +145,9 @@ self.addEventListener('fetch', (event) => {
   // 残りは画面遷移だけ面倒を見る。API も素通しにする。
   if (request.mode !== 'navigate') return;
 
+  // 何時に通信を始めたか。上の SW_BOOT_AT との差が「起動を待った時間」。
+  LAST_NAV = { at: Date.now(), url: request.url };
+
   event.respondWith(
     (async () => {
       try {
@@ -137,6 +160,27 @@ self.addEventListener('fetch', (event) => {
       }
     })(),
   );
+});
+
+/**
+ * ページから「いつ起きた？」と聞かれたら答える。
+ *
+ * 返すのは素の時刻2つだけで、判断はページ側でやる
+ * （components/BootTiming.tsx が `performance.timeOrigin` と引き算する）。
+ * **ここで計算しないこと**——ワーカーとページで時刻の原点が違う。
+ */
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'rsstube-boot') return;
+  const reply = {
+    type: 'rsstube-boot',
+    swBootAt: SW_BOOT_AT,
+    navAt: LAST_NAV?.at ?? null,
+    navUrl: LAST_NAV?.url ?? null,
+    preload: Boolean(self.registration.navigationPreload),
+  };
+  const port = event.ports?.[0];
+  if (port) port.postMessage(reply);
+  else event.source?.postMessage(reply);
 });
 
 /**

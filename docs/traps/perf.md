@@ -595,3 +595,25 @@ proxy · 遷移 · 運ぶ量 を触るときに読む。索引は `CLAUDE.md` �
   測れるもの（往復・ペイロード・hydration）と、Chromium では測れないもの
   （サービスワーカーの起動、navigationPreload の有無）を**分けて書くこと**。
   後者は実機でしか出ない。
+
+- **`workerStart` は WebKit が埋めてくれないので、ワーカー自身に時刻を聞く。**
+  サーバー側を 3029ms → 246ms にしても iPhone SE では体感3秒のままだった。
+  残りはサービスワーカーの起動・PWA の起動・ハイドレーションで、**どれも
+  実機でしか出ない**（手元の WebKit は Windows では起動しない）。
+  `PerformanceNavigationTiming.workerStart` を読めば済む話だが、Safari は
+  ここを 0 のままにする。そこで `public/sw.js` の**最上位**で `Date.now()` を
+  控え（＝ワーカーが起きた時刻）、画面遷移の取得を始めるときにもう一度控えて、
+  ページから `postMessage` で聞く。ページ側で `performance.timeOrigin` を
+  引けば、同じものさしに乗る（`src/lib/boot.ts`・`components/BootTiming.tsx`）。
+  **ワーカー側で引き算しないこと**——あちらの `performance.now()` は
+  ワーカーが起きた時刻が原点なので、ページとは原点が違う。
+  **「起きた時刻」も一緒に返すこと。** 通信を始めるまでが 0ms でも、
+  ワーカーが**前から起きていた**なら起動ぶんを払っていない——朝いちばんとは
+  別の状態を見ていることになる（`bootedForThisNavigation()`）。
+
+- **実機の数字は、サーバーへ送らずに端末へ置く。** 1人しか使っていないので、
+  そのために口を1つ増やす必要が無い。localStorage に最新12件を積んで、
+  設定画面のいちばん下で読む（`components/BootTimings.tsx`）。
+  **読むのは `useEffect` + `setState` ではなく `useSyncExternalStore`**
+  ——lint の `react-hooks/set-state-in-effect` に当たるうえ、サーバー用の
+  値を別に返せるので hydration が食い違わない。
