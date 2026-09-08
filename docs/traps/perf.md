@@ -617,3 +617,13 @@ proxy · 遷移 · 運ぶ量 を触るときに読む。索引は `CLAUDE.md` �
   **読むのは `useEffect` + `setState` ではなく `useSyncExternalStore`**
   ——lint の `react-hooks/set-state-in-effect` に当たるうえ、サーバー用の
   値を別に返せるので hydration が食い違わない。
+
+- **測る係はページではなく layout に置く。** 起動の内訳を記録する
+  `components/BootTiming.tsx` を `/` のページに置いたら、**1件も残らなかった**
+  ——一覧が出た瞬間に設定を開かれると、記録する前に unmount する。
+  `PerformanceNavigationTiming` は「最初の1枚を読み込んだとき」の1回しか無く、
+  画面を移っても増えないので、**layout に置けば遷移で作り直されず、
+  どの入口から開いても必ず1件残る**。ついでに待ち時間も 2.5秒 → 400ms に
+  縮めた（`performance` を読んで文字にするだけで数msしかかからない）。
+  **`pagehide` と `visibilitychange` でも書き出すこと**——iOS はホームに
+  戻した時点でページを凍らせるので、待っている `setTimeout` は二度と起きない。

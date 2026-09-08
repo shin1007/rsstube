@@ -21,8 +21,14 @@ import { BOOT_KEEP, BOOT_KEY, readBootSamples, type BootSample } from '@/lib/boo
  * 「走っている途中の先読みは、遷移には使われない」）。
  */
 
-/** 画面が落ち着いてから測るまでの間。描画とハイドレーションを邪魔しない。 */
-const DELAY_MS = 2500;
+/**
+ * `load` から測るまでの間。描画とハイドレーションを邪魔しない。
+ *
+ * **長くしすぎないこと。** 最初 2.5秒にしたら、一覧が出てすぐ設定を開いた1回で
+ * **1件も残らなかった**。ここでやるのは `performance` を読んで文字にするだけで
+ * 数msしかかからないので、`load` の後にひと呼吸あれば足りる。
+ */
+const DELAY_MS = 400;
 
 /** サービスワーカーの返事を待つ上限。返らなくても残りは記録する。 */
 const SW_TIMEOUT_MS = 1000;
@@ -54,9 +60,15 @@ function askWorker(): Promise<{ swBootAt: number; navAt: number | null; preload:
 
 export function BootTiming() {
   useEffect(() => {
-    let cancelled = false;
+    /**
+     * **1回の読み込みにつき1件。** `load` で測るぶんと、画面を閉じられたときに
+     * 慌てて測るぶんが二重に走らないようにする。
+     */
+    let done = false;
 
     const run = async () => {
+      if (done) return;
+      done = true;
       try {
         const nav = performance.getEntriesByType('navigation')[0] as
           | PerformanceNavigationTiming
@@ -64,7 +76,6 @@ export function BootTiming() {
         if (!nav) return;
 
         const worker = await askWorker();
-        if (cancelled) return;
 
         /**
          * ワーカーの時刻は素の `Date.now()`。ページの原点（`timeOrigin`）を
@@ -121,28 +132,32 @@ export function BootTiming() {
 
     // `load` が済んでいなければ待つ。`loadEventEnd` が 0 のまま記録されると、
     // いちばん見たい「完了まで」が欠ける。
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const start = () => {
-      const timer = setTimeout(run, DELAY_MS);
-      return () => clearTimeout(timer);
+      timer = setTimeout(run, DELAY_MS);
     };
 
-    if (document.readyState === 'complete') {
-      const stop = start();
-      return () => {
-        cancelled = true;
-        stop();
-      };
-    }
+    if (document.readyState === 'complete') start();
+    else addEventListener('load', start, { once: true });
 
-    let stop: (() => void) | null = null;
-    const onLoad = () => {
-      stop = start();
+    /**
+     * **画面を離れられたら、その場で測る。**
+     *
+     * iOS はホームに戻した時点でページを凍らせる（そのまま捨てることもある）ので、
+     * 待っている途中の `setTimeout` は二度と起きない。`load` が済んでいれば
+     * 数字は出揃っているので、ここで慌てて残す。
+     */
+    const flush = () => {
+      if (document.readyState === 'complete') run();
     };
-    addEventListener('load', onLoad, { once: true });
+    addEventListener('pagehide', flush);
+    addEventListener('visibilitychange', flush);
+
     return () => {
-      cancelled = true;
-      removeEventListener('load', onLoad);
-      stop?.();
+      if (timer) clearTimeout(timer);
+      removeEventListener('load', start);
+      removeEventListener('pagehide', flush);
+      removeEventListener('visibilitychange', flush);
     };
   }, []);
 

@@ -111,7 +111,9 @@ export function BootTimings() {
                   {ms(s.swStart)}
                   <span className="ml-1 text-zinc-600">
                     {bootedForThisNavigation(s) === null
-                      ? ''
+                      ? s.swStart === null
+                        ? '(通っていない)'
+                        : ''
                       : bootedForThisNavigation(s)
                         ? '(起動)'
                         : '(起きていた)'}
