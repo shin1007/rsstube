@@ -15,7 +15,7 @@ create extension if not exists pg_net;
 select cron.unschedule(jobname)
   from cron.job
  where jobname in ('rsstube-poll', 'rsstube-worker', 'rsstube-purge', 'rsstube-digest',
-                   'rsstube-media-purge');
+                   'rsstube-media-purge', 'rsstube-warm');
 
 -- 1時間毎: フィード巡回
 select cron.schedule('rsstube-poll', '7 * * * *', $$
@@ -67,6 +67,30 @@ select cron.schedule('rsstube-media-purge', '45 3 * * *', $$
     headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__'),
     timeout_milliseconds := 60000
   );
+$$);
+
+-- 5分毎: 朝いちばんの待ち時間を消すための「温め」。
+--
+-- ホーム画面から開く朝の1回は、必ず**冷えた関数**に当たる。本番の実測で
+-- 合計 2215ms かかっていた（`/` が 393ms → `/auth/refresh` が 848ms →
+-- 本体が 973ms）。同じ経路でも温まっていれば 400ms、トークンまで生きていれば
+-- 200ms なので、**待ち時間の8割はコールドスタート**だった。
+-- 詳しくは docs/traps/perf.md の「速さを、生きた Cookie でだけ測っていた」。
+--
+-- **2つとも要る。** 朝は `/` と `/auth/refresh` の2つの関数を通るが、
+-- Vercel では**ルートごとに別の関数**なので、片方を温めても
+-- もう片方は冷えている。`/auth/refresh` は1日1回しか通らないぶん、
+-- 温めないと毎朝必ず冷たい。
+--
+-- **中身のある処理はしない。** どちらも未ログインで叩くので、Cookie を見て
+-- 307 を返すだけで DB には触らない。狙いは関数のインスタンスを起こしたままに
+-- しておくことだけ。**5分あけた時点で完全に温かくはない**（実測: 直後 93ms、
+-- 5分後 554ms、10分後 1150ms、15分後 973ms）。それでも冷え切った 2215ms の
+-- 4分の1に収まるので、間隔は5分で止めてある。
+-- 認証も要らない（CRON_SECRET を渡さない）——秘密を撒く先を増やさないため。
+select cron.schedule('rsstube-warm', '*/5 * * * *', $$
+  select net.http_get(url := '__APP_URL__/', timeout_milliseconds := 5000);
+  select net.http_get(url := '__APP_URL__/auth/refresh', timeout_milliseconds := 5000);
 $$);
 
 -- 確認用:
