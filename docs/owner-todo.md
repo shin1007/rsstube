@@ -6,65 +6,7 @@
 好みの判断——だけを、急ぎの順に並べています。**済んだものは消します**（履歴は
 `docs/status.md` と git log に残ります）。
 
-最終更新: 2026-09-08（「iPhone SE で3秒以上」の件。**0-A は済んでいます。残りは 0-B と 0-C**）
-
----
-
-## 0-B. トークンの寿命を延ばす（Supabase の設定画面で、1分）**← いちばん効きます**
-
-**「PWA の起動に3秒以上」の主犯はここです。** 前回もお願いしていた項目ですが、
-本番を見にいったところ**まだ `3600`（1時間）のまま**でした（アクセストークンの
-`exp - iat` を実際に読んで確認）。一方 0-A の pg_cron のほうは**貼っていただけて
-います**（`rsstube-warm-morning` が active で並んでいました）。
-
-寿命が1時間なので、**しばらく開いていなければ必ず**こうなります:
-
-    /  →（307）→ /auth/refresh  →（307）→ /  → 200
-
-**Vercel ではこの3本が別々の関数**なので、冷えているときは**コールドスタートを
-3回**払います。本番の実測で `/` が 393ms、`/auth/refresh` が 848ms、本体が 973ms
-——これだけで 2.2秒。ここに iPhone の PWA 起動とサービスワーカーの起動が乗って
-3秒を超えます。1本にできれば、払うコールドスタートは1回だけです。
-
-- [ ] **[Supabase → Authentication → Sessions](https://supabase.com/dashboard/project/_/auth/sessions)**
-      の **Access token (JWT) expiry** を `3600`（1時間）から **`604800`（1週間）** へ
-
-**安全性はほとんど変わりません。** アクセストークンと更新トークンは**同じ Cookie に
-入っている**ので、Cookie を盗られた時点でどちらにしても新しいトークンを作られます。
-寿命を延ばして増えるのは「Cookie を消してから、それが効かなくなるまでの猶予」だけです。
-気になるなら `86400`（1日）でも構いませんが、**1日だと「昨日の夜に開いて今朝開く」で
-また切れます**。毎日確実に効かせたいなら1週間にしてください。
-
----
-
-## 0-C. 温めを2分毎に貼り替える（Supabase の SQL Editor で、30秒）
-
-いま日中は**5分毎**に温めています。ところが**5分あけた時点でもう冷えている**
-（1分刻みの実測: 1分 96ms / 2分 263ms / **3分 553ms** / 5分 554ms）。
-「日中は使っている本人の操作が温め続けるので5分でよい」と書いていましたが、
-**それが外れ**でした——**開く瞬間は、いつも使っていない**からです。実際、
-今回3秒かかったのは朝ではなく昼です。**朝だけ1分毎にしたのは、朝しか
-測っていなかったからで、朝しか開かないからではありませんでした。**
-
-- [ ] **[Supabase → SQL Editor](https://supabase.com/dashboard/project/_/sql/new)**
-      に下を貼って Run
-
-```sql
-select cron.schedule('rsstube-warm', '*/2 * * * *', $$
-  select net.http_get(url := 'https://rsstube.vercel.app/', timeout_milliseconds := 5000);
-  select net.http_get(url := 'https://rsstube.vercel.app/auth/refresh', timeout_milliseconds := 5000);
-  select net.http_get(url := 'https://rsstube.vercel.app/exports', timeout_milliseconds := 5000);
-$$);
-
--- 確認（rsstube-warm が */2 になっていれば成功）
-select j.jobname, j.schedule, j.active from cron.job j order by j.jobname;
-```
-
-朝の1分毎（`rsstube-warm-morning`、UTC 20-23 = 日本時間 5:00〜8:59）は
-そのままです。同じ内容は `supabase/scheduler.sql` にも入れてあります。
-
-**終日1分毎にはしません。** 呼び出し回数がそのまま増えるのに、2分と1分の差は
-170ms しかないためです。
+最終更新: 2026-09-08（0-A・0-B・0-C すべて適用済み。起動の待ちは 3029ms → 246ms）
 
 ---
 
@@ -96,6 +38,12 @@ select j.jobname, j.schedule, j.active from cron.job j order by j.jobname;
 スマホから **https://rsstube.vercel.app** を開いてください
 （LANの `192.168.1.5:3000` ではPWAも通知も動きません。HTTPSが要るため）。
 
+- [ ] **もう一度ホーム画面から開いて、体感を教えてください（9/8）** — 3秒以上かかっていた件は、
+      サーバー側では **3029ms → 246ms** になりました（リダイレクトが3本立てから1本に、
+      日中の温めが2分毎に）。ここから残るのは **iPhone 側の2つ**だけで、どちらも
+      サーバーからは触れません: サービスワーカーの起動ぶん（navigationPreload が
+      WebKit に無い）と、PWA そのものの起動。**まだ遅ければ、次はそこを疑います**
+      ——「アイコンを押してから一覧の文字が読めるまで」で何秒か教えてください
 - [ ] **通知をオンにして「テスト送信」** — 登録端末は**0件のまま**です。
       これをやらないと朝の通知はどこにも飛びません。iPhone は共有メニュー →
       「ホーム画面に追加」で開いてからでないと登録できません
