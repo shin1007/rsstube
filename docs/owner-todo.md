@@ -6,56 +6,25 @@
 好みの判断——だけを、急ぎの順に並べています。**済んだものは消します**（履歴は
 `docs/status.md` と git log に残ります）。
 
-最終更新: 2026-09-08（温めを朝だけ1分毎にしました。「0」に貼るものが増えています）
+最終更新: 2026-09-08（「iPhone SE で3秒以上」の件。**0-A は済んでいます。残りは 0-B と 0-C**）
 
 ---
 
-## 0-A. pg_cron を貼り替える（Supabase の SQL Editor で、30秒）**← 先にこれ**
+## 0-B. トークンの寿命を延ばす（Supabase の設定画面で、1分）**← いちばん効きます**
 
-前回入れた「5分毎に叩いて関数を起こしておく」を測り直したら、**まだ 3259ms**
-ありました。5分の隙間があると Vercel は関数を落としてしまいます（1分なら
-温かいままでした）。そこで**朝（日本時間 5:00〜8:59）だけ1分毎**にして、
-**通知から開く `/exports`** も温める形に変えました。数字は `docs/status.md` の
-15周目にあります。
+**「PWA の起動に3秒以上」の主犯はここです。** 前回もお願いしていた項目ですが、
+本番を見にいったところ**まだ `3600`（1時間）のまま**でした（アクセストークンの
+`exp - iat` を実際に読んで確認）。一方 0-A の pg_cron のほうは**貼っていただけて
+います**（`rsstube-warm-morning` が active で並んでいました）。
 
-pg_cron の登録だけは私からは流せないので、**下をそのまま貼って実行**して
-ください。同じ名前で登録し直すだけなので、何度貼っても増えません。
+寿命が1時間なので、**しばらく開いていなければ必ず**こうなります:
 
-- [ ] **[Supabase → SQL Editor](https://supabase.com/dashboard/project/_/sql/new)**
-      に下を貼って Run
+    /  →（307）→ /auth/refresh  →（307）→ /  → 200
 
-```sql
-select cron.schedule('rsstube-warm', '*/5 * * * *', $$
-  select net.http_get(url := 'https://rsstube.vercel.app/', timeout_milliseconds := 5000);
-  select net.http_get(url := 'https://rsstube.vercel.app/auth/refresh', timeout_milliseconds := 5000);
-  select net.http_get(url := 'https://rsstube.vercel.app/exports', timeout_milliseconds := 5000);
-$$);
-
-select cron.schedule('rsstube-warm-morning', '* 20-23 * * *', $$
-  select net.http_get(url := 'https://rsstube.vercel.app/', timeout_milliseconds := 5000);
-  select net.http_get(url := 'https://rsstube.vercel.app/auth/refresh', timeout_milliseconds := 5000);
-  select net.http_get(url := 'https://rsstube.vercel.app/exports', timeout_milliseconds := 5000);
-$$);
-
--- 確認（rsstube-warm-morning が active で並んでいれば成功）
-select jobname, schedule, active from cron.job order by jobname;
-```
-
-`20-23` は **UTC の時刻**です（日本時間の 5:00〜8:59）。起きる時間を変えたときは
-ここもずらしてください。同じ内容は `supabase/scheduler.sql` にも入れてあります。
-
----
-
-## 0-B. 朝いちばんの「トークン更新」を無くすなら（Supabase の設定画面で、1分）
-
-ホーム画面から開いたときの待ち時間は、**その8割がコールドスタート**（夜のあいだ
-誰も叩いていないので、Vercel の関数が眠っている）でした。そこは 0-A で塞いで
-あります。数字と内訳は `docs/status.md` の 14・15周目にあります。
-
-残っているのは、**朝いちばんだけ通る「トークンの更新」**です。アクセストークンの
-寿命が1時間なので、一晩あけると必ず `/` →（更新）→ `/` の**3本立て**になります。
-温まった状態での実測は、更新が要るとき 400ms、要らないとき 200ms でした。
-スマホの回線だと往復ぶんだけ差が開きます。
+**Vercel ではこの3本が別々の関数**なので、冷えているときは**コールドスタートを
+3回**払います。本番の実測で `/` が 393ms、`/auth/refresh` が 848ms、本体が 973ms
+——これだけで 2.2秒。ここに iPhone の PWA 起動とサービスワーカーの起動が乗って
+3秒を超えます。1本にできれば、払うコールドスタートは1回だけです。
 
 - [ ] **[Supabase → Authentication → Sessions](https://supabase.com/dashboard/project/_/auth/sessions)**
       の **Access token (JWT) expiry** を `3600`（1時間）から **`604800`（1週間）** へ
@@ -63,9 +32,39 @@ select jobname, schedule, active from cron.job order by jobname;
 **安全性はほとんど変わりません。** アクセストークンと更新トークンは**同じ Cookie に
 入っている**ので、Cookie を盗られた時点でどちらにしても新しいトークンを作られます。
 寿命を延ばして増えるのは「Cookie を消してから、それが効かなくなるまでの猶予」だけです。
-気になるなら `86400`（1日）でも朝の1回はほぼ避けられます。**やらなくても構いません**
-——0-A の温めだけで 3259ms → 950ms 前後には入ります。ここまでやると 250ms です
-（3本立てが1本になるので）。
+気になるなら `86400`（1日）でも構いませんが、**1日だと「昨日の夜に開いて今朝開く」で
+また切れます**。毎日確実に効かせたいなら1週間にしてください。
+
+---
+
+## 0-C. 温めを2分毎に貼り替える（Supabase の SQL Editor で、30秒）
+
+いま日中は**5分毎**に温めています。ところが**5分あけた時点でもう冷えている**
+（1分刻みの実測: 1分 96ms / 2分 263ms / **3分 553ms** / 5分 554ms）。
+「日中は使っている本人の操作が温め続けるので5分でよい」と書いていましたが、
+**それが外れ**でした——**開く瞬間は、いつも使っていない**からです。実際、
+今回3秒かかったのは朝ではなく昼です。**朝だけ1分毎にしたのは、朝しか
+測っていなかったからで、朝しか開かないからではありませんでした。**
+
+- [ ] **[Supabase → SQL Editor](https://supabase.com/dashboard/project/_/sql/new)**
+      に下を貼って Run
+
+```sql
+select cron.schedule('rsstube-warm', '*/2 * * * *', $$
+  select net.http_get(url := 'https://rsstube.vercel.app/', timeout_milliseconds := 5000);
+  select net.http_get(url := 'https://rsstube.vercel.app/auth/refresh', timeout_milliseconds := 5000);
+  select net.http_get(url := 'https://rsstube.vercel.app/exports', timeout_milliseconds := 5000);
+$$);
+
+-- 確認（rsstube-warm が */2 になっていれば成功）
+select j.jobname, j.schedule, j.active from cron.job j order by j.jobname;
+```
+
+朝の1分毎（`rsstube-warm-morning`、UTC 20-23 = 日本時間 5:00〜8:59）は
+そのままです。同じ内容は `supabase/scheduler.sql` にも入れてあります。
+
+**終日1分毎にはしません。** 呼び出し回数がそのまま増えるのに、2分と1分の差は
+170ms しかないためです。
 
 ---
 
