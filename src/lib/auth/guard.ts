@@ -113,7 +113,7 @@ export async function requireSession(next: string): Promise<void> {
    * **素の fetch で `/rest/v1/` を叩くだけの版は効かなかった**ので戻してある。
    * 効いたかどうかは `__rsstubeDataMs` で確かめること。
    */
-  warmDataPath();
+  await warmDataPath();
 
   if (state === 'expired') {
     const store = await cookies();
