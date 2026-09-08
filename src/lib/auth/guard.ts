@@ -1,3 +1,4 @@
+import { warmDataPath } from '@/lib/supabase/warm';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
@@ -103,12 +104,16 @@ export async function requireSession(next: string): Promise<void> {
   /**
    * **ここまで来た1回は、DB に一度も触らずに終わる**（pg_cron の温めがこれ）。
    *
-   * だから次に来るオーナーの1回が「1本目」の重さを払う（実測で 528〜813ms、
-   * 2本目は 227〜491ms）。**ここで Supabase へ接続を1本開けてみたが、差は
-   * 出なかった**——重いのは接続ではなく、そのインスタンスで初めてページを
-   * 組むぶんだった。詳しくは docs/traps/perf.md の
-   * 「匿名の1回では、描く道は温まらない」。**もう一度入れないこと。**
+   * だから次に来るオーナーの1回が「1本目」の重さを払う。本番の実測で、
+   * 匿名の直後のログイン済み1本目は **うち DB が 529〜632ms**、2本目以降は
+   * 154〜249ms。実機の冷えた起動だと 1218〜1590ms だった。
+   * そこで**このインスタンスで1回だけ**、PostgREST へ本物の問い合わせを
+   * 通しておく（`lib/supabase/warm.ts`。応答は捨てる）。
+   *
+   * **素の fetch で `/rest/v1/` を叩くだけの版は効かなかった**ので戻してある。
+   * 効いたかどうかは `__rsstubeDataMs` で確かめること。
    */
+  warmDataPath();
 
   if (state === 'expired') {
     const store = await cookies();
