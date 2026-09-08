@@ -58,6 +58,14 @@ self.addEventListener('activate', (event) => {
        * という方向の遅さなので、コードを見ても原因に見えない。
        * navigationPreload を有効にすると、ブラウザが起動と並行して
        * 要求を出しておいてくれる（下の fetch で preloadResponse を使う）。
+       *
+       * **ただし WebKit は navigationPreload に対応していない**（WebKit bug
+       * 182466。Chrome と Firefox だけ）。つまり**この手当てが効かない唯一の
+       * ブラウザが iPhone** ——ここを読んで「起動の遅さは対処済み」と思わないこと。
+       * iPhone では今もワーカーの起動ぶんを丸ごと払ってから通信が始まる。
+       * `self.registration.navigationPreload` が undefined ならそちら側。
+       * だから iPhone の起動を速くする手は**サーバー側**にしかない
+       * ——往復の本数を減らす（トークンを長生きさせる）か、関数を冷やさないか。
        */
       if (self.registration.navigationPreload) {
         await self.registration.navigationPreload.enable();
