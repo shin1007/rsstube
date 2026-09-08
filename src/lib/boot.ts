@@ -45,6 +45,15 @@ export type BootSample = {
   transfer: number;
   decoded: number;
 
+  /**
+   * **一覧の HTML が届いた時刻**（page.tsx が埋めたインラインの script）。
+   * ここが小さいのに描画が遅いなら、遅いのは**描くほう**。
+   * ここが大きいなら、遅いのは**サーバー**。切り分けの要。
+   */
+  listAt: number | null;
+  /** 接続が張れた時刻（DNS・TCP・TLS の合計）。冷えた起動では最初の往復ぶん。 */
+  connect: number;
+
   /** 最初に何かが描かれた時刻。**「真っ暗が終わる」のはここ**。 */
   paint: number | null;
   /** ハイドレーションが済んだあたり。`responseEnd` との差が端末の重さ。 */
@@ -116,7 +125,7 @@ export function formatBootSample(s: BootSample): string {
           ? 'この遷移のために起きた'
           : '前から起きていた'
     }／preload ${s.preload ? 'あり' : 'なし'}）`,
-    `  リダイレクト ${s.redirects}本 ${ms(s.redirectEnd)} → 応答 ${ms(s.responseStart)} → 受け終わり ${ms(s.responseEnd)}`,
+    `  接続 ${ms(s.connect)} → 応答 ${ms(s.responseStart)} → 一覧 ${ms(s.listAt)} → 受け終わり ${ms(s.responseEnd)}（リダイレクト ${s.redirects}本 ${ms(s.redirectEnd)}）`,
     `  描画 ${ms(s.paint)} → 操作可 ${ms(s.interactive)} → 完了 ${ms(s.load)}`,
     `  HTML ${Math.round(s.transfer / 1024)}KB（展開後 ${Math.round(s.decoded / 1024)}KB）`,
     `  画面 ${s.screen} / コア ${s.cores ?? '－'} / 回線 ${s.net ?? '－'}`,

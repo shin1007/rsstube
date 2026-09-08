@@ -112,6 +112,11 @@ export function BootTiming() {
           responseEnd: nav.responseEnd,
           transfer: nav.transferSize,
           decoded: nav.decodedBodySize,
+          listAt:
+            typeof (window as { __rsstubeListAt?: number }).__rsstubeListAt === 'number'
+              ? (window as { __rsstubeListAt?: number }).__rsstubeListAt!
+              : null,
+          connect: nav.connectEnd,
           paint: paint ?? null,
           interactive: nav.domInteractive,
           load: nav.loadEventEnd,
