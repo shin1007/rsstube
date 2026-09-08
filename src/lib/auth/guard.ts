@@ -1,3 +1,4 @@
+import { warmDbPath } from '@/lib/supabase/warm';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
@@ -99,6 +100,16 @@ export async function sessionState(): Promise<SessionState> {
 export async function requireSession(next: string): Promise<void> {
   const state = await sessionState();
   if (state === 'live') return;
+
+  /**
+   * **ここまで来た1回は、DB に一度も触らずに終わる。**
+   *
+   * pg_cron の温めがまさにこれ（Cookie を付けられないので必ず 307）。
+   * そのままだと関数だけ温まって Supabase へ向かう道は冷えたままになり、
+   * **次に来るオーナーの1回**が DNS・TLS ごと払う。実測で 813ms 対 426ms。
+   * 応答を返したあとに1本だけ投げて、道を開けておく（lib/supabase/warm.ts）。
+   */
+  warmDbPath();
 
   if (state === 'expired') {
     const store = await cookies();
