@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { keepAliveFetch } from '@/lib/supabase/fetch';
 
 /**
  * cron / ワーカー専用のクライアント。
@@ -17,6 +18,8 @@ export function createAdminClient() {
 
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    // 接続を保つ fetch（lib/supabase/fetch.ts）。ワーカーは5分毎に何本も投げる。
+    global: { fetch: keepAliveFetch },
   });
 }
 

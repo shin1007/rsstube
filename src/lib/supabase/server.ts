@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { keepAliveFetch } from '@/lib/supabase/fetch';
 
 /**
  * Server Component / Route Handler から使う Supabase クライアント。
@@ -12,6 +13,9 @@ export async function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
+      // 接続を保つ fetch を渡す。**空いた時間ぶん張り直していた**のが、
+      // 起動の待ちの正体だった（lib/supabase/fetch.ts）。
+      global: { fetch: keepAliveFetch },
       cookies: {
         getAll() {
           return cookieStore.getAll();
