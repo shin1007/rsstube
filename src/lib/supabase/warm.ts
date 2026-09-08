@@ -28,17 +28,24 @@ import { createAdminClient } from '@/lib/supabase/admin';
  */
 
 /**
- * **1インスタンスにつき1回だけ。** module のトップレベルなので、
- * 同じインスタンスが生きているあいだは残る。
+ * **温めた時刻。1インスタンスにつき45秒に1回まで。**
  *
- * こうしておくと、未ログインで叩かれるたびに問い合わせが増えることもない
- * （`/` は誰でも叩けるので、無条件に投げると外から回数を増やせてしまう）。
+ * 最初は「1インスタンスに1回だけ」にしていたが、それでは足りなかった
+ * ——接続は空いた時間ぶん切られるので、**開け直し続ける**必要がある
+ * （`lib/supabase/fetch.ts` で長く保つようにしたが、それでも上限はある）。
+ *
+ * 回数に上限を置くのは、`/` は誰でも叩けるからで、無条件に投げると
+ * 外から問い合わせの回数を増やせてしまうため。
  */
-let warmed = false;
+let lastWarmedAt = 0;
+
+/** 何秒に1回まで温めるか。pg_cron は2分毎なので、毎回1本通る。 */
+const MIN_GAP_MS = 45_000;
 
 export function warmDataPath(): void {
-  if (warmed) return;
-  warmed = true;
+  const now = Date.now();
+  if (now - lastWarmedAt < MIN_GAP_MS) return;
+  lastWarmedAt = now;
 
   /**
    * **`after()` で投げること。** ここは redirect() の直前で、応答は 307 一本。
