@@ -43,6 +43,13 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
               "if(s==='0.9'||s==='1'||s==='1.15')document.documentElement.style.setProperty('--text-scale',s);" +
               "var c=localStorage.getItem('rsstube:theme-color');" +
               "if(c)document.documentElement.setAttribute('data-accent',c);" +
+              // **画面の幅をサーバーに教える。** サーバーには幅が分からないので、
+              // スマホでも「本文ペイン」を組んで流していた——`hidden md:flex` で
+              // 見えていないのに、実機の記録で **273ms と 8KB** を払っていた。
+              // UA では振り分けない（タブレットの三ペインと細い窓のデスクトップが
+              // 崩れる）。ここは `md`（768px）と同じ境目にすること。
+              // 次に開くときから効く。幅を変えた直後の1枚は前の幅のまま。
+              "document.cookie='rsstube-w='+(innerWidth>=768?'w':'n')+';path=/;max-age=31536000;samesite=lax';" +
               "}catch(e){}",
           }}
         />

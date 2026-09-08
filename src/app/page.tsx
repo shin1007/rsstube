@@ -1,4 +1,5 @@
 import { requireSession } from '@/lib/auth/guard';
+import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
@@ -22,6 +23,19 @@ import { PAGE_SIZE, asId, type View } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 
 const VIEWS: View[] = ['unread', 'starred', 'all', 'unsummarized'];
+
+/**
+ * かかった時間を一緒に返す。
+ *
+ * **コンポーネントの中で `Date.now()` を呼ばないこと**——lint の
+ * `react-hooks/purity` に当たる（描画は何度呼んでも同じでなければならない）。
+ * 外の関数に閉じ込めれば、描画そのものは純粋なままでいられる。
+ */
+async function timed<T>(run: () => Promise<T>): Promise<[T, number]> {
+  const startedAt = Date.now();
+  const value = await run();
+  return [value, Date.now() - startedAt];
+}
 
 /**
  * **枠だけを先に流すための入れ子。ここは `async` にしないこと。**
@@ -113,14 +127,33 @@ async function Reader({ searchParams }: PageProps<'/'>) {
   // 「あと何件」の総数も listArticles() が同じ1回で返す。以前はここに
   // countArticles() が並んでいたが、並べても**その1本がいちばん遅い**ので
   // 待ち時間はそのまま乗っていた（lib/articles.ts）。
-  const [shell, [page, searchFailed], picked] = await Promise.all([
-    shellData(),
-    searchable(() => listArticles({ view, folderId, feedId, search }), {
-      articles: [],
-      total: null,
-    }),
-    selectedId ? getArticle(selectedId) : Promise.resolve(null),
-  ] as const);
+  /**
+   * **画面が細いか。** layout の script が入れた Cookie（`md` と同じ 768px の境目）。
+   *
+   * 無いとき＝**初めての1枚**は「広い」に倒す。逆に倒すと、PC で初めて開いた人が
+   * 本文ペインの無い画面を見ることになる（スマホで1枚ぶん余計に運ぶほうが軽い）。
+   */
+  const narrow = (await cookies()).get('rsstube-w')?.value === 'n';
+
+  /**
+   * **この3本にかかった時間を、そのまま端末へ渡す**（下のインライン script）。
+   *
+   * 実機の記録で、`<head>` が 279ms で届いたあと**一覧が届くのは 1814ms**だった。
+   * 描くほうではなくサーバーが遅い、まではここで決まったが、その 1.5秒が
+   * **DB を待っているぶん**なのか**初めてページを組むぶん**なのかが分かれない。
+   * ここで測った値が 1.4秒なら DB、200ms なら組み立てのほう。
+   * 手元では区別がつかない（何度も叩くので、いつも温まっている側しか見えない）。
+   */
+  const [[shell, [page, searchFailed], picked], dataMs] = await timed(() =>
+    Promise.all([
+      shellData(),
+      searchable(() => listArticles({ view, folderId, feedId, search }), {
+        articles: [],
+        total: null,
+      }),
+      selectedId ? getArticle(selectedId) : Promise.resolve(null),
+    ] as const),
+  );
 
   const { articles, total } = page;
 
@@ -312,6 +345,21 @@ async function Reader({ searchParams }: PageProps<'/'>) {
             nextHref={nextId ? linkTo(nextId) : undefined}
             remaining={remaining}
           />
+        ) : narrow ? (
+          /*
+            **細い画面には、このペインを組まない。**
+
+            ここは `hidden md:flex` で**スマホでは見えていない**のに、記事を1本
+            まるごと取ってきて流していた。実機（iPhone SE）の記録で
+            **273ms と 8KB**——一覧が届いてから応答が終わるまでの全部がこれ。
+            見えないものを待たせない（幅は layout の script が Cookie で渡す）。
+
+            **幅を変えた直後の1枚だけ、PC でもここに落ちる**（Cookie が前の幅の
+            まま）ので、空にせず「選ぶと出る」と書いておく。次の遷移で戻る。
+          */
+          <div className="flex h-full items-center justify-center p-6 text-sm text-zinc-600">
+            記事を選ぶと本文が出ます
+          </div>
         ) : (
           /* 何も選んでいないときの先頭記事。一覧を止めずに、あとから流す。 */
           <Suspense fallback={<ArticlePaneSkeleton />}>
@@ -342,7 +390,9 @@ async function Reader({ searchParams }: PageProps<'/'>) {
         頼らないこと**——それだと画面が全部揃うまで動かず、測りたい差が消える。
       */}
       <script
-        dangerouslySetInnerHTML={{ __html: 'window.__rsstubeListAt=performance.now()' }}
+        dangerouslySetInnerHTML={{
+          __html: `window.__rsstubeListAt=performance.now();window.__rsstubeDataMs=${dataMs}`,
+        }}
       />
 
       {/*

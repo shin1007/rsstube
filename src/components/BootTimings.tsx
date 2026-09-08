@@ -96,6 +96,7 @@ export function BootTimings() {
               <th className="py-1 text-right font-normal">ワーカー</th>
               <th className="py-1 text-right font-normal">転送</th>
               <th className="py-1 text-right font-normal">一覧</th>
+              <th className="py-1 text-right font-normal">うちDB</th>
               <th className="py-1 text-right font-normal">受け終わり</th>
               <th className="py-1 text-right font-normal">描画</th>
               <th className="py-1 text-right font-normal">完了</th>
@@ -124,6 +125,7 @@ export function BootTimings() {
                   {s.redirects > 0 ? `${s.redirects}本 ${ms(s.redirectEnd)}` : '－'}
                 </td>
                 <td className="py-1 text-right text-zinc-300">{ms(s.listAt)}</td>
+                <td className="py-1 text-right text-zinc-500">{ms(s.dataMs)}</td>
                 <td className="py-1 text-right text-zinc-300">{ms(s.responseEnd)}</td>
                 <td className="py-1 text-right text-zinc-300">{ms(s.paint)}</td>
                 <td className="py-1 text-right text-zinc-200">{ms(s.load)}</td>
@@ -139,6 +141,7 @@ export function BootTimings() {
         （<strong className="text-zinc-500">(起動)</strong>＝その1回のために起きた＝冷えた状態、
         <strong className="text-zinc-500">(起きていた)</strong>＝起動ぶんは払っていない）。
         <strong className="text-zinc-500">一覧</strong>＝一覧のHTMLが届いた時刻、
+        <strong className="text-zinc-500">うちDB</strong>＝そのうちサーバーがDBを待っていた時間、
         <strong className="text-zinc-500">受け終わり</strong>＝HTMLを最後まで受け取るまで、
         <strong className="text-zinc-500">描画</strong>＝真っ暗が終わるまで、
         <strong className="text-zinc-500">完了</strong>＝操作できるまで。
