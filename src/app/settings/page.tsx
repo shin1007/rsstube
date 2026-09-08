@@ -28,6 +28,7 @@ import { ThemeColorPicker } from '@/components/ThemeColorPicker';
 import { PushToggle } from '@/components/PushToggle';
 import { SettingsForm, type SaveState } from '@/components/SettingsForm';
 import { UsageTable } from '@/components/UsageTable';
+import { BootTimings } from '@/components/BootTimings';
 import { recentUsage } from '@/lib/ai/usage';
 import { pipelineStatus } from '@/lib/pipeline';
 import {
@@ -618,6 +619,11 @@ async function Diagnostics() {
       <section>
         <h2 className="mb-2 section-title">AI の使用量（直近7日）</h2>
         <UsageTable usage={usage} />
+      </section>
+
+      <section>
+        <h2 className="mb-2 section-title">起動の内訳（この端末で測ったもの）</h2>
+        <BootTimings />
       </section>
     </>
   );
