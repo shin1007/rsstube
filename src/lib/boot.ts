@@ -51,6 +51,11 @@ export type BootSample = {
    * ここが大きいなら、遅いのは**サーバー**。切り分けの要。
    */
   listAt: number | null;
+  /**
+   * **サーバーが DB を待っていた時間**（page.tsx が測って埋める）。
+   * 一覧の到着が遅いとき、これが大きければ DB、小さければ「初めて組むぶん」。
+   */
+  dataMs: number | null;
   /** 接続が張れた時刻（DNS・TCP・TLS の合計）。冷えた起動では最初の往復ぶん。 */
   connect: number;
 
@@ -126,6 +131,7 @@ export function formatBootSample(s: BootSample): string {
           : '前から起きていた'
     }／preload ${s.preload ? 'あり' : 'なし'}）`,
     `  接続 ${ms(s.connect)} → 応答 ${ms(s.responseStart)} → 一覧 ${ms(s.listAt)} → 受け終わり ${ms(s.responseEnd)}（リダイレクト ${s.redirects}本 ${ms(s.redirectEnd)}）`,
+    `  うちサーバーが DB を待っていたぶん ${ms(s.dataMs)}`,
     `  描画 ${ms(s.paint)} → 操作可 ${ms(s.interactive)} → 完了 ${ms(s.load)}`,
     `  HTML ${Math.round(s.transfer / 1024)}KB（展開後 ${Math.round(s.decoded / 1024)}KB）`,
     `  画面 ${s.screen} / コア ${s.cores ?? '－'} / 回線 ${s.net ?? '－'}`,

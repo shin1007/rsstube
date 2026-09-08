@@ -116,6 +116,10 @@ export function BootTiming() {
             typeof (window as { __rsstubeListAt?: number }).__rsstubeListAt === 'number'
               ? (window as { __rsstubeListAt?: number }).__rsstubeListAt!
               : null,
+          dataMs:
+            typeof (window as { __rsstubeDataMs?: number }).__rsstubeDataMs === 'number'
+              ? (window as { __rsstubeDataMs?: number }).__rsstubeDataMs!
+              : null,
           connect: nav.connectEnd,
           paint: paint ?? null,
           interactive: nav.domInteractive,
