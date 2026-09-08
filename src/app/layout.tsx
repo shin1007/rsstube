@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { PlaybackProvider } from '@/components/Playback';
+import { BootTiming } from '@/components/BootTiming';
 import { ServiceWorker } from '@/components/ServiceWorker';
 import './globals.css';
 
@@ -79,6 +80,17 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         */}
         <PlaybackProvider>{children}</PlaybackProvider>
         <ServiceWorker />
+
+        {/*
+          起動の内訳を、その端末に測らせる（何も描かない）。
+
+          **ページではなく layout に置くこと。** PerformanceNavigationTiming は
+          「最初の1枚を読み込んだとき」の1回しか無く、画面を移っても増えない。
+          ページ側に置くと、記録し終わる前に設定へ移っただけで1件も残らなかった
+          （実際にそうなった）。layout なら遷移で作り直されないので、
+          どの入口から開いても必ず1件残る。読むのは設定画面の BootTimings。
+        */}
+        <BootTiming />
       </body>
     </html>
   );

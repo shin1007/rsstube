@@ -93,7 +93,9 @@ export function readBootSamples(): BootSample[] {
  * `swBoot` が負なら、この画面遷移より前から起きていた。
  */
 export function bootedForThisNavigation(s: BootSample): boolean | null {
-  if (s.swBoot === null) return null;
+  // ワーカーがこの遷移を扱っていないなら（入れた直後の1枚目など）、
+  // 起動の話そのものが当てはまらない。**「起動した」と出さないこと。**
+  if (s.swStart === null || s.swBoot === null) return null;
   return s.swBoot > -50;
 }
 
@@ -109,7 +111,7 @@ export function formatBootSample(s: BootSample): string {
     `${when} ${s.path} ${s.standalone ? 'PWA' : 'ブラウザ'} ${s.type}`,
     `  ワーカー ${ms(s.swStart)}（${
       bootedForThisNavigation(s) === null
-        ? '効いていない'
+        ? 'この遷移は通っていない'
         : bootedForThisNavigation(s)
           ? 'この遷移のために起きた'
           : '前から起きていた'

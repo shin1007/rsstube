@@ -581,6 +581,17 @@ async function Settings({ searchParams }: PageProps<'/settings'>) {
           </ul>
         </section>
 
+        {/*
+          **ここは本体のいちばん下。** 診断（Diagnostics）の中に入れると
+          ページの真ん中に出る——あちらは <Suspense> で先に流している節で、
+          画面の並びとしては上のほうにある。「いちばん下を見てください」と
+          伝えて実際は真ん中だった、を一度やっている。
+        */}
+        <section>
+          <h2 className="mb-2 section-title">起動の内訳（この端末で測ったもの）</h2>
+          <BootTimings />
+        </section>
+
         </div>
       </main>
     </AppShell>
@@ -619,11 +630,6 @@ async function Diagnostics() {
       <section>
         <h2 className="mb-2 section-title">AI の使用量（直近7日）</h2>
         <UsageTable usage={usage} />
-      </section>
-
-      <section>
-        <h2 className="mb-2 section-title">起動の内訳（この端末で測ったもの）</h2>
-        <BootTimings />
       </section>
     </>
   );

@@ -3,7 +3,6 @@ import { Suspense } from 'react';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleView } from '@/components/ArticleView';
 import { AppBadge } from '@/components/AppBadge';
-import { BootTiming } from '@/components/BootTiming';
 import { BottomTabs } from '@/components/BottomTabs';
 import { OfflineCache } from '@/components/OfflineCache';
 import { Sidebar } from '@/components/Sidebar';
@@ -333,14 +332,6 @@ async function Reader({ searchParams }: PageProps<'/'>) {
         走らせても、取ってくるものは同じで、回数だけ増える。
       */}
       <OfflineCache />
-
-      {/*
-        起動の内訳を、その端末に測らせる（何も描かない）。サーバー側の待ちは
-        246ms まで落ちたのに iPhone SE ではまだ3秒かかっているが、残りの
-        —— サービスワーカーの起動・PWA の起動・ハイドレーション —— は
-        **実機でしか出ない**。読むのは設定画面（components/BootTimings.tsx）。
-      */}
-      <BootTiming />
 
       {/* ホーム画面のアイコンに未読の数を出す。サイドバーと同じ値。 */}
       <AppBadge count={[...counts.values()].reduce((sum, n) => sum + n, 0)} />
