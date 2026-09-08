@@ -15,7 +15,8 @@ create extension if not exists pg_net;
 select cron.unschedule(jobname)
   from cron.job
  where jobname in ('rsstube-poll', 'rsstube-worker', 'rsstube-purge', 'rsstube-digest',
-                   'rsstube-media-purge', 'rsstube-warm');
+                   'rsstube-media-purge', 'rsstube-warm',
+                   'rsstube-warm-morning');
 
 -- 1時間毎: フィード巡回
 select cron.schedule('rsstube-poll', '7 * * * *', $$
@@ -77,9 +78,9 @@ $$);
 -- 200ms なので、**待ち時間の8割はコールドスタート**だった。
 -- 詳しくは docs/traps/perf.md の「速さを、生きた Cookie でだけ測っていた」。
 --
--- **2つとも要る。** 朝は `/` と `/auth/refresh` の2つの関数を通るが、
--- Vercel では**ルートごとに別の関数**なので、片方を温めても
--- もう片方は冷えている。`/auth/refresh` は1日1回しか通らないぶん、
+-- **3つとも要る。** 朝は `/`・`/auth/refresh`・（通知から入るなら）`/exports`
+-- を通るが、Vercel では**ルートごとに別の関数**なので、1つ温めても
+-- 残りは冷えている。`/auth/refresh` は1日1回しか通らないぶん、
 -- 温めないと毎朝必ず冷たい。
 --
 -- **中身のある処理はしない。** どちらも未ログインで叩くので、Cookie を見て
@@ -91,6 +92,29 @@ $$);
 select cron.schedule('rsstube-warm', '*/5 * * * *', $$
   select net.http_get(url := '__APP_URL__/', timeout_milliseconds := 5000);
   select net.http_get(url := '__APP_URL__/auth/refresh', timeout_milliseconds := 5000);
+  select net.http_get(url := '__APP_URL__/exports', timeout_milliseconds := 5000);
+$$);
+
+-- 朝だけ1分毎: 実際に開く時間帯は、5分では間に合わない。
+--
+-- 上の5分毎を入れたあとで測り直したら**まだ冷えていた**（本番の実測で、
+-- Cookie を読んで 307 を返すだけの `/` に TTFB 1071ms、朝の3本立てで
+-- 合計 3259ms。直前の温めは4分前で、pg_cron の記録は succeeded）。
+-- 5分の隙間は、Vercel がインスタンスを落とすには十分ある。
+--
+-- そこで**実際に開く時間帯だけ**1分毎にする。UTC の 20〜23時 =
+-- **日本時間の 5:00〜8:59**（ダイジェストができるのは settings.digest_hour = 6時）。
+-- **終日1分毎にはしないこと**——呼び出し回数がそのまま増えるうえ、
+-- 日中は使っている本人の操作が温め続けるので要らない。
+--
+-- **`/exports` も温めること。** 朝の通知（ダイジェストができた）をタップして
+-- 開くのは `/exports` で、これも**別の関数**。`/` だけ温めていたので、
+-- 通知から入る朝は必ず冷えた関数に当たっていた
+-- （通知の行き先は src/app/api/cron/digest/route.ts の `url: '/exports'`）。
+select cron.schedule('rsstube-warm-morning', '* 20-23 * * *', $$
+  select net.http_get(url := '__APP_URL__/', timeout_milliseconds := 5000);
+  select net.http_get(url := '__APP_URL__/auth/refresh', timeout_milliseconds := 5000);
+  select net.http_get(url := '__APP_URL__/exports', timeout_milliseconds := 5000);
 $$);
 
 -- 確認用:
