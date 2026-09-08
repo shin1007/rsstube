@@ -6,16 +6,51 @@
 好みの判断——だけを、急ぎの順に並べています。**済んだものは消します**（履歴は
 `docs/status.md` と git log に残ります）。
 
-最終更新: 2026-09-08（朝いちばんの待ち時間を測って、「0」を足しました）
+最終更新: 2026-09-08（温めを朝だけ1分毎にしました。「0」に貼るものが増えています）
 
 ---
 
-## 0. 朝いちばんの「3秒」を、もう一段削るなら（Supabase の設定画面で、1分）
+## 0-A. pg_cron を貼り替える（Supabase の SQL Editor で、30秒）**← 先にこれ**
 
-ホーム画面から開いたときの待ち時間を測ったところ、**本番で 2215ms** でした。
-**その8割はコールドスタート**（夜のあいだ誰も叩いていないので、Vercel の関数が
-眠っている）で、そこはこちらで塞いであります——5分毎に軽く叩いて起こしたままに
-する仕組みを入れました。数字と内訳は `docs/status.md` にあります。
+前回入れた「5分毎に叩いて関数を起こしておく」を測り直したら、**まだ 3259ms**
+ありました。5分の隙間があると Vercel は関数を落としてしまいます（1分なら
+温かいままでした）。そこで**朝（日本時間 5:00〜8:59）だけ1分毎**にして、
+**通知から開く `/exports`** も温める形に変えました。数字は `docs/status.md` の
+15周目にあります。
+
+pg_cron の登録だけは私からは流せないので、**下をそのまま貼って実行**して
+ください。同じ名前で登録し直すだけなので、何度貼っても増えません。
+
+- [ ] **[Supabase → SQL Editor](https://supabase.com/dashboard/project/_/sql/new)**
+      に下を貼って Run
+
+```sql
+select cron.schedule('rsstube-warm', '*/5 * * * *', $$
+  select net.http_get(url := 'https://rsstube.vercel.app/', timeout_milliseconds := 5000);
+  select net.http_get(url := 'https://rsstube.vercel.app/auth/refresh', timeout_milliseconds := 5000);
+  select net.http_get(url := 'https://rsstube.vercel.app/exports', timeout_milliseconds := 5000);
+$$);
+
+select cron.schedule('rsstube-warm-morning', '* 20-23 * * *', $$
+  select net.http_get(url := 'https://rsstube.vercel.app/', timeout_milliseconds := 5000);
+  select net.http_get(url := 'https://rsstube.vercel.app/auth/refresh', timeout_milliseconds := 5000);
+  select net.http_get(url := 'https://rsstube.vercel.app/exports', timeout_milliseconds := 5000);
+$$);
+
+-- 確認（rsstube-warm-morning が active で並んでいれば成功）
+select jobname, schedule, active from cron.job order by jobname;
+```
+
+`20-23` は **UTC の時刻**です（日本時間の 5:00〜8:59）。起きる時間を変えたときは
+ここもずらしてください。同じ内容は `supabase/scheduler.sql` にも入れてあります。
+
+---
+
+## 0-B. 朝いちばんの「トークン更新」を無くすなら（Supabase の設定画面で、1分）
+
+ホーム画面から開いたときの待ち時間は、**その8割がコールドスタート**（夜のあいだ
+誰も叩いていないので、Vercel の関数が眠っている）でした。そこは 0-A で塞いで
+あります。数字と内訳は `docs/status.md` の 14・15周目にあります。
 
 残っているのは、**朝いちばんだけ通る「トークンの更新」**です。アクセストークンの
 寿命が1時間なので、一晩あけると必ず `/` →（更新）→ `/` の**3本立て**になります。
@@ -29,8 +64,8 @@
 入っている**ので、Cookie を盗られた時点でどちらにしても新しいトークンを作られます。
 寿命を延ばして増えるのは「Cookie を消してから、それが効かなくなるまでの猶予」だけです。
 気になるなら `86400`（1日）でも朝の1回はほぼ避けられます。**やらなくても構いません**
-——温めだけで 2215ms → 900ms 前後には入ります（温めは5分毎で、完全に
-温かい状態ではありません。冷め方の実測は `docs/status.md`）。
+——0-A の温めだけで 3259ms → 950ms 前後には入ります。ここまでやると 250ms です
+（3本立てが1本になるので）。
 
 ---
 

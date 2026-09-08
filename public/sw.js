@@ -15,7 +15,7 @@
  * 中身を変えたら CACHE の版を上げること。古い版は activate で消える。
  */
 
-const CACHE = 'rsstube-shell-v4';
+const CACHE = 'rsstube-shell-v5';
 /**
  * `/_next/static/` の中身だけを入れる置き場。
  *
@@ -132,8 +132,43 @@ self.addEventListener('fetch', (event) => {
 });
 
 /**
+ * **朝の通知が来た時点で、Vercel の関数を起こしておく。**
+ *
+ * ダイジェストができた通知は、オーナーが実際に開く数分前に届く——つまり
+ * 「これから開く」ことが分かる唯一の合図。ここで軽く叩いておけば、
+ * 通知をタップした先が冷えた関数に当たらない（本番の実測で、冷えた朝は
+ * 合計 3259ms、温まっていれば 951ms。docs/traps/perf.md）。
+ * pg_cron の `rsstube-warm-morning` と役割は同じだが、あちらは時間帯を
+ * 決め打ちで叩くだけなので、**通知が来た瞬間**には手が届かない。
+ *
+ * **`/` と `/exports` は Cookie を付けて叩く**（`credentials: "include"`）。
+ * 付けないと未ログイン扱いで 307 を返すだけになり、関数は起きても
+ * **DB へ問い合わせる側の道が冷えたまま**になる。ページのルートは Cookie を
+ * 書かない（Server Component からは書けない）ので、これで壊れるものは無い。
+ *
+ * **`/auth/refresh` にだけは Cookie を付けないこと。** あそこは更新トークンを
+ * 回転させて Set-Cookie で返す1本道で、応答を捨てると**新しい更新トークンごと
+ * 捨てる**ことになる（セッションが死ぬ。lib/auth/guard.ts の注記）。
+ * ここで欲しいのは関数を起こすことだけなので、未ログインで叩いて 307 を
+ * もらえば足りる。
+ */
+function wake() {
+  const warm = (path, credentials) =>
+    fetch(path, { credentials, cache: 'no-store', redirect: 'manual' })
+      .then((res) => res.arrayBuffer?.())
+      .catch(() => {}); // 圏外・失敗は放っておく。通知そのものより優先しない。
+
+  return Promise.all([
+    warm('/', 'include'),
+    warm('/exports', 'include'),
+    warm('/auth/refresh', 'omit'),
+  ]);
+}
+
+/**
  * ダイジェストができたときの通知。
  * payload は { title, body, url } の JSON（lib/push/send.ts が組み立てる）。
+ * **通知を出すのと同時に、上の wake() で関数を起こしておく。**
  */
 self.addEventListener('push', (event) => {
   let data = {};
@@ -145,14 +180,18 @@ self.addEventListener('push', (event) => {
 
   const title = data.title || 'RSSTube';
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body: data.body || '新しいダイジェストができました',
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      // 同じタグの通知は積み重ならず置き換わる。朝の通知が溜まらないように。
-      tag: data.tag || 'rsstube-digest',
-      data: { url: data.url || '/exports' },
-    }),
+    Promise.all([
+      // 通知を出すのが本業。温めは付け足しで、失敗しても通知は出る。
+      wake(),
+      self.registration.showNotification(title, {
+        body: data.body || '新しいダイジェストができました',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        // 同じタグの通知は積み重ならず置き換わる。朝の通知が溜まらないように。
+        tag: data.tag || 'rsstube-digest',
+        data: { url: data.url || '/exports' },
+      }),
+    ]),
   );
 });
 
