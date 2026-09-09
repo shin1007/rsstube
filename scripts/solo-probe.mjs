@@ -24,11 +24,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 for (let i = 1; i <= RUNS; i++) {
   await sleep((i === 1 ? 30 : GAP_SEC) * 1000);
-  const t0 = performance.now();
+  const t0 = Date.now();
   const res = await fetch(BASE + '/', { headers: { cookie }, cache: 'no-store' });
   const text = await res.text();
   const m = text.match(/__rsstubeDataMs=(\d+)/);
   console.log(
-    `${i}回目（触らずに待ったあとの1本目） 合計 ${Math.round(performance.now() - t0)}ms  うちDB ${m ? m[1] + 'ms' : '－'}`,
+    `${i}回目（触らずに待ったあとの1本目） 合計 ${Date.now() - t0}ms  うちDB ${m ? m[1] + 'ms' : '－'}`,
   );
 }
