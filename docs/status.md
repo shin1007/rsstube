@@ -2,10 +2,43 @@
 
 **このファイルは報告だけ。** やってほしいことは `docs/owner-todo.md` にあります。
 
-最終更新: 2026-09-09（実機の確認をいただきました。文字・記号・押しやすさは決着）
+最終更新: 2026-09-09（Drive が繋がらないのは Google 側の登録。Supabase は解決）
 
 ---
 
+## Google Drive が繋がらない理由が分かりました（9/9）
+
+**アプリ側は正常です。** 止まっているのは Google 側の登録で、
+**リダイレクト URI が1つも登録されていません**。
+
+確かめかたは、アプリを通さずに Google へ直接問い合わせる形です。
+`start` が組み立てるのと同じ認可 URL を作って叩き、返る `Location` を見ます:
+
+| 送った redirect_uri | Google の答え |
+|---|---|
+| `https://rsstube.vercel.app/api/auth/google/callback` | **`redirect_uri_mismatch`** |
+| `http://localhost:3000/api/auth/google/callback` | **`redirect_uri_mismatch`** |
+| （わざと存在しない URL） | 同じ `redirect_uri_mismatch` |
+
+**本番と手元の両方が落ちる**ので、「本番のぶんを足し忘れた」ではなく
+**この OAuth クライアントに URI が1つも入っていない**（あるいは種類が
+「ウェブ アプリケーション」ではない）という話です。押すと Google の
+エラー 400 が出て戻ってきます。
+
+DB 側は揃っています——`app_config` に**クライアント ID とシークレットが入っており**
+（8/31 保存、手元の `.env.local` と同じ ID）、`google_accounts` は **0件**。
+つまり「認証情報は入ったが、まだ一度も接続に成功していない」状態です。
+owner-todo の「1」は、済んだ設定画面の手順を消して**Console の登録だけ**に
+書き直しました。
+
+---
+
+## Supabase の警告は消していただきました（9/9）
+
+オーナーが Advisor を再スキャン済み。DB 側も再確認して、public の**19表すべてで
+RLS が有効**、`RLS OFF` は1つもありません。owner-todo からは消しました。
+
+---
 ## 実機で確認いただきました（9/9）
 
 オーナーの iPhone で、**これらは決着**です。owner-todo からは消しました。
