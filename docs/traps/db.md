@@ -107,3 +107,22 @@ Supabase · PostgREST · actions/ · 追加した依存 を触るときに読む
   0042 で一覧とアーカイブは SQL 側が物として組み立てるようにし、
   本文（`getArticle`）は受け取った直後に均している。
   埋め込みを新しく足したら、**返ってきた形を1回は目で見ること**。
+
+- **`public` に作った表は、RLS を書かなければ anon キーだけで読み書きできる。**
+  Supabase の Security Advisor が `rls_disabled_in_public` を出したのは
+  `schema_migrations`（2026-09-09、`0044` で塞いだ）。**この表だけが
+  `supabase/migrations/` ではなく `scripts/db-migrate.mjs` の
+  `create table if not exists` で作られていた**——移行を管理する側の道具なので
+  0001 に書けず、そのぶん「表を作ったら RLS」の手順から外れていた。
+  `migrations/` を見比べるだけでは見つからない（18表すべて RLS 済みに見える）。
+  **本番に何があるかは本番に聞くこと**:
+  `select relname, relrowsecurity from pg_class join pg_namespace n on n.oid=relnamespace
+   where nspname='public' and relkind='r'`。
+  実害は記事の流出ではなく移行の記録のほう——行を消されれば次の `db:migrate` が
+  0001 から流し直そうとして落ち、偽の version を入れられれば以後の移行が黙って飛ぶ。
+  塞ぎ方は RLS を有効にする（ポリシーは置かない。所有者の postgres は迂回するので
+  `db:migrate` はそのまま動く）だけでなく、**`revoke all ... from anon, authenticated`
+  まで**やること。Supabase は public の表に既定で両ロールへ全権限を渡すので、
+  権限を残したまま RLS だけ有効にすると「0行が返る」形で通ってしまう。
+  取り上げてあれば 401 で止まる（確認: anon キーで `/rest/v1/<表>` を叩いて
+  `42501 permission denied` が返ること）。
