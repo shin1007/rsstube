@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
@@ -41,26 +42,27 @@ let lastWarmedAt = 0;
 /** 何秒に1回まで温めるか。pg_cron は2分毎なので、毎回1本通る。 */
 const MIN_GAP_MS = 45_000;
 
-export async function warmDataPath(): Promise<void> {
+export function warmDataPath(): void {
   const now = Date.now();
   if (now - lastWarmedAt < MIN_GAP_MS) return;
   lastWarmedAt = now;
 
   /**
-   * **待つこと。** 最初は `after()` に投げていたが、実機ではまだ半分の回で
-   * 冷えていた（9/9 0:08 の記録: 応答は 167ms と速いのに **うち DB が 1192ms**
-   * ——つまり**関数は温まっているのに接続だけ冷たい**）。`after()` が
-   * 走っているかは外からは見えず、走っていなければ接続は一度も開かない。
+   * **`after()` に投げること。待たせないこと。**
    *
-   * **待って困るのはこの1回だけ**で、ここに来るのは pg_cron の温めか、
-   * 未ログインの人か、期限切れのセッションだけ。オーナーの普段の1回は
-   * `state === 'live'` で手前に返っているので、ここは通らない。
+   * 一度 await する版を入れて、本番で測って戻している。狙いは「after が
+   * 走っていないかもしれない」を潰すことだったが、**うち DB の平均が
+   * 442ms → 797ms と悪くなった**（同じ形の測定で、after 版が
+   * 504/341/597/327ms、await 版が 950/781/668/380/1207ms）。
+   * 温めの1回が長く居座るぶん、インスタンスが増えて温まりが薄まったのだと思う。
+   * **もう一度 await にしないこと。**
    */
-  try {
-    // 中身は見ない。**通すこと**が目的なので、いちばん軽い RPC を1本。
-    await createAdminClient().rpc('shell_data');
-  } catch {
-    // 失敗しても構わない。誰もこの結果を待っていない。
-    // 次の1回がまた試す。
-  }
+  after(async () => {
+    try {
+      // 中身は見ない。**通すこと**が目的なので、いちばん軽い RPC を1本。
+      await createAdminClient().rpc('shell_data');
+    } catch {
+      // 失敗しても構わない。誰もこの結果を待っていない。次の1回がまた試す。
+    }
+  });
 }
