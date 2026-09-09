@@ -29,6 +29,12 @@ try {
     )
   `);
 
+  // ここで作る唯一の表なので、RLS も権限もここで閉じる。public に置いた表には
+  // Supabase が anon / authenticated へ既定で全権限を渡すため、放っておくと
+  // ブラウザに出ている anon キーだけで移行の記録を消せてしまう（0044）。
+  await client.query('alter table schema_migrations enable row level security');
+  await client.query('revoke all on table schema_migrations from anon, authenticated');
+
   const { rows } = await client.query('select version from schema_migrations');
   const applied = new Set(rows.map((r) => r.version));
 
