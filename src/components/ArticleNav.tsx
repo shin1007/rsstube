@@ -35,6 +35,7 @@ export function ArticleNav({
   nextHref: serverNext,
   remaining,
   menu,
+  star,
 }: {
   articleId: string;
   prevHref?: string;
@@ -49,6 +50,11 @@ export function ArticleNav({
    * 本文の上に浮かせていたときは、読んでいる行の右端に常に被っていた。
    */
   menu?: React.ReactNode;
+  /**
+   * スター（スマホ）。メニューの外に1つだけ出す。**読みながらいちばん押すもの**
+   * なのに、メニューの中だと開いて・押しての2回かかっていた。
+   */
+  star?: React.ReactNode;
 }) {
   const { prevHref, nextHref } = useNeighbours(articleId, serverPrev, serverNext);
   /**
@@ -154,6 +160,16 @@ export function ArticleNav({
       )}
 
       <span aria-hidden className="w-px bg-zinc-800" />
+
+      {/* スター（スマホのみ）。帯の高さいっぱいを当たり判定にする。 */}
+      {star && (
+        <span
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          className="flex shrink-0 items-stretch md:hidden"
+        >
+          {star}
+        </span>
+      )}
 
       {/* 記事のメニュー（スマホのみ）。前後のボタンと同じ高さに収める。 */}
       {menu && (

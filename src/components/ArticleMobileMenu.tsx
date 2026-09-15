@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from 'react';
-import { setStarred } from '@/app/actions/articles';
 import { createExport } from '@/app/actions/exports';
 import { requestArticleMedia } from '@/app/actions/media';
 import { ExportDialog } from '@/components/ExportDialog';
@@ -15,17 +14,14 @@ export function ArticleMobileMenu({
   articleId,
   title,
   url,
-  starred,
   exported,
 }: {
   articleId: string;
   title: string;
   url: string;
-  starred: boolean;
   exported?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [starState, setStarState] = useState(starred);
   const [flash, setFlash] = useState<string | null>(null);
 
   // 音声化用
@@ -67,19 +63,6 @@ export function ArticleMobileMenu({
     const timer = setTimeout(() => setFlash(null), 2500);
     return () => clearTimeout(timer);
   }, [flash]);
-
-  // スター切り替え
-  const handleToggleStar = async () => {
-    const next = !starState;
-    setStarState(next);
-    setFlash(next ? '★ スターを付けました' : 'スターを外しました');
-    try {
-      await setStarred(articleId, next);
-    } catch {
-      setStarState(!next);
-      setFlash('保存できませんでした');
-    }
-  };
 
   // 共有
   const handleShare = async () => {
@@ -132,7 +115,7 @@ export function ArticleMobileMenu({
       {flash && (
         <div
           role="status"
-          className="fixed bottom-20 inset-x-4 z-40 mx-auto max-w-xs rounded-lg border border-zinc-700 bg-zinc-800/95 px-3 py-2 text-center text-xs shadow-xl text-zinc-100"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] inset-x-4 z-40 mx-auto max-w-xs rounded-lg border border-zinc-700 bg-zinc-800/95 px-3 py-2 text-center text-xs shadow-xl text-zinc-100"
         >
           {flash}
           {mediaResult && (
@@ -166,15 +149,8 @@ export function ArticleMobileMenu({
         {/* メニュー展開時のポップアップ */}
         {open && (
           <div className="absolute bottom-full right-0 z-40 mb-2 w-48 rounded-xl border border-zinc-800 bg-zinc-900/95 p-1.5 shadow-2xl backdrop-blur-md flex flex-col gap-0.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
-            {/* スター */}
-            <button
-              type="button"
-              onClick={handleToggleStar}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-left hover:bg-zinc-800 text-zinc-200 transition active:scale-95"
-            >
-              <span className={starState ? 'text-amber-400 font-bold' : 'text-zinc-400'}>★</span>
-              <span>{starState ? 'スターを外す' : 'スターを付ける'}</span>
-            </button>
+            {/* スターはここに無い。帯の上に直接出している（ArticleActions の variant="nav"）。
+                ここにも置くと、状態を2つの部品が別々に持って食い違う。 */}
 
             {/* 共有 */}
             {canShare && (

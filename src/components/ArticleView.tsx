@@ -317,13 +317,20 @@ export function ArticleView({
         prevHref={prevHref}
         nextHref={nextHref}
         remaining={remaining}
-        /* スマホの操作はここに集める。浮かせると本文に被る（ArticleMobileMenu）。 */
+        /* スマホの操作はここに集める。浮かせると本文に被る（ArticleMobileMenu）。
+           スターだけはメニューに入れず、帯の上に1回で押せる形で出す。 */
+        star={
+          <ArticleActions
+            articleId={a.id}
+            starred={Boolean(state?.is_starred)}
+            variant="nav"
+          />
+        }
         menu={
           <ArticleMobileMenu
             articleId={a.id}
             title={a.summaries?.title_ja?.trim() || a.title}
             url={a.url}
-            starred={Boolean(state?.is_starred)}
             exported={Boolean(state?.exported_at)}
           />
         }
