@@ -28,14 +28,17 @@ export const EXTERNAL_BROWSER_KEY = 'rsstube:external-browser';
 type Choice = 'inapp' | 'safari' | 'brave' | 'chrome';
 
 const CHOICES: { value: Choice; label: string }[] = [
-  { value: 'brave', label: 'Brave' },
   { value: 'safari', label: 'Safari' },
+  { value: 'brave', label: 'Brave' },
   { value: 'chrome', label: 'Chrome' },
   { value: 'inapp', label: 'アプリ内' },
 ];
 
-/** オーナーの iPhone の既定が Brave なので、選んでいなければ Brave に渡す。 */
-const DEFAULT_CHOICE: Choice = 'brave';
+/**
+ * 選んでいなければ Safari に渡す。**どの iPhone にも必ず入っている**のは Safari だけで、
+ * 入っていないブラウザを既定にすると、設定を開くまでリンクが1本も開かない。
+ */
+const DEFAULT_CHOICE: Choice = 'safari';
 
 function read(): Choice {
   try {
