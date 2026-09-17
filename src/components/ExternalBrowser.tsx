@@ -16,7 +16,10 @@ import { useEffect, useSyncExternalStore } from 'react';
  * - Chrome は `googlechromes://`
  *
  * **既定のブラウザは Web から読めない**ので、どれに渡すかは設定で選ぶ。
- * 入っていないブラウザを選ぶと iOS が「アドレスが無効」を出すだけで何も開かない。
+ * **入っていないブラウザを選んだときは Safari に回す**（下の `fallbackChain`）。
+ * 入っているかは Web から聞けないので、渡してから2秒たってもアプリが裏に
+ * 回らなければ「開かなかった」とみなす。Safari も開かなければ（iOS 16 以前）、
+ * 最後はアプリ内の簡易ブラウザで開く。
  * 端末ごとに入っているブラウザが違うので、TextScale と同じく localStorage に持つ。
  *
  * iPhone の standalone 以外（Safari のタブ・PC・Android）では何もしない。
@@ -75,6 +78,46 @@ export function browserUrl(url: string, choice: Choice): string | null {
   }
 }
 
+/**
+ * 選んだブラウザが開かなかったときに、次に試す順。
+ * Safari は OS に必ず入っているので、どれを選んでも Safari を挟んでからアプリ内に落とす。
+ */
+export function fallbackChain(choice: Choice): Choice[] {
+  if (choice === 'inapp') return ['inapp'];
+  if (choice === 'safari') return ['safari', 'inapp'];
+  return [choice, 'safari', 'inapp'];
+}
+
+/** ブラウザに切り替われば、この時間のうちにアプリが裏へ回る。 */
+const SWITCH_WAIT_MS = 2000;
+
+function openWith(url: string, chain: Choice[]) {
+  const [first, ...rest] = chain;
+  const to = first ? browserUrl(url, first) : null;
+  if (!to) {
+    // アプリ内。タイマーから呼ぶので押した操作の続きではなくなり、
+    // 止められることがある——ここまで来るのは iOS 16 以前だけ。
+    window.open(url, '_blank', 'noopener');
+    return;
+  }
+
+  // 裏に回ったかだけを見る。blur は見ない——iOS の「開けません」の警告でも
+  // 立つかもしれず、そうなると開かなかったのに次へ回らなくなる。
+  let left = document.visibilityState === 'hidden';
+  const onHide = () => {
+    if (document.visibilityState === 'hidden') left = true;
+  };
+  document.addEventListener('visibilitychange', onHide);
+  window.addEventListener('pagehide', onHide);
+  location.href = to;
+
+  window.setTimeout(() => {
+    document.removeEventListener('visibilitychange', onHide);
+    window.removeEventListener('pagehide', onHide);
+    if (!left && document.visibilityState === 'visible') openWith(url, rest);
+  }, SWITCH_WAIT_MS);
+}
+
 /** layout に置く。何も描かない。 */
 export function ExternalLinkHandler() {
   useEffect(() => {
@@ -86,10 +129,10 @@ export function ExternalLinkHandler() {
       if (e.defaultPrevented || e.button !== 0) return;
       const a = (e.target as Element | null)?.closest?.('a[target="_blank"]');
       if (!(a instanceof HTMLAnchorElement)) return;
-      const to = browserUrl(a.href, read());
-      if (!to) return;
+      const choice = read();
+      if (!browserUrl(a.href, choice)) return;
       e.preventDefault();
-      location.href = to;
+      openWith(a.href, fallbackChain(choice));
     };
     document.addEventListener('click', onClick);
     return () => document.removeEventListener('click', onClick);
@@ -143,7 +186,7 @@ export function ExternalBrowserPicker() {
       <p className="mt-2 text-xs text-zinc-500">
         iPhone のホーム画面から開いたときに、元記事などのリンクをどのブラウザで開くか。
         <strong className="font-semibold text-zinc-400">この端末だけ</strong>
-        の設定です。入っていないブラウザを選ぶと何も開きません。
+        の設定です。選んだブラウザが入っていなければ Safari で開きます。
         {!standalone && ' いまはホーム画面のアプリではないので、この設定は効きません。'}
       </p>
     </div>
