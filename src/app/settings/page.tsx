@@ -24,6 +24,7 @@ import { UnsubscribeButton } from '@/components/UnsubscribeButton';
 import { FolderSelect } from '@/components/FolderSelect';
 import { PasskeyManager, type PasskeyRow } from '@/components/PasskeyManager';
 import { TextScale } from '@/components/TextScale';
+import { ExternalBrowserPicker } from '@/components/ExternalBrowser';
 import { ThemeColorPicker } from '@/components/ThemeColorPicker';
 import { PushToggle } from '@/components/PushToggle';
 import { SettingsForm, type SaveState } from '@/components/SettingsForm';
@@ -202,6 +203,11 @@ async function Settings({ searchParams }: PageProps<'/settings'>) {
         <section>
           <h2 className="mb-2 section-title">文字の大きさ</h2>
           <TextScale />
+        </section>
+
+        <section>
+          <h2 className="mb-2 section-title">リンクを開くブラウザ</h2>
+          <ExternalBrowserPicker />
         </section>
 
         <section>

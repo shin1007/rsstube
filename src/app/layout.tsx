@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { PlaybackProvider } from '@/components/Playback';
 import { BootTiming } from '@/components/BootTiming';
 import { ServiceWorker } from '@/components/ServiceWorker';
+import { ExternalLinkHandler } from '@/components/ExternalBrowser';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -87,6 +88,8 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         */}
         <PlaybackProvider>{children}</PlaybackProvider>
         <ServiceWorker />
+        {/* iPhone のホーム画面アプリで、外へのリンクを簡易ブラウザではなくブラウザ本体に渡す。 */}
+        <ExternalLinkHandler />
 
         {/*
           起動の内訳を、その端末に測らせる（何も描かない）。
