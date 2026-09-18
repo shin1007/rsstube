@@ -128,7 +128,8 @@ export function UnsubscribeButton({
             disabled={pending}
             className="rounded px-2.5 py-1 text-zinc-400"
           >
-            やめる
+            {/* 「やめる」にしない。隣が「購読をやめる」なので、どちらをやめるのか読めない。 */}
+            キャンセル
           </button>
         </div>
 
@@ -143,7 +144,8 @@ export function UnsubscribeButton({
         type="button"
         onClick={ask}
         disabled={pending}
-        className="text-xs text-zinc-500 hover:text-red-400 disabled:opacity-50"
+        // 当たり判定は 44px（traps/ui.md）。文字は小さいままで、枠だけ広げる。
+        className="inline-flex min-h-11 items-center px-1 text-xs text-zinc-500 hover:text-red-400 disabled:opacity-50"
       >
         {pending ? '確認中…' : '購読をやめる'}
       </button>

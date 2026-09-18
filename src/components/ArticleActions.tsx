@@ -49,7 +49,9 @@ export function ArticleActions({
         onFlash={setFlash}
         variant={variant}
       />
-      {flash && <ActionFlash {...flash} onDismiss={() => setFlash(null)} />}
+      {flash && (
+        <ActionFlash {...flash} onDismiss={() => setFlash(null)} center={variant === 'nav'} />
+      )}
     </>
   );
 }
@@ -151,15 +153,25 @@ function Toggle({
   );
 }
 
-/** 一覧側（キーボード・スワイプ）からも同じ帯を使うので外に出す。 */
+/**
+ * 一覧側（キーボード・スワイプ）からも同じ帯を使うので外に出す。
+ *
+ * **置き場所は、押した指で決める。** 記事の画面では押すのは画面の下端の帯
+ * （スター）なので、そのすぐ上に出すと**押した指がそのまま被って読めない**。
+ * そこでは `center` で画面の真ん中に出す（ArticleNav の「これが最後です」と同じ）。
+ * 一覧では指は行の上（画面のどこでも）にあり、真ん中はかえって被りやすいので下のまま。
+ */
 export function ActionFlash({
   text,
   undo,
   onDismiss,
+  center = false,
 }: {
   text: string;
   undo?: () => void;
   onDismiss: () => void;
+  /** スマホで画面の真ん中に出す。PC は下のまま（マウスの指は画面に被らない）。 */
+  center?: boolean;
 }) {
   // 出しっぱなしにすると本文に被る。取り消しを押す間だけ残す。
   useEffect(() => {
@@ -167,14 +179,18 @@ export function ActionFlash({
     return () => clearTimeout(timer);
   }, [text, undo, onDismiss]);
 
-  return (
+  const bar = (
     <div
       // 読み上げにも伝える。押した結果が画面の色でしか分からない状態を残さない。
       role="status"
       aria-live="polite"
       // 下の帯（前後の記事・下部タブ）はどちらもホームバーぶん背が伸びる。
       // 足さないと、ホームバーのある iPhone では帯の上端に被る。
-      className="fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-sm items-center gap-3 rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs shadow-lg md:bottom-4"
+      className={
+        center
+          ? 'pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800/95 px-4 py-3 text-sm shadow-xl md:rounded md:px-3 md:py-2 md:text-xs md:shadow-lg'
+          : 'fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-sm items-center gap-3 rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs shadow-lg md:bottom-4'
+      }
     >
       <span className="flex-1">{text}</span>
       {undo && (
@@ -197,6 +213,16 @@ export function ActionFlash({
       >
         ✕
       </button>
+    </div>
+  );
+
+  if (!center) return bar;
+
+  // 外枠は画面いっぱいだが、指は素通しにする（下の帯を押せるままにする）。
+  // 「取り消す」「✕」は中身の pointer-events-auto で押せる。
+  return (
+    <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-6 md:items-end md:px-3 md:pb-4">
+      {bar}
     </div>
   );
 }

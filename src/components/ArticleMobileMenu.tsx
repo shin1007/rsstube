@@ -111,21 +111,27 @@ export function ArticleMobileMenu({
 
   return (
     <>
-      {/* 操作フィードバックのトースト */}
+      {/* 操作フィードバックのトースト。**画面の真ん中に出す。** メニューは画面の
+          下端の帯にあるので、そのすぐ上に出すと押した指で隠れて読めない
+          （ArticleNav の「これが最後です」と同じ理由）。外枠は指を素通しにし、
+          「開く」だけ押せるようにする。 */}
       {flash && (
-        <div
-          role="status"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] inset-x-4 z-40 mx-auto max-w-xs rounded-lg border border-zinc-700 bg-zinc-800/95 px-3 py-2 text-center text-xs shadow-xl text-zinc-100"
-        >
-          {flash}
-          {mediaResult && (
-            <Link
-              href={`/watch/${mediaResult.id}`}
-              className="ml-2 underline text-[var(--color-accent-text)]"
-            >
-              開く
-            </Link>
-          )}
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center p-6">
+          <div
+            role="status"
+            aria-live="polite"
+            className="pointer-events-auto max-w-xs rounded-lg border border-zinc-700 bg-zinc-800/95 px-4 py-3 text-center text-sm shadow-xl text-zinc-100"
+          >
+            {flash}
+            {mediaResult && (
+              <Link
+                href={`/watch/${mediaResult.id}`}
+                className="ml-2 underline text-[var(--color-accent-text)]"
+              >
+                開く
+              </Link>
+            )}
+          </div>
         </div>
       )}
 

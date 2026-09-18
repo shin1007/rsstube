@@ -2,6 +2,7 @@
 
 import { ActionFlash } from '@/components/ArticleActions';
 import { ArticleListRow } from '@/components/ArticleListRow';
+import { UnsubscribeButton } from '@/components/UnsubscribeButton';
 import {
   BAR,
   FeedDrawer,
@@ -646,8 +647,29 @@ export function ArticleList({
    * そのときは何も出さない。id をそのまま出しても読めないし、
    * 「まだ何も無い」と「実在しない」を同じ見た目にしないため（traps/ui.md）。
    */
+  const scopeFeed = feedId ? feeds.find((f) => f.id === feedId) : undefined;
+
+  /**
+   * **ここで購読をやめた直後も、名札を残す。**
+   *
+   * やめると一覧の再検証で `feeds` からそのフィードが抜け、名前が引けなくなる。
+   * そのまま名札ごと消すと、隣の「元に戻す」も一緒に消えてしまう。
+   * この画面で一度見た名前だけを覚えておく（URL を直接叩いたときは覚えていないので、
+   * 上に書いたとおり何も出さない）。
+   */
+  const [seenFeed, setSeenFeed] = useState<FeedRow | null>(null);
+  if (
+    scopeFeed &&
+    (scopeFeed.id !== seenFeed?.id ||
+      scopeFeed.title !== seenFeed.title ||
+      scopeFeed.folder_id !== seenFeed.folder_id)
+  ) {
+    setSeenFeed(scopeFeed);
+  }
+  const shownFeed = scopeFeed ?? (seenFeed?.id === feedId ? seenFeed : undefined);
+
   const scope = feedId
-    ? { kind: '情報源' as const, name: feeds.find((f) => f.id === feedId)?.title }
+    ? { kind: '情報源' as const, name: shownFeed?.title }
     : folderId
       ? { kind: 'フォルダ' as const, name: folders.find((f) => f.id === folderId)?.name }
       : null;
@@ -725,7 +747,7 @@ export function ArticleList({
           行を1つ増やすのは絞り込んでいる間だけ。
         */}
         {scopeName && (
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-x-2">
             <span className="shrink-0 text-xs text-zinc-500">{scope?.kind}</span>
             <button
               type="button"
@@ -737,6 +759,22 @@ export function ArticleList({
               <span aria-hidden className="shrink-0 text-zinc-400">✕</span>
               <span className="sr-only">この絞り込みを外す</span>
             </button>
+            {/* **購読をやめる手を、その情報源を見ている場所に置く。**
+                これまでは設定のフィード一覧の中にしか無く、読んでいて
+                「もう要らない」と思った場所からは辿り着けなかった。
+                記事の上の情報源名を押すとここへ来る（ArticleView）。 */}
+            {feedId && shownFeed && (
+              <>
+                {/* 右へ寄せる詰め物。確かめる枠（w-full）は次の行へ折り返す。 */}
+                <span aria-hidden className="flex-1" />
+                <UnsubscribeButton
+                  key={shownFeed.id}
+                  feedId={shownFeed.id}
+                  title={scopeName}
+                  folderId={shownFeed.folder_id}
+                />
+              </>
+            )}
           </div>
         )}
 
