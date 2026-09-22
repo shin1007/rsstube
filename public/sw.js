@@ -15,7 +15,7 @@
  * 中身を変えたら CACHE の版を上げること。古い版は activate で消える。
  */
 
-const CACHE = 'rsstube-shell-v6';
+const CACHE = 'rsstube-shell-v7';
 
 /**
  * **このワーカーが起きた時刻**と、**画面遷移の取得を始めた時刻**。
@@ -56,9 +56,22 @@ const STATIC_MAX = 120;
 const OFFLINE = 'rsstube-offline-v1';
 const OFFLINE_URL = '/offline.html';
 
+/**
+ * **ホーム画面から最初に開く1枚**（manifest の start_url）。
+ *
+ * ここをキャッシュから即返すことで、サーバーも DB も待たずに画面が出る。
+ * 出たら自分で `/` へ移り、ブラウザはその間この枠を出したままにするので、
+ * **起動の 0.8〜2.2秒が真っ暗にならない**（docs/traps/perf.md）。
+ *
+ * **中身を変えたら上の CACHE の版を上げること。** 上げないと、キャッシュに
+ * 残った古い1枚がいつまでも出る（ここは HTML なので、静的ファイルのように
+ * URL にハッシュが入らない）。
+ */
+const START_URL = '/start.html';
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll([OFFLINE_URL])),
+    caches.open(CACHE).then((cache) => cache.addAll([OFFLINE_URL, START_URL])),
   );
   // 新しい版をすぐ有効にする。個人用なので、複数タブでの版ズレより
   // 「直したものがすぐ反映される」ほうが大事。
@@ -142,6 +155,32 @@ self.addEventListener('fetch', (event) => {
 
   // 残りは画面遷移だけ面倒を見る。API も素通しにする。
   if (request.mode !== 'navigate') return;
+
+  /**
+   * **起動の1枚目は、通信を待たずにキャッシュから返す。**
+   *
+   * ここだけは「握ってよい HTML」——中身が固定で、ログインの状態も記事も
+   * 含まないため（他の画面を握らない理由は、このファイルの冒頭）。
+   * 取り違えると古い一覧を見せる事故になるので、**パスを完全一致で見ること。**
+   *
+   * キャッシュに無ければ（入れた直後など）普通に取りに行く。
+   */
+  if (new URL(request.url).pathname === START_URL) {
+    event.respondWith(
+      (async () => {
+        const hit = await caches.match(START_URL);
+        if (hit) return hit;
+        try {
+          return (await event.preloadResponse) || (await fetch(request));
+        } catch {
+          // 圏外で、まだキャッシュにも入っていない。せめて offline.html を出す。
+          const cached = await caches.match(OFFLINE_URL);
+          return cached ?? new Response('オフラインです', { status: 503 });
+        }
+      })(),
+    );
+    return;
+  }
 
   // 何時に通信を始めたか。上の SW_BOOT_AT との差が「起動を待った時間」。
   LAST_NAV = { at: Date.now(), url: request.url };
