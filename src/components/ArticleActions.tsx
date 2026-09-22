@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { setStarred } from '@/app/actions/articles';
 
 /**
@@ -34,6 +34,14 @@ export function ArticleActions({
   variant?: 'bar' | 'nav';
 }) {
   const [flash, setFlash] = useState<{ text: string; undo?: () => void } | null>(null);
+
+  // 帯も記事と一緒に片付ける。残しておくと「取り消す」が**前の記事**を戻しながら
+  // いま見ている記事の★を書き替える（closure が押したときの id を握っている）。
+  const [flashFor, setFlashFor] = useState(articleId);
+  if (flashFor !== articleId) {
+    setFlashFor(articleId);
+    setFlash(null);
+  }
 
   return (
     <>
@@ -83,15 +91,21 @@ function Toggle({
   const [shown, setShown] = useState(active);
   const [pending, startTransition] = useTransition();
 
-  // サーバーから新しい値が来たらそちらに合わせる。記事を切り替えたときや、
-  // 別の端末で操作したときに、古い楽観値が残らないようにする。
-  const serverValue = useRef(active);
-  useEffect(() => {
-    if (serverValue.current !== active) {
-      serverValue.current = active;
-      setShown(active);
-    }
-  }, [active]);
+  // サーバーから新しい値が来たらそちらに合わせる。
+  //
+  // **記事の id も一緒に見ること。** 記事を移ってもこの部品は同じ場所に居座る
+  // （同じ route の中の遷移では unmount されない）ので、押したときの楽観値が
+  // そのまま次の記事に残る。`active` だけを見ていると
+  // 「スター無しの記事で押して付けた → 次の記事もスター無し」のとき
+  // `active` は false のまま動かず差が出ないので、★ が付いたままに見えていた。
+  //
+  // 合わせるのは render の中で行う（useEffect ではない）。効果は描いたあとに
+  // 走るので、切り替えた直後の1フレームだけ前の記事の★が見えてしまう。
+  const [seen, setSeen] = useState({ articleId, active });
+  if (seen.articleId !== articleId || seen.active !== active) {
+    setSeen({ articleId, active });
+    setShown(active);
+  }
 
   const run = (next: boolean, announce: boolean) => {
     setShown(next);
