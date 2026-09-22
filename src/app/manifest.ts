@@ -16,7 +16,19 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'RSSTube',
     short_name: 'RSSTube',
     description: 'AI要約つきの個人用RSSリーダー',
-    start_url: '/',
+    /**
+     * **アイコンから開く先は `/` ではなく `/start.html`。**
+     *
+     * `/` は毎回サーバーで組む画面で、実機では応答を受け終わるまで 0.8〜2.2秒
+     * あり、WebKit はそれまで**何も描かない**（docs/traps/perf.md）。
+     * `/start.html` はサービスワーカーのキャッシュから即返る静的な1枚で、
+     * 出たら自分で `/` へ移る。移っているあいだブラウザはこの枠を出したままに
+     * するので、**待ち時間が真っ暗にならない**（速くなるわけではない）。
+     *
+     * **通知から開く先は今までどおり `/exports` など。** start_url は
+     * 「アイコンを押したとき」にしか効かないので、他の入口は素通りする。
+     */
+    start_url: '/start.html',
     scope: '/',
     display: 'standalone',
     background_color: '#0b0d10',

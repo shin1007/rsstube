@@ -1,7 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { BOOT_KEEP, BOOT_KEY, readBootSamples, type BootSample } from '@/lib/boot';
+import {
+  BOOT_KEEP,
+  BOOT_KEY,
+  LAUNCH_FRESH_MS,
+  LAUNCH_KEY,
+  readBootSamples,
+  type BootSample,
+} from '@/lib/boot';
 
 /**
  * **ホーム画面から開いた1回を、その端末に測らせる。** 何も描かない。
@@ -58,6 +65,45 @@ function askWorker(): Promise<{ swBootAt: number; navAt: number | null; preload:
   });
 }
 
+/**
+ * **起動の1枚目（`/start.html`）が置いていった時刻を引き取る。**
+ *
+ * `PerformanceNavigationTiming` は文書ごとなので、この文書からは「アイコンを
+ * 押してから1枚目が描かれるまで」が見えない。あちらが素の時刻で置いていくので、
+ * ここで拾って同じものさし（`performance.timeOrigin`）に直す。
+ *
+ * **拾ったら消すこと。** 残したままにすると、画面を移っただけの1回にも同じ
+ * 数字が付いて、起動していないのに起動したように見える。
+ */
+function takeLaunch(origin: number): { blank: number | null; handoff: number | null } {
+  const empty = { blank: null, handoff: null };
+  try {
+    const raw = localStorage.getItem(LAUNCH_KEY);
+    if (!raw) return empty;
+    localStorage.removeItem(LAUNCH_KEY);
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== 'object') return empty;
+    const {
+      origin: startOrigin,
+      paintAt,
+      fcp,
+    } = value as { origin?: number; paintAt?: number; fcp?: number | null };
+    if (typeof startOrigin !== 'number' || typeof paintAt !== 'number') return empty;
+    const handoff = origin - startOrigin;
+    // 置きっぱなしのもの（前の起動のぶん）は使わない。
+    if (!(handoff >= 0 && handoff < LAUNCH_FRESH_MS)) return empty;
+    /**
+     * **描かれた合図（first-contentful-paint）があるなら、そちらを使う。**
+     * 2フレーム待った時刻は「描かれたはず」でしかない。拾えないブラウザでは
+     * そちらで代用する（数msしか違わないが、名前どおりの数字にならない）。
+     */
+    const painted = typeof fcp === 'number' ? fcp : paintAt;
+    return { blank: painted - startOrigin, handoff };
+  } catch {
+    return empty;
+  }
+}
+
 export function BootTiming() {
   useEffect(() => {
     /**
@@ -86,6 +132,8 @@ export function BootTiming() {
         const origin = performance.timeOrigin;
         const rel = (abs: number | null | undefined) =>
           typeof abs === 'number' ? abs - origin : null;
+
+        const launch = takeLaunch(origin);
 
         const paint = performance
           .getEntriesByType('paint')
@@ -122,6 +170,8 @@ export function BootTiming() {
               : null,
           connect: nav.connectEnd,
           paint: paint ?? null,
+          blank: launch.blank,
+          handoff: launch.handoff,
           interactive: nav.domInteractive,
           load: nav.loadEventEnd,
           screen: `${screen.width}x${screen.height}@${devicePixelRatio}`,

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0d10" />
+    <title>RSSTube</title>
+
+    <!--
+      **ホーム画面から最初に開く1枚**（manifest の start_url）。
+
+      ここは**サービスワーカーのキャッシュから即返る**ので、サーバーも DB も
+      待たない。描けたらすぐ `/` へ移る。移っているあいだ、ブラウザは
+      「今出ている画面」＝この枠を出したままにするので、**真っ暗が消える**。
+
+      実機（iPhone SE）では `/` の応答を受け終わるまで 0.8〜2.2秒あり、
+      WebKit はそれを受け終わるまで何も描かない（docs/traps/perf.md）。
+      `<Suspense>` の骨組みを先に流しても、この端末では描かれていなかった。
+
+      **外部ファイルを一切参照しないこと**（offline.html と同じ理由）。
+      CSS も JS も取りに行った時点で、待ちたくない往復が1本増える。
+      色は globals.css と揃える。
+    -->
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: #0b0d10;
+        color: #f4f4f5;
+        font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.25rem;
+        -webkit-text-size-adjust: 100%;
+      }
+      .mark { width: 64px; height: 64px; }
+      /* 弧は外側から順に灯す。**止まって見えないこと**がこの画面の仕事。 */
+      .mark .a1 { animation: blink 1.4s ease-in-out infinite; }
+      .mark .a2 { animation: blink 1.4s ease-in-out 0.2s infinite; }
+      .mark .dot { animation: blink 1.4s ease-in-out 0.4s infinite; }
+      @keyframes blink {
+        0%, 100% { opacity: 0.35; }
+        50% { opacity: 1; }
+      }
+      /* 動きを減らす設定の端末では光らせない（代わりに全部を出しておく）。 */
+      @media (prefers-reduced-motion: reduce) {
+        .mark .a1, .mark .a2, .mark .dot { animation: none; opacity: 1; }
+      }
+      .name { font-size: 0.875rem; font-weight: 700; letter-spacing: 0.08em; }
+      .note { font-size: 0.75rem; color: #71717a; }
+      .note a { color: #a1a1aa; }
+    </style>
+
+    <!--
+      JS が動かなかったときの逃げ道。下の script が動けば、ここへ来る前に移る。
+      1秒待つのは、**描く前に移らない**ため（移ってしまうと真っ暗に戻る）。
+    -->
+    <meta http-equiv="refresh" content="1;url=/" />
+  </head>
+  <body>
+    <!-- アイコンと同じ図柄（scripts/make-icons.mjs）。左下の点と右上へ広がる弧2本。 -->
+    <svg class="mark" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+      <circle class="dot" cx="14" cy="50" r="6" fill="#f4f4f5" />
+      <path class="a1" d="M14 30a20 20 0 0 1 20 20" stroke="#f4f4f5" stroke-width="7" stroke-linecap="round" />
+      <path class="a2" d="M14 14a36 36 0 0 1 36 36" stroke="#f4f4f5" stroke-width="7" stroke-linecap="round" />
+    </svg>
+
+    <div class="name">RSSTube</div>
+    <div class="note">読み込み中…&nbsp;<a href="/">開かないときはこちら</a></div>
+
+    <script>
+      (function () {
+        /**
+         * **描かれてから移る。** ここがこの1枚の全部。
+         *
+         * 描く前に `location.replace` すると、ブラウザは「前の画面」を出したまま
+         * 次を待つ——つまり**真っ暗のまま**で、1枚挟んだ意味が丸ごと消える。
+         * なので**実際に描かれた合図**（first-contentful-paint）を待ってから移る。
+         *
+         * **待ちすぎないこと。** 合図が来ないブラウザのために上限を置く
+         * （その場合は2フレーム待ってから移る）。ここで待ったぶんは、そのまま
+         * 起動が遅くなる。かかった時間は下で控えて、設定画面の表に出す。
+         */
+        var moved = false;
+        var paintedAt = null;
+
+        var go = function () {
+          if (moved) return;
+          moved = true;
+          try {
+            localStorage.setItem(
+              'rsstube-launch-v1',
+              JSON.stringify({
+                origin: performance.timeOrigin,
+                // 移る直前の時刻。**アイコンを押してからここまでが「真っ暗」**。
+                paintAt: performance.timeOrigin + performance.now(),
+                // 描かれた合図が拾えたときだけ入る（拾えなければ上で代用する）。
+                fcp: paintedAt,
+              }),
+            );
+          } catch (e) {
+            // プライベートブラウズや容量切れ。測れなくても起動は続ける。
+          }
+          // **replace にすること。** push だと「戻る」でここへ戻り、また移る。
+          location.replace('/');
+        };
+
+        // 合図が来なかったときの上限。来るときは数十msで来る。
+        var cap = setTimeout(go, 200);
+
+        var watched = false;
+        try {
+          var po = new PerformanceObserver(function (list) {
+            var entries = list.getEntries();
+            for (var i = 0; i < entries.length; i++) {
+              if (entries[i].name === 'first-contentful-paint') {
+                paintedAt = performance.timeOrigin + entries[i].startTime;
+                clearTimeout(cap);
+                go();
+              }
+            }
+          });
+          po.observe({ type: 'paint', buffered: true });
+          watched = true;
+        } catch (e) {
+          // paint の記録が無いブラウザ。下の2フレーム待ちで移る。
+        }
+
+        if (!watched) {
+          if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () {
+                clearTimeout(cap);
+                go();
+              });
+            });
+          } else {
+            setTimeout(go, 32);
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -93,6 +93,7 @@ export function BootTimings() {
           <thead>
             <tr className="text-left text-zinc-500">
               <th className="py-1 font-normal">いつ</th>
+              <th className="py-1 text-right font-normal">真っ暗</th>
               <th className="py-1 text-right font-normal">ワーカー</th>
               <th className="py-1 text-right font-normal">転送</th>
               <th className="py-1 text-right font-normal">一覧</th>
@@ -108,6 +109,14 @@ export function BootTimings() {
                 <td className="py-1 text-zinc-400">
                   {new Date(s.at).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}
                   <span className="ml-1 text-zinc-600">{s.standalone ? 'PWA' : 'ブラウザ'}</span>
+                </td>
+                {/*
+                  起動の1枚目（/start.html）で何も出ていなかった時間と、そこから
+                  本体へ移るのにかかった時間。1枚目を通らずに開いた回は「－」。
+                */}
+                <td className="py-1 text-right text-zinc-300">
+                  {ms(s.blank ?? null)}
+                  <span className="ml-1 text-zinc-600">+{ms(s.handoff ?? null)}</span>
                 </td>
                 <td className="py-1 text-right text-zinc-300">
                   {ms(s.swStart)}
@@ -137,6 +146,10 @@ export function BootTimings() {
 
       <p className="text-xs text-zinc-600">
         すべて「画面遷移が始まってから」の時刻です。
+        <strong className="text-zinc-500">真っ暗</strong>＝アイコンを押してから起動画面
+        （/start.html）が出るまで、その右の
+        <strong className="text-zinc-500">+</strong>は起動画面から本体へ移るまで
+        （この2つだけ、押した瞬間が起点）。
         <strong className="text-zinc-500">ワーカー</strong>＝サービスワーカーが起きて通信を始めるまで
         （<strong className="text-zinc-500">(起動)</strong>＝その1回のために起きた＝冷えた状態、
         <strong className="text-zinc-500">(起きていた)</strong>＝起動ぶんは払っていない）。

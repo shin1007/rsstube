@@ -61,6 +61,23 @@ export type BootSample = {
 
   /** 最初に何かが描かれた時刻。**「真っ暗が終わる」のはここ**。 */
   paint: number | null;
+
+  /**
+   * **起動の1枚目（`/start.html`）で真っ暗だった時間。**
+   *
+   * アイコンを押してから、あの枠が描かれるまで。**体感の「真っ暗」はここだけ**に
+   * なったはずで、そうなっているかを確かめるための数字。
+   * 古い記録や、`/start.html` を通らずに開いた回には無い。
+   */
+  blank?: number | null;
+  /**
+   * **1枚目から本体へ移るのにかかった時間。**
+   *
+   * `/start.html` の遷移が始まってから、この文書の遷移が始まるまで。
+   * **1枚挟んだぶんの費用がそのまま出る**ので、大きいようなら挟み方を
+   * 考え直すこと（docs/traps/perf.md）。
+   */
+  handoff?: number | null;
   /** ハイドレーションが済んだあたり。`responseEnd` との差が端末の重さ。 */
   interactive: number;
   load: number;
@@ -74,6 +91,21 @@ export type BootSample = {
 
 /** localStorage の鍵。形を変えたら版を上げる（古いものは読み捨てる）。 */
 export const BOOT_KEY = 'rsstube-boot-v1';
+
+/**
+ * 起動の1枚目（`public/start.html`）が置いていく時刻の鍵。
+ * **あちらは素の HTML なので、この定数を import できない**——名前を変えるときは
+ * 両方を直すこと。
+ */
+export const LAUNCH_KEY = 'rsstube-launch-v1';
+
+/**
+ * 1枚目の記録が、**この起動のもの**と言える上限。
+ *
+ * 置きっぱなしのものを拾うと、何時間も前の起動を今の1回として数えてしまう。
+ * 1枚目から本体へは1フレームで移るので、秒の単位で足りる。
+ */
+export const LAUNCH_FRESH_MS = 30_000;
 
 /** 残す件数。数回ぶん見比べられれば足りる。 */
 export const BOOT_KEEP = 12;
@@ -132,6 +164,7 @@ export function formatBootSample(s: BootSample): string {
     }／preload ${s.preload ? 'あり' : 'なし'}）`,
     `  接続 ${ms(s.connect)} → 応答 ${ms(s.responseStart)} → 一覧 ${ms(s.listAt)} → 受け終わり ${ms(s.responseEnd)}（リダイレクト ${s.redirects}本 ${ms(s.redirectEnd)}）`,
     `  うちサーバーが DB を待っていたぶん ${ms(s.dataMs)}`,
+    `  起動画面 真っ暗 ${ms(s.blank ?? null)} → 本体へ ${ms(s.handoff ?? null)}`,
     `  描画 ${ms(s.paint)} → 操作可 ${ms(s.interactive)} → 完了 ${ms(s.load)}`,
     `  HTML ${Math.round(s.transfer / 1024)}KB（展開後 ${Math.round(s.decoded / 1024)}KB）`,
     `  画面 ${s.screen} / コア ${s.cores ?? '－'} / 回線 ${s.net ?? '－'}`,
