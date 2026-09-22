@@ -120,10 +120,13 @@ export function ArticleView({
           そのまま出る。音声のほうは押すとボタン自体がリンクに置き換わるので、
           放っておくと**次の記事では「音声にする」が押せない**。
           docs/traps/ui.md「記事を移っても、client 部品の state は付いてくる」。
+          **key は部品ごとに別の文字列にすること。** 並んでいる兄弟に同じ key を
+          付けると React の「同じ key の子が2つ」になる（画面は出るが、
+          console に警告が出て、いずれ片方が捨てられてもおかしくない）。
         */}
-        <ExportButton key={a.id} articleIds={[a.id]} exported={Boolean(state?.exported_at)} />
+        <ExportButton key={`export-${a.id}`} articleIds={[a.id]} exported={Boolean(state?.exported_at)} />
 
-        <MediaButton key={a.id} articleId={a.id} />
+        <MediaButton key={`media-${a.id}`} articleId={a.id} />
 
         {/* 共有できないブラウザでは、このボタンごと出ない（ShareButton の中で判定）。 */}
         <ShareButton title={a.summaries?.title_ja?.trim() || a.title} url={a.url} />
