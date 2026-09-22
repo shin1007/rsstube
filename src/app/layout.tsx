@@ -3,6 +3,7 @@ import { PlaybackProvider } from '@/components/Playback';
 import { BootTiming } from '@/components/BootTiming';
 import { ServiceWorker } from '@/components/ServiceWorker';
 import { ExternalLinkHandler } from '@/components/ExternalBrowser';
+import { SPLASH_DEVICES, splashHref, splashMedia } from '@/lib/splash';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -54,6 +55,28 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
               "}catch(e){}",
           }}
         />
+
+        {/*
+          **起動のあいだ、真っ暗にしない**（iOS だけの話）。
+
+          ホーム画面から開いてから最初の描画まで、実機では 0.8〜2.2秒ある
+          （docs/traps/perf.md の実機の内訳）。そのあいだ iOS が出すのは
+          manifest の `background_color` そのもの——つまり**真っ暗な画面**で、
+          Android と違ってアイコンは重ねてくれない。押したのに何も起きていない
+          ように見えるのはこれで、**サーバーを速くする話とは別に手当てが要る**。
+
+          Next の Metadata にはこの口が無いので、`<link>` を直に並べる。
+          一覧と画像の生成は `lib/splash.ts` と `npm run icons`（**端末ごとに
+          1枚**要る。寸法が完全に一致する1枚しか使われない）。
+        */}
+        {SPLASH_DEVICES.map((d) => (
+          <link
+            key={splashHref(d)}
+            rel="apple-touch-startup-image"
+            media={splashMedia(d)}
+            href={splashHref(d)}
+          />
+        ))}
       </head>
       {/*
         高さは `min-h-full` ではなく `h-dvh` で**確定**させる。
