@@ -12,9 +12,12 @@
  */
 
 import { deflateSync } from 'node:zlib';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+// Node は型注釈を剥がして .ts をそのまま読む（v22.18以降）。端末の一覧を
+// layout.tsx と2か所に持たないため、ここから直に読んでいる。
+import { SPLASH_DEVICES, splashHref, splashPixels } from '../src/lib/splash.ts';
 
 const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
@@ -37,7 +40,7 @@ const TARGETS = [
  * 1枚ぶんの RGBA バッファを作る。
  * 図柄は RSS の記号（左下の点＋右上へ広がる2本の弧）。
  */
-function render({ size, glyph, round }) {
+function renderIcon({ size, glyph, round }) {
   const buf = Buffer.alloc(size * size * 4);
   const S = 4; // スーパーサンプリングの分割数
 
@@ -83,7 +86,60 @@ function render({ size, glyph, round }) {
     }
   }
 
-  return { size, buf };
+  return { w: size, h: size, buf };
+}
+
+/**
+ * iOS の起動画面を1枚ぶん作る（一覧は src/lib/splash.ts）。
+ *
+ * **アイコンと違って正方形ではない**ので、図柄を真ん中に置いて残りは背景色で
+ * べた塗りにする。ここで凝らないこと——出ているのは1〜2秒で、要るのは
+ * 「押したのは届いている」と分かることだけ。
+ *
+ * 走査するのは図柄の入る正方形だけにしてある。端末の実寸（例 1290x2796）を
+ * 全画素×16標本で回すと1枚に数秒かかるが、塗るのは真ん中の数%しかない。
+ */
+function renderSplash({ w, h }) {
+  const buf = Buffer.alloc(w * h * 4);
+  // 全面を背景色で埋める。透明のまま残すと iOS が白で合成する。
+  for (let i = 0; i < w * h; i++) {
+    buf[i * 4] = BG[0];
+    buf[i * 4 + 1] = BG[1];
+    buf[i * 4 + 2] = BG[2];
+    buf[i * 4 + 3] = 255;
+  }
+
+  // 図柄は短辺の26%。弧の比率はアイコンと同じ。
+  const span = Math.round(Math.min(w, h) * 0.26);
+  const left = Math.round((w - span) / 2);
+  const top = Math.round((h - span) / 2);
+  const originX = left;
+  const originY = top + span;
+  const dotR = span * 0.13;
+  const arcs = [
+    { r: span * 0.42, w: span * 0.15 },
+    { r: span * 0.78, w: span * 0.15 },
+  ];
+
+  const S = 4;
+  for (let y = top; y < top + span; y++) {
+    for (let x = left; x < left + span; x++) {
+      let hits = 0;
+      for (let sy = 0; sy < S; sy++) {
+        for (let sx = 0; sx < S; sx++) {
+          if (insideGlyph(x + (sx + 0.5) / S, y + (sy + 0.5) / S, originX, originY, dotR, arcs)) {
+            hits++;
+          }
+        }
+      }
+      if (hits === 0) continue;
+      const mix = hits / (S * S);
+      const i = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) buf[i + c] = Math.round(BG[c] * (1 - mix) + FG[c] * mix);
+    }
+  }
+
+  return { w, h, buf };
 }
 
 /** 角丸の四角形の内側か。radius が 0 なら全面。 */
@@ -108,17 +164,18 @@ function insideGlyph(x, y, ox, oy, dotR, arcs) {
 }
 
 /** RGBA バッファを PNG のバイト列にする。 */
-function png({ size, buf }) {
+function png({ w, h, buf }) {
   // 各行の先頭にフィルタ種別のバイト（0 = なし）を挟むのが PNG の生データ形式。
-  const raw = Buffer.alloc(size * (size * 4 + 1));
-  for (let y = 0; y < size; y++) {
-    raw[y * (size * 4 + 1)] = 0;
-    buf.copy(raw, y * (size * 4 + 1) + 1, y * size * 4, (y + 1) * size * 4);
+  const stride = w * 4 + 1;
+  const raw = Buffer.alloc(h * stride);
+  for (let y = 0; y < h; y++) {
+    raw[y * stride] = 0;
+    buf.copy(raw, y * stride + 1, y * w * 4, (y + 1) * w * 4);
   }
 
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
   ihdr[8] = 8; // ビット深度
   ihdr[9] = 6; // カラータイプ 6 = RGBA
   // 10-12 は圧縮・フィルタ・インタレース方式。いずれも既定値の 0。
@@ -159,6 +216,14 @@ function crc32(buf) {
 // 実行はここ。const 宣言（CRC_TABLE）より前に呼ぶと初期化前アクセスになるので、
 // 生成のループはファイル末尾に置いている。
 for (const t of TARGETS) {
-  writeFileSync(join(OUT_DIR, t.file), png(render(t)));
+  writeFileSync(join(OUT_DIR, t.file), png(renderIcon(t)));
   console.log(`${t.file}  ${t.size}x${t.size}`);
+}
+
+// iOS の起動画面。端末ごとに1枚要る（寸法が完全に一致する1枚しか使われない）。
+mkdirSync(join(OUT_DIR, 'splash'), { recursive: true });
+for (const d of SPLASH_DEVICES) {
+  const px = splashPixels(d);
+  writeFileSync(join(OUT_DIR, splashHref(d).slice(1)), png(renderSplash(px)));
+  console.log(`splash/${px.w}x${px.h}.png  ${d.label}`);
 }
