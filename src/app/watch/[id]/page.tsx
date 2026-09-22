@@ -97,7 +97,11 @@ async function Watch({ params }: PageProps<'/watch/[id]'>) {
         </a>
       </header>
 
+      {/* 別の音声に移っても同じ場所に居座るので、どのクリップまで聴いたか
+          （usePlayer の state）を持ち越さないよう作り直す。下部プレイヤーの
+          DockPlayer が key を付けているのと同じ理由。 */}
       <Player
+        key={id}
         mediaId={id}
         title={media.title}
         slides={media.slides}

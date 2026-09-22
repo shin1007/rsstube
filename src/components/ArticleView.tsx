@@ -113,9 +113,17 @@ export function ArticleView({
       <header className="hidden md:flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-zinc-800 px-3 py-1">
         <ArticleActions articleId={a.id} starred={Boolean(state?.is_starred)} />
 
-        <ExportButton articleIds={[a.id]} exported={Boolean(state?.exported_at)} />
+        {/*
+          **記事ごとの state を持つ部品には key を付ける。** 記事を移っても
+          ここは同じ route の中の遷移なので unmount されず、押した結果
+          （書き出しの失敗文・音声の「受け付けました／開く」）が次の記事にも
+          そのまま出る。音声のほうは押すとボタン自体がリンクに置き換わるので、
+          放っておくと**次の記事では「音声にする」が押せない**。
+          docs/traps/ui.md「記事を移っても、client 部品の state は付いてくる」。
+        */}
+        <ExportButton key={a.id} articleIds={[a.id]} exported={Boolean(state?.exported_at)} />
 
-        <MediaButton articleId={a.id} />
+        <MediaButton key={a.id} articleId={a.id} />
 
         {/* 共有できないブラウザでは、このボタンごと出ない（ShareButton の中で判定）。 */}
         <ShareButton title={a.summaries?.title_ja?.trim() || a.title} url={a.url} />
@@ -141,7 +149,8 @@ export function ArticleView({
           className="flex-1 overflow-y-auto thin-scroll px-4 py-4 md:px-8 pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-8"
         >
           {/* 長い記事は一度で読み切れない。前回の位置へ戻す。 */}
-          <ReadingPosition articleId={a.id} />
+          {/* 「前回の続きから開きました」も記事ごと。持ち越さない（上の key と同じ理由）。 */}
+          <ReadingPosition key={a.id} articleId={a.id} />
           <div className="mx-auto max-w-2xl">
             {/* スマホで一覧へ戻るリンク */}
             <div className="mb-3 md:hidden">
@@ -328,6 +337,8 @@ export function ArticleView({
         }
         menu={
           <ArticleMobileMenu
+            /* 開いたメニュー・知らせ・音声の「開く」リンクは記事ごと（上の key と同じ理由）。 */
+            key={a.id}
             articleId={a.id}
             title={a.summaries?.title_ja?.trim() || a.title}
             url={a.url}
